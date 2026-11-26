@@ -4,8 +4,8 @@ A pixel-art isometric air-combat game: fly strike missions behind enemy lines, s
 Claude, who implements.
 
 - Repo: https://github.com/Swooshiiroll/wings-of-freedom
-- Board: {{BOARD_URL}}
-- Workflow page: {{DOC_URL}}
+- Board: https://github.com/users/Swooshiiroll/projects/5
+- Workflow page: https://claude.ai/artifact/TvBohXytmXAzz5gBharuo3
 
 ## Models
 

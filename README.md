@@ -4,8 +4,8 @@ A pixel-art isometric air-combat game: fly strike missions behind enemy lines, s
 
 ## Development
 
-How work is planned, built, tested and released: [workflow page]({{DOC_URL}}) and `CLAUDE.md`.
-Board: {{BOARD_URL}}
+How work is planned, built, tested and released: [workflow page](https://claude.ai/artifact/TvBohXytmXAzz5gBharuo3) and `CLAUDE.md`.
+Board: https://github.com/users/Swooshiiroll/projects/5
 
 ```sh
 tools/dev.sh setup   # once

@@ -7,3 +7,4 @@ them under its version (see CLAUDE.md, "Releasing").
 
 ### Added
 - Project set up: CI (check, unit tests, test build), tag releases, issue and pull request templates.
+- Board and workflow page links.
