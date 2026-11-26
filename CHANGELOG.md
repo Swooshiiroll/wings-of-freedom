@@ -5,5 +5,8 @@ them under its version (see CLAUDE.md, "Releasing").
 
 ## [Unreleased]
 
+### Design
+- `design/game.md`: the game overview, rules agreed so far, and open questions.
+
 ### Added
 - Project set up: CI (check, unit tests, test build), tag releases, issue and pull request templates.
