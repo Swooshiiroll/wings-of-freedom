@@ -20,7 +20,9 @@ from it: all art, sound and code are original.
 - **True isometric.** The ground grid is turned 45°.
   - North, toward enemy territory, is up-right on screen.
   - South, toward home base, is down-left.
-- **Pixel art at 480x270**, scaled by whole numbers to the window (4x on a 1080p screen).
+- **Pixel art at 480x270**, scaled by whole numbers to the window (4x on a 1080p screen). On
+  screens that 270 doesn't divide evenly (1440p, Steam Deck), the largest whole-number scale is used
+  and the space left over shows more of the world. The HUD stays pinned to the edges.
 - **Planes are drawn at 32 headings** (one every 11.25°). Flight itself is smooth; only the
   sprite steps.
 - **Height** shows as the gap between a plane and its shadow on the ground.
@@ -29,31 +31,44 @@ from it: all art, sound and code are original.
 
 - **Free flight** over a large scrolling map, with **full altitude control** (climb and dive
   freely).
+- **Light physics:** climbing costs speed and diving gains it, and a plane that gets too slow stalls
+  and drops its nose.
+- **No power** (engine destroyed or fuel gone): the plane glides, trading height for distance.
+- **Collisions:**
+  - touching the ground is a crash, except on a runway (later);
+  - when two planes collide, the one with the lower total HP is destroyed and the other is damaged.
 - **Keyboard first**, every key rebindable in a controls menu. Gamepad comes later.
 - **Default keys:**
 
   | Key | Action |
   |---|---|
   | A / D | Turn left / right |
-  | W / S | Climb / dive |
+  | W / S | Dive / climb |
   | Shift / Ctrl | Throttle up / down |
-  | Space | Guns |
-  | B | Bomb |
+  | F | Guns |
+  | Space | Release the selected heavy weapon (bombs, rockets, missiles) |
+  | Tab | Switch heavy weapon |
+
+The details for v0.1 are in `flight.md`.
 
 ## Weapons
 
 - The first plane carries **guns and bombs**, each with limited ammunition.
 - **Hitting other planes at different heights** is a game option, with three rules:
-  - **Forgiving band:** guns hit if the target is roughly at your height. The target shows whether
-    it is above, level or below.
+  - **Forgiving band** (the default): guns hit if the target is roughly at your height.
   - **Strict:** you must match its height closely.
   - **Auto-aim in height:** shots angle up or down toward a target ahead of you.
+- **You judge other planes' heights by their shadows only.** There are no height markers.
 - **Bombs fall** from your height and speed. The **impact marker** (a crosshair where the bomb
   would land) is an **upgrade**; without it, you aim by your shadow.
 
 ## Damage
 
-The plane has four parts that take hits. Each part is first **damaged**, then **destroyed**.
+The plane has four parts that take hits: engine, wings, fuselage and pilot.
+- A hit lands on the part facing the fire: from ahead, mostly the engine and pilot; from behind,
+  the fuselage; from a side, that wing.
+- **The effect grows gradually** as a part's HP falls.
+- **The HUD shows stages:** OK, WARNING, DANGER, CRITICAL, then destroyed.
 
 | Part | Damaged | Destroyed |
 |---|---|---|
@@ -108,8 +123,10 @@ Flying off the south edge mid-round takes you to base. **The battle goes on** wh
 The first set, for v0.1:
 - **Enemy fighters** that chase and shoot you;
 - **Enemy bombers**, bigger and tougher, with defensive gunners;
-- **Flak guns** on the ground, which threaten you depending on your height. They are also the
-  first ground targets to bomb.
+- **Flak guns** on the ground, less accurate the higher you fly and out of reach above a ceiling.
+  They are also the first ground targets to bomb.
+
+Enemy bombers head south to bomb your base, so you have to intercept them.
 
 Trucks, tanks, depots and other objective targets arrive with Strike's objectives in v0.2.
 
@@ -143,19 +160,15 @@ How the code is shaped for this from the start:
 
 ## Open questions
 
-1. **Screens that 270 doesn't divide.** 1440p is 5.33x and the Steam Deck (1280x800) is 2.96x.
-   Proposed: use the largest whole-number scale that fits, and show more of the world in the
-   space left over, with the HUD pinned to the edges.
-2. **Lost engine or fuel.** Proposed: the plane glides, trading height for distance, so getting
-   home depends on how high you were. To settle in `flight.md`.
-3. **Default keys** above are my reading of "W/S A/D". Confirm or change.
-4. **Runway grace period and service times** (start values), and whether each service takes time
+1. **Runway grace period and service times** (start values), and whether each service takes time
    at base.
-5. **The map:** its size, what the east, west and north edges do, terrain, and where the base sits.
-6. **Eras and the plane roster:** which eras, how many planes each, and what jets add (missiles,
+2. **The Strike map:** terrain, objectives, and where the base sits (v0.1's test field is in
+   `flight.md`).
+3. **Eras and the plane roster:** which eras, how many planes each, and what jets add (missiles,
    radar?).
-7. **Points:** values per kill, the kill-chain rule, and prices of upgrades, planes and pilots.
-8. **One-monitor-per-player:** how players provide input (two keyboards, gamepads?).
-9. **Hosted server:** who runs it, and whether it's the same program in a headless mode.
-10. **The name:** other games already use "Wings of Freedom" in their titles. Fine for now; check
-    it before any store release.
+4. **Points:** values per kill, the kill-chain rule, and prices of upgrades, planes and pilots.
+5. **What a bomber reaching base costs** in v0.2.
+6. **One-monitor-per-player:** how players provide input (two keyboards, gamepads?).
+7. **Hosted server:** who runs it, and whether it's the same program in a headless mode.
+8. **The name:** other games already use "Wings of Freedom" in their titles. Fine for now; check
+   it before any store release.
