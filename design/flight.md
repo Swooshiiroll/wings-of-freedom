@@ -2,7 +2,8 @@
 
 The spec for the first playable build. It covers one World War II fighter that flies with full
 altitude control and burns fuel. It fights enemy fighters, bombers and flak with guns and bombs,
-and takes damage part by part. Written from the owner's answers of 2026-11-26 (flight rounds 1-5).
+and takes damage part by part. Written from the owner's answers of 2026-11-26 (flight rounds 1-5,
+then the first draft's open questions).
 The whole game is in `game.md`.
 
 Every number here is a **(start)** value. They all live in `tuning.txt`, which the game reloads
@@ -31,9 +32,12 @@ shop, pilots, saving, other planes and eras, trucks and tanks, sound, gamepad, c
 - **Map:** **2880 u east-west by 4800 u north-south** (about 6 screens across and 10 deep). The
   ground is flat in v0.1, with drawn detail only.
 - **Edges:**
-  - East, west and north are soft. Within **200 u** of one, a warning shows. Past it, the
-    autopilot turns the plane back toward the map, and control returns once it faces inward.
+  - East, west and north are soft. Within **200 u** of one, a warning shows.
+  - Past one of them, a **10 s countdown** starts: "Return to the battle area". Flying back inside
+    stops it, and it starts again from 10 s the next time you leave. At 0 the plane
+    **self-destructs**, and the run ends as "left the battle area".
   - South is the way home. Leaving the south edge ends the run as "returned to base".
+  - Enemy AI keeps its planes inside the map, except bombers, which leave by the south edge.
 - **Camera:** it follows the player, centred between the plane and its shadow, and leads a little
   in the direction of flight.
 - **Screens that 270 doesn't divide evenly:** the largest whole-number scale is used. The space
@@ -111,7 +115,11 @@ You judge other planes' heights from their **shadows only**. There are no height
 
 - **4 bombs.** Each falls from the plane's height and carries its speed, under g. From 120 u at
   150 u/s, a bomb lands about 245 u ahead.
-- **Blast radius 20 u**, **40 damage** at the centre, falling to 0 at the edge.
+- **Blast radius 20 u**, **40 damage** at the centre, falling to 0 at the edge. The blast reaches
+  up as well as across: it hurts any plane within 20 u of the burst, yours included.
+- **Bombing low is dangerous.** A bomb keeps the plane's speed, so a plane flying straight on is
+  right above it when it lands. Drop from below 20 u and your own blast hits you: at 10 u, for
+  20 damage. Those hits land as a flak burst's do.
 - **No impact marker in v0.1** (it's a v0.2 upgrade). You aim by your shadow. A developer switch
   turns the marker on for testing.
 
@@ -122,7 +130,7 @@ You judge other planes' heights from their **shadows only**. There are no height
 | Part | HP | Damaged (gradual) | Destroyed |
 |---|---|---|---|
 | Engine | 40 | Top speed and acceleration fall, to **60%** at 1 HP | No thrust: glide home |
-| Left wing, right wing | 40 each | Turn rate falls, to **60%** at 1 HP; the weaker wing sets it | The wing breaks off and the plane crashes |
+| Left wing, right wing | 40 each | Turn rate falls, to **60%** at 1 HP; the weaker wing sets it. The plane doesn't pull to one side | The wing breaks off and the plane crashes |
 | Fuselage | 60 | Fuel leaks, growing to a full tank in **60 s** at 1 HP | All fuel is lost (glide home); then a **tail** of **20 HP** takes the hits, and losing it is a crash |
 | Pilot | 3 hits | | The third hit kills the pilot and the plane crashes |
 
@@ -155,6 +163,7 @@ Flying so the enemy is behind you protects the engine and pilot, at the cost of 
 - **The ground:** touching it is a crash. Landing on runways comes later.
 - **Two planes:** they touch when their outlines overlap within **6 u** of height.
   - The one with the **lower total HP** (engine + both wings + fuselage + tail) is destroyed.
+    The pilot isn't counted, since pilot hits aren't HP.
   - The other takes damage equal to the destroyed plane's remaining total, spread over its parts.
   - If the totals are equal, both are destroyed.
 - **Friendly fire** is always on. In v0.1 that only matters for bombers' gunners and the flak,
@@ -179,6 +188,10 @@ Enemy planes use the same flight and damage model as the player, driven by AI in
 - They fly **south in groups of 2**, at **120-180 u** of height and **90 u/s**, to bomb your base.
 - They're tough: engine **120**, each wing **100**, fuselage **160**, tail **40**.
 - **Gunners** (tail and top) fire at any plane within **160 u**, using the forgiving band.
+- **Each gunner can be knocked out on its own.** It takes **3 hits**, like a pilot, and then
+  stops firing; the bomber flies on.
+  - The tail gunner takes **15%** of hits from behind, out of the fuselage's share.
+  - The top gunner takes **10%** of hits from any direction, out of the wings' share.
 - In v0.1 a bomber reaching the south edge shows "Bomber reached base" and adds to a counter in
   the summary. It costs nothing until v0.2.
 
@@ -206,13 +219,16 @@ Enemy planes use the same flight and damage model as the player, driven by AI in
   WARNING yellow, DANGER orange, CRITICAL red), and a destroyed part is drawn missing. The pilot
   has a marker.
 - **Height and speed**, with a **STALL** warning.
+  - Height is shown in **feet**, at **50 ft per u**. The ceiling reads 12,000 ft, and flak can't
+    reach above 10,000 ft. The simulation itself works in u.
 - **Radar / minimap:** nearby enemy planes, flak guns, and an arrow toward the base (south). It
   shows positions only, never heights.
-- **Edge warning** when near a soft edge.
+- **Edge warning** when near a soft edge, and the **countdown** once past it.
 
 ## Run end and menus
 
-- **End of a run:** shot down, crashed, pilot killed, or returned to base. A summary shows the
+- **End of a run:** shot down, crashed, pilot killed, left the battle area, or returned to base.
+  A summary shows the
   cause, time flown, kills by type, and bombers that reached base. A key starts a new run.
 - **Pause menu (Esc):** resume, restart, controls (rebinding), options (gunnery height rule),
   quit.
@@ -262,14 +278,17 @@ input commands, so tests can replay scripted flights.
   - a destroyed wing crashes the plane;
   - a destroyed engine or fuselage leaves it gliding;
   - the tail breaks after the fuselage;
-  - the third pilot hit crashes it.
-- **Hit location:** the weights hold for each direction.
+  - the third pilot hit crashes it;
+  - a bomber gunner stops firing after 3 hits, and the bomber flies on.
+- **Hit location:** the weights hold for each direction, including the bomber gunners' shares.
 - **Height rules:** each one hits and misses at its own limits.
-- **Bombs:** impact point and blast falloff.
+- **Bombs:**
+  - impact point and blast falloff;
+  - your own blast hits you when you drop from below 20 u, and not from above.
 - **Collisions:** the lower total HP is destroyed and the survivor takes the remainder; ground
   contact crashes.
 - **Edges and waves:**
-  - the soft edges turn the plane back;
+  - past a soft edge the countdown runs, stops when the plane flies back in, and destroys it at 0;
   - leaving south ends the run;
   - wave sizes follow the formula.
 - **Determinism:** the same seed and inputs give the same result.
@@ -278,13 +297,8 @@ input commands, so tests can replay scripted flights.
 
 ## Open questions
 
-1. **Pilot stages:** is 1 hit WARNING and 2 hits CRITICAL right?
-2. **A damaged wing:** should the plane pull toward that side, or only turn worse?
-3. **Bombing low:** should your own bomb's blast hurt you if you drop it too low?
-4. **Bomber gunners:** can they be knocked out on their own, or only by downing the bomber?
-5. **Soft edges:** an autopilot turn-back (as written), or a countdown after which the plane is
-   lost?
-6. **Altimeter units:** a plain number, or feet or metres for flavour?
-7. **Collision damage:** is "the survivor takes the destroyed plane's remaining total" the right
-   amount?
-8. **Total HP** for collisions: I left the pilot out (pilot hits aren't HP). Confirm.
+The first draft's eight questions are answered above. Two came out of those answers:
+
+1. **Speed display:** height is in feet. Should speed be a plain number, mph or knots?
+2. **Knocking out bomber gunners:** I gave each gunner 3 hits, like a pilot, and a share of the
+   hits that strike the bomber (under Bombers). Is that the right way for it to work?
