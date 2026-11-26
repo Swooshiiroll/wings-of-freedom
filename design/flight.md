@@ -300,8 +300,6 @@ input commands, so tests can replay scripted flights.
 
 ## Open questions
 
-The first draft's eight questions are answered above, and the speed display (mph) after them. One
-is left:
-
-1. **Knocking out bomber gunners:** I gave each gunner 3 hits, like a pilot, and a share of the
-   hits that strike the bomber (under Bombers). Is that the right way for it to work?
+None. The first draft's eight questions are answered above, and so are the two that came out of
+them: speed shows in mph, and bomber gunners are knocked out as described under Bombers. New
+questions that come up while building go to the owner and are added here.
