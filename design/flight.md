@@ -221,6 +221,9 @@ Enemy planes use the same flight and damage model as the player, driven by AI in
 - **Height and speed**, with a **STALL** warning.
   - Height is shown in **feet**, at **50 ft per u**. The ceiling reads 12,000 ft, and flak can't
     reach above 10,000 ft. The simulation itself works in u.
+  - Speed is shown in **mph**, at **2.4 mph per u/s**: top level speed reads 360 mph, the dive
+    limit 576 mph and the stall 132 mph. The map is squeezed to fit the screen, so this scale is
+    set for the feel of a WWII fighter, not from the ground distances.
 - **Radar / minimap:** nearby enemy planes, flak guns, and an arrow toward the base (south). It
   shows positions only, never heights.
 - **Edge warning** when near a soft edge, and the **countdown** once past it.
@@ -297,8 +300,8 @@ input commands, so tests can replay scripted flights.
 
 ## Open questions
 
-The first draft's eight questions are answered above. Two came out of those answers:
+The first draft's eight questions are answered above, and the speed display (mph) after them. One
+is left:
 
-1. **Speed display:** height is in feet. Should speed be a plain number, mph or knots?
-2. **Knocking out bomber gunners:** I gave each gunner 3 hits, like a pilot, and a share of the
+1. **Knocking out bomber gunners:** I gave each gunner 3 hits, like a pilot, and a share of the
    hits that strike the bomber (under Bombers). Is that the right way for it to work?
