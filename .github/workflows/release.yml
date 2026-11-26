@@ -1,0 +1,113 @@
+name: Release
+
+# Pushing a tag vX.Y.Z publishes that version: checks, tests, Linux and Windows builds, and a GitHub
+# release whose notes are the version's CHANGELOG.md section. A tag with a suffix (v1.2.0-rc1)
+# becomes a pre-release with the Unreleased notes; it's for trying the release pipeline.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CI: "true"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      base: ${{ steps.v.outputs.base }}
+      pre: ${{ steps.v.outputs.pre }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain (C++20, CMake, Ninja, SDL3 libraries, clang-format 22.1.3)
+        run: |
+          sudo tools/linux-deps.sh
+          pipx install clang-format==22.1.3
+
+      - name: Version
+        id: v
+        run: |
+          tag=${GITHUB_REF_NAME#v}
+          base=${tag%%-*}
+          pre=false; [ "$tag" != "$base" ] && pre=true
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "pre=$pre" >> "$GITHUB_OUTPUT"
+          have=$(tr -d '[:space:]' < VERSION)
+          if [ "$pre" = false ] && [ "$have" != "$base" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME but VERSION says $have. Release from a merged pull request that ran 'tools/dev.sh version $base'."
+            exit 1
+          fi
+          tools/dev.sh version "$base"
+
+      - name: Release notes
+        run: |
+          heading="## [${{ steps.v.outputs.base }}]"
+          [ "${{ steps.v.outputs.pre }}" = true ] && heading="## [Unreleased]"
+          awk -v h="$heading" 'index($0, h) == 1 {on=1; next} on && index($0, "## [") == 1 {exit} on' CHANGELOG.md > out-notes.md
+          if [ ! -s out-notes.md ]; then
+            echo "::error::CHANGELOG.md has no section for ${{ steps.v.outputs.base }}"; exit 1
+          fi
+          cat out-notes.md
+
+      - name: Notes artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: out-notes.md
+
+      - name: Checks and tests
+        run: |
+          tools/dev.sh setup
+          tools/dev.sh check
+          tools/dev.sh test
+
+  build:
+    needs: [verify]
+    strategy:
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-latest
+          - platform: windows
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain (C++20, CMake, Ninja, SDL3 libraries)
+        if: runner.os == 'Linux'
+        run: sudo tools/linux-deps.sh
+      - name: Build
+        run: |
+          tools/dev.sh version "${{ needs.verify.outputs.base }}"
+          tools/dev.sh setup
+          tools/dev.sh build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: build/
+
+  publish:
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=""; [ "${{ needs.verify.outputs.pre }}" = true ] && flags="--prerelease"
+          shopt -s nullglob
+          files=(dist/release-*/*)
+          gh release create "$GITHUB_REF_NAME" "${files[@]}" \
+            --title "Wings of Freedom $GITHUB_REF_NAME" --notes-file dist/release-notes/out-notes.md --verify-tag $flags

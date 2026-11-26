@@ -1,0 +1,150 @@
+name: CI
+
+# Every push to any branch: static checks and unit tests (one job), then a test build (Linux and
+# Windows). main only takes pull requests whose head commit passed check and build.
+#
+# Every job runs on a fresh machine, so what each needs is cached between runs instead of being
+# installed and compiled again: clang-format, the Linux apt packages, and compiled objects
+# (ccache, SDL3 included). They're rebuilt only when their pinned versions change.
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: "true"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Format, version, a warnings-as-errors build of the core and the tests (GCC), and the unit
+  # tests when a system or object changed (tools/ci-scope.sh). Core only: the tests never touch
+  # SDL, so this job needs no SDL packages and doesn't compile SDL3. The game itself is built
+  # warnings-as-errors in build-linux.
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      WOF_CMAKE_ARGS: >-
+        -DWOF_BUILD_GAME=OFF
+        -DCMAKE_C_COMPILER_LAUNCHER=ccache
+        -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tools/ci-scope.sh compares with the previous push and with main
+      - name: Test scope (full unit tests only when a system or object changed)
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scope=$(tools/ci-scope.sh "${{ github.event.before }}")
+          echo "unit tests: $scope"
+          echo "tests=$scope" >> "$GITHUB_OUTPUT"
+      - name: Ninja (the runner image normally has it already)
+        run: command -v ninja || { sudo apt-get update -q && sudo apt-get install -y -q ninja-build; }
+      - name: clang-format cache
+        uses: actions/cache@v6
+        with:
+          path: ~/clang-format-venv
+          key: clang-format-22.1.3-${{ runner.os }}-${{ runner.arch }}
+      - name: clang-format 22.1.3
+        run: |
+          venv="$HOME/clang-format-venv"
+          # Reinstall if the cache missed, or if a runner image update broke the cached venv.
+          if ! "$venv/bin/clang-format" --version 2>/dev/null | grep -q '22\.1\.3'; then
+            rm -rf "$venv"
+            python3 -m venv "$venv"
+            "$venv/bin/pip" install -q clang-format==22.1.3
+          fi
+          echo "$venv/bin" >> "$GITHUB_PATH"
+      - name: Compiler cache
+        uses: hendrikmuhs/ccache-action@dbeefd73e8e2ffc1bbc412570072735eb4db3607 # v1.2.25
+        with:
+          key: check
+      - name: Setup
+        run: tools/dev.sh setup
+      - name: Static checks
+        run: tools/dev.sh check
+      - name: Unit tests
+        if: steps.scope.outputs.tests == 'full'
+        run: tools/dev.sh test
+      - name: Unit tests skipped
+        if: steps.scope.outputs.tests != 'full'
+        run: |
+          echo "::notice::Unit tests skipped: this push changes no system or object (src/core, tests, CMake, CI or tools)."
+      - name: Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: check-logs
+          path: out/*.log
+
+  build-platform:
+    name: build-${{ matrix.platform }}
+    needs: [check]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-latest
+          - platform: windows
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      # Linux: compiled objects (SDL3 included) come from ccache. SDL's precompiled header is off
+      # here because ccache can't cache compiles that use one. Windows uses the Visual Studio
+      # generator, which ccache doesn't support, so it compiles everything each run.
+      WOF_CMAKE_ARGS: ${{ matrix.platform == 'linux' && '-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package list
+        if: runner.os == 'Linux'
+        id: deps
+        run: echo "packages=$(tools/linux-deps.sh --list)" >> "$GITHUB_OUTPUT"
+      - name: Toolchain (C++20, CMake, Ninja, SDL3 libraries; cached apt packages)
+        if: runner.os == 'Linux'
+        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
+        with:
+          packages: ${{ steps.deps.outputs.packages }}
+          version: 1
+      - name: Compiler cache
+        if: runner.os == 'Linux'
+        uses: hendrikmuhs/ccache-action@dbeefd73e8e2ffc1bbc412570072735eb4db3607 # v1.2.25
+        with:
+          key: build-linux
+      # Windows: the runner image already has Visual Studio (MSVC) and CMake.
+      - name: Setup
+        run: tools/dev.sh setup
+      - name: Build
+        run: tools/dev.sh build
+      - name: Artifact name
+        id: names
+        run: echo "base=wings-of-freedom-${{ matrix.platform }}-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Test build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.names.outputs.base }}
+          path: build/
+          retention-days: 14
+
+  # The required status check is named "build": it passes only if every platform build passed.
+  build:
+    name: build
+    needs: [build-platform]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: All platform builds passed
+        run: |
+          echo "platform builds: ${{ needs.build-platform.result }}"
+          [ "${{ needs.build-platform.result }}" = "success" ]

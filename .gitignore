@@ -1,0 +1,19 @@
+# Logs and build output (tools/dev.sh)
+out/
+build/
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local Claude settings
+.claude/settings.local.json
+
+# C++ / CMake / Visual Studio
+.vs/
+*.user
+CMakeUserPresets.json
+compile_commands.json

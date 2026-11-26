@@ -1,0 +1,9 @@
+# Keep files as written (LF), so tools/dev.sh runs in Git Bash and on Linux CI alike.
+* text=auto eol=lf
+*.sh text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.png binary
+*.jpg binary
+*.pdf binary
+*.zip binary
