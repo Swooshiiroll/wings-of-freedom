@@ -168,17 +168,19 @@ Blast radius and damage scale with the cube root of the bomb's weight. A 100 lb 
 | 500 lb | 34 u | 68 |
 | 250 kg (551 lb) | 35 u | 71 |
 
-### Flak: real light and heavy guns (built in PR 6)
+### Flak: machine guns, light cannon and heavy guns
 
-| | Rate | Reaches | Hit |
-|---|---|---|---|
-| **German light:** 2 cm Flak 30 | 120 rounds/min practical [8] | ~3,500 ft effective [9] | 20 mm shells: 8 per hit, aimed tracer streams |
-| **German heavy:** 8.8 cm Flak 18 | 15-20 rounds/min [10] | 26,000 ft effective [10] | timed bursts: 16 u, 14 damage, scatter growing with height |
-| **US light:** 37 mm M1 | 120 rounds/min max, ~90 practical [11] | ~10,500 ft (est.; sources conflict) | 37 mm shells: 14 per hit, aimed streams |
-| **US heavy:** 3-inch M3 | ~25 rounds/min (est.) | ~28,000 ft [12] | timed bursts: 15 u, 13 damage |
+| | Rate | Reaches (height; across) | Hit | HP |
+|---|---|---|---|---|
+| **German machine gun:** MG 34 | 900 rounds/min [27] | 3,000 ft (est.); 180 u | rifle rounds, 1 | 20 |
+| **German light:** 2 cm Flak 30 | 120 rounds/min practical [8] | ~3,500 ft effective [9]; 240 u | 8 a hit | 30 |
+| **German heavy:** 8.8 cm Flak 18 | 15-20 rounds/min [10], 18 used | 26,000 ft [10]; 400 u | timed bursts: 16 u, 14 damage | 45 |
+| **US machine gun:** water-cooled .50 | 450-600 rounds/min [28], 500 used | 5,000 ft (est. from [28]); 180 u | .50 rounds, 2.5 | 20 |
+| **US light:** 37 mm M1 | ~90 practical [11] | ~10,500 ft (est.); 240 u | 14 a hit | 30 |
+| **US heavy:** 3-inch M3 | ~25 rounds/min (est.) | ~28,000 ft [12]; 400 u | timed bursts: 15 u, 13 damage | 45 |
 
-- **Light flak** fires aimed streams like guns: deadly low, and useless above its reach.
-- **Heavy flak** fires timed bursts that scatter more the higher you are (`flight.md`'s rule).
+- **Light guns** fire aimed streams: deadly low, useless above their reach.
+- **Heavy guns** fire timed bursts that scatter more the higher you are (`flight.md`).
 
 ## Height: 30,000 ft for every plane
 
@@ -272,3 +274,5 @@ the **He 111B-2 229 mph** [7] (owner, 2026-11-27).
 24. [HistoryOfWar: Keystone B-6A](https://www.historyofwar.org/articles/weapons_keystone_B-6A_Panther.html)
 25. [Wikipedia: Dornier Do 23](https://en.wikipedia.org/wiki/Dornier_Do_23)
 26. [Warbirds Resource Group: Do 23G](https://warbirdsresourcegroup.org/LRG/luftwaffe_dornier_do23_specifications.html)
+27. [Lone Sentry: TM-E 30-451, German MG 34](https://lonesentry.com/manuals/tme30/ch7sec2sub6.html)
+28. [NavWeaps: .50 cal M2 machine gun](https://navweaps.com/Weapons/WNUS_50cal-M2_MG.htm)

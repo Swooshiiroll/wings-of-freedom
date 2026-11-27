@@ -35,8 +35,11 @@ enum class Ground : std::uint8_t {
     Road,
     River,
     Bank,
+    Mud,    // the front line's churned ground
+    Trench, // its trenches
+    Crater, // and shell holes (row: the rim)
 };
-inline constexpr int kGroundKinds = 10;
+inline constexpr int kGroundKinds = 13;
 inline constexpr int kFieldKinds = 6; // Wheat to Woods: what a field can be
 
 // One river winds north to south through each strip of the farmland this wide (u).
@@ -54,6 +57,7 @@ struct GroundParams {
     int hedge_u = 2;            // hedgerow width
     int hedge_missing_pct = 15; // share of field sides with no hedge
     int row_u = 4;              // crop and plough row width
+    int front_depth_u = 400;    // the front line's band of trenches, across the map (0: none)
     int river_u = 24;           // river width
     int river_bank_u = 3;       // bank width on each side
     int river_step_u = 256;     // the river bends once per this much distance north

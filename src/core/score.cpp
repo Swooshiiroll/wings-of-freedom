@@ -15,13 +15,26 @@ float chain_multiplier(int chain, const ScoreParams& p) noexcept {
     return std::min(p.chain_max, 1.0f + p.chain_step * static_cast<float>(chain - 1));
 }
 
-void score_kill(RunScore& s, Role role, const ScoreParams& p) noexcept {
+namespace {
+
+// A kill worth `base`, adding to the chain.
+void chain_add(RunScore& s, int base, const ScoreParams& p) noexcept {
     s.chain = s.chain_s > 0.0f ? s.chain + 1 : 1;
     s.chain_s = p.chain_window_s;
-    const int base = role == Role::Bomber ? p.bomber_points : p.fighter_points;
     s.points +=
         static_cast<int>(std::lround(static_cast<float>(base) * chain_multiplier(s.chain, p)));
+}
+
+} // namespace
+
+void score_kill(RunScore& s, Role role, const ScoreParams& p) noexcept {
+    chain_add(s, role == Role::Bomber ? p.bomber_points : p.fighter_points, p);
     ++(role == Role::Bomber ? s.bombers : s.fighters);
+}
+
+void score_gun(RunScore& s, bool heavy, const ScoreParams& p) noexcept {
+    chain_add(s, heavy ? p.flak_heavy : p.flak_light, p);
+    ++s.guns;
 }
 
 void score_tick(RunScore& s, const World& w, const ScoreParams& p, float dt) noexcept {
@@ -38,6 +51,8 @@ void score_tick(RunScore& s, const World& w, const ScoreParams& p, float dt) noe
         } else if (e.kind == EventKind::EnemyDown && e.by == 0) {
             const Body& b = w.bodies[static_cast<std::size_t>(e.who)];
             score_kill(s, plane_type(b.type).role, p);
+        } else if (e.kind == EventKind::FlakDown && e.by == 0) {
+            score_gun(s, e.damage > 0.5f, p);
         }
     }
 }

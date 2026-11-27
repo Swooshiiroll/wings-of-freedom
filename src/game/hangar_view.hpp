@@ -30,6 +30,7 @@ struct Summary {
     bool kept = false; // progress is saved: the banked points are the nation's now
     int points_now = 0;
     int through = 0; // enemy bombers that reached your base
+    int guns = 0;    // flak guns destroyed
 };
 
 // `view_h` is the world's rows, above the dashboard.

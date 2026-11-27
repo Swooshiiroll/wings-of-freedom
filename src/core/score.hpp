@@ -15,6 +15,8 @@ struct World;
 struct ScoreParams {
     int fighter_points = 100;
     int bomber_points = 250;
+    int flak_light = 50;          // a machine gun or light cannon destroyed
+    int flak_heavy = 150;         // a heavy gun
     float chain_window_s = 20.0f; // a kill within this of the last keeps the chain
     float chain_step = 0.5f;      // and raises the multiplier by this
     float chain_max = 4.0f;
@@ -28,6 +30,7 @@ struct ScoreParams {
 struct RunScore {
     int fighters = 0; // shot down
     int bombers = 0;
+    int guns = 0;         // flak guns destroyed
     int points = 0;       // from kills, chains included
     int chain = 0;        // kills in the chain now
     float chain_s = 0.0f; // until the chain ends
@@ -41,6 +44,8 @@ struct RunScore {
 
 // A kill of a plane in a role.
 void score_kill(RunScore& s, Role role, const ScoreParams& p) noexcept;
+// A flak gun destroyed: in the chain like a kill.
+void score_gun(RunScore& s, bool heavy, const ScoreParams& p) noexcept;
 
 // One tick, after the world's step: the chain's clock, new waves and the player's kills.
 void score_tick(RunScore& s, const World& w, const ScoreParams& p, float dt) noexcept;

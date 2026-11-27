@@ -9,5 +9,7 @@ namespace wof {
 // about 12.5 miles square.
 inline constexpr int kMapWidthU = 28800; // east-west
 inline constexpr int kMapDepthU = 28800; // north-south
+// The enemy's front line, halfway up (owner, 2026-11-27): about 2 minutes' flying from your base.
+inline constexpr int kFrontU = kMapDepthU / 2;
 
 } // namespace wof

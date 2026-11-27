@@ -6,6 +6,7 @@
 
 #include "core/hash.hpp"
 #include "core/iso.hpp"
+#include "core/map.hpp"
 
 namespace wof {
 namespace {
@@ -21,6 +22,8 @@ constexpr std::uint64_t kSaltRiver = 0x7269766572ull;     // "river"
 constexpr std::uint64_t kSaltRiverBase = 0x7269766261ull; // "rivba"
 
 constexpr std::int64_t kQ16 = 65536;
+constexpr std::uint64_t kSaltCrater = 0x637261746572ull; // "crater"
+constexpr std::int64_t kHalfRoot2Q16 = 46341;            // sqrt(1/2) in 1/65536ths
 
 [[nodiscard]] int floor_mod(int a, int b) noexcept {
     const int m = a % b;
@@ -119,6 +122,58 @@ struct RiverAt {
     return {static_cast<int>(x0 + dx * eased / s3), slope * kQ16 / s3};
 }
 
+// The front line's band, across the world's north-south (design/flight.md, Flak guns): churned
+// mud, three zigzag trenches and shell holes. False outside it. Integers only, as the rest.
+[[nodiscard]] bool front_line(const GroundParams& p, std::uint64_t seed, int x, int y,
+                              GroundSample& out) noexcept {
+    const int depth = p.front_depth_u;
+    if (depth <= 0) {
+        return false;
+    }
+    // World coordinates of this farmland unit (core/iso.hpp): the farmland is turned 45 degrees.
+    const auto wx = static_cast<int>((static_cast<std::int64_t>(x) + y) * kHalfRoot2Q16 >> 16);
+    const auto wy = static_cast<int>((static_cast<std::int64_t>(y) - x) * kHalfRoot2Q16 >> 16);
+    const int off = wy - kFrontU;
+    if (std::abs(off) >= depth / 2) {
+        return false;
+    }
+    const int phase = ((wx % 96) + 96) % 96;
+    const int zig = phase < 48 ? phase - 24 : 72 - phase; // -24 to 24 and back
+    for (const int line : {-depth / 4, 0, depth / 4}) {
+        if (std::abs(off - line - zig) < 3) {
+            out = {Ground::Trench, false, 0};
+            return true;
+        }
+    }
+    const int cx = floor_div(wx, 40);
+    const int cy = floor_div(off, 40);
+    const std::uint64_t h = hash2(seed, cx, cy, kSaltCrater);
+    if (h % 100u < 40u) {
+        const int r = 4 + static_cast<int>((h >> 24u) % 8u);
+        const int dx = wx - cx * 40 - 12 - static_cast<int>((h >> 8u) % 17u);
+        const int dy = off - cy * 40 - 12 - static_cast<int>((h >> 16u) % 17u);
+        const int d2 = dx * dx + dy * dy;
+        if (d2 <= r * r) {
+            out = {Ground::Crater, d2 > (r - 2) * (r - 2), 0};
+            return true;
+        }
+    }
+    // The mud's edges wander: the band reaches further in some places than others.
+    const int stretch = floor_div(wx, 48);
+    const int t = wx - stretch * 48;
+    const auto reach = [&](int at, int side) {
+        return depth * 3 / 8 + static_cast<int>(hash2(seed, at, side, kSaltCrater) %
+                                                static_cast<std::uint64_t>(std::max(1, depth / 8)));
+    };
+    const int side = off < 0 ? -1 : 1;
+    const int limit = (reach(stretch, side) * (48 - t) + reach(stretch + 1, side) * t) / 48;
+    if (std::abs(off) > limit) {
+        return false;
+    }
+    out = {Ground::Mud, false, 0};
+    return true;
+}
+
 } // namespace
 
 const char* ground_name(Ground g) noexcept {
@@ -143,6 +198,12 @@ const char* ground_name(Ground g) noexcept {
         return "river";
     case Ground::Bank:
         return "bank";
+    case Ground::Mud:
+        return "mud";
+    case Ground::Trench:
+        return "trench";
+    case Ground::Crater:
+        return "shell hole";
     }
     return "?";
 }
@@ -157,6 +218,7 @@ bool validate(GroundParams& p) noexcept {
     p.hedge_u = std::clamp(p.hedge_u, 0, 16);
     p.hedge_missing_pct = std::clamp(p.hedge_missing_pct, 0, 100);
     p.row_u = std::clamp(p.row_u, 1, 64);
+    p.front_depth_u = std::clamp(p.front_depth_u, 0, 4000);
     p.river_u = std::clamp(p.river_u, 0, 400);
     p.river_bank_u = std::clamp(p.river_bank_u, 0, 64);
     p.river_step_u = std::clamp(p.river_step_u, 32, 1024);
@@ -236,6 +298,9 @@ GroundSample sample_ground(const GroundParams& p, std::uint64_t seed, int x, int
         if (d < half + p.river_bank_u) {
             return {Ground::Bank, false, 0};
         }
+    }
+    if (GroundSample front; front_line(p, seed, x, y, front)) {
+        return front;
     }
     const FieldRect f = field_at(p, seed, x, y);
     const Ground kind = field_kind(p, f);

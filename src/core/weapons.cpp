@@ -37,8 +37,17 @@ struct Vec {
     return r == HeightRule::Strict ? p.band_strict_u : p.band_forgiving_u;
 }
 
-// The rule that judges a body's rounds: the AI pilots' or the players'.
+// Whether a round or bomb is a player's (not an AI pilot's or flak's).
+[[nodiscard]] bool players(const World& w, int owner) noexcept {
+    return owner >= 0 && std::none_of(w.pilots.begin(), w.pilots.end(),
+                                      [owner](const Pilot& p) { return p.body == owner; });
+}
+
+// The rule that judges a body's rounds: the AI pilots' or the players'. Flak uses the pilots'.
 [[nodiscard]] HeightRule rule_of(const World& w, const Rules& rules, int owner) noexcept {
+    if (owner < 0) {
+        return rules.enemy_height_rule;
+    }
     for (const Pilot& pilot : w.pilots) {
         if (pilot.body == owner) {
             return rules.enemy_height_rule;
@@ -121,6 +130,15 @@ void burst(World& w, const Rules& rules, float gx, float gy, int owner, const Bl
             Event e{EventKind::BlastHitPlane, static_cast<int>(j), owner, b.x, b.y, b.z, damage};
             e.part = static_cast<std::int8_t>(part);
             w.events.push_back(e);
+        }
+    }
+    if (players(w, owner)) {
+        for (std::size_t k = 0; k < w.flak.guns.size(); ++k) {
+            const float d =
+                std::hypot(w.flak.guns[k].x - gx, w.flak.guns[k].y - gy) - rules.flak.gun_radius_u;
+            if (const float damage = blast_damage_at(blast, std::max(0.0f, d)); damage > 0.0f) {
+                hit_flak(w, k, damage, owner);
+            }
         }
     }
     for (std::size_t k = 0; k < w.targets.size(); ++k) {
@@ -378,6 +396,22 @@ void move_projectiles(World& w, const Rules& rules) {
             const float gx = r.x + (x1 - r.x) * t;
             const float gy = r.y + (y1 - r.y) * t;
             w.events.push_back(Event{EventKind::RoundGround, -1, r.owner, gx, gy, 0.0f, 0.0f});
+            // And a flak gun, from a player's guns.
+            if (players(w, r.owner)) {
+                int gun = -1;
+                float gun_d = rules.flak.gun_radius_u + p.strafe_radius_u;
+                for (std::size_t k = 0; k < w.flak.guns.size(); ++k) {
+                    const FlakGun& f = w.flak.guns[k];
+                    const float d = std::hypot(f.x - gx, f.y - gy);
+                    if (f.alive && d <= gun_d) {
+                        gun = static_cast<int>(k);
+                        gun_d = d;
+                    }
+                }
+                if (gun >= 0) {
+                    hit_flak(w, static_cast<std::size_t>(gun), r.damage, r.owner);
+                }
+            }
             int nearest = -1;
             float nearest_d = 0.0f;
             for (std::size_t k = 0; k < w.targets.size(); ++k) {

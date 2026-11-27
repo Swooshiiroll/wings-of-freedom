@@ -28,6 +28,9 @@ constexpr std::array<Rgb, kGroundKinds> kPalette = {{
     {164, 144, 110}, // road
     {62, 102, 138},  // river
     {116, 118, 90},  // bank
+    {112, 92, 64},   // the front line's mud
+    {62, 48, 34},    // trench
+    {74, 58, 42},    // shell hole
 }};
 
 constexpr std::uint64_t kSaltSpeckle = 0x737065636bull; // "speck"
@@ -78,6 +81,15 @@ constexpr std::uint64_t kSaltCrown = 0x63726f776eull;   // "crown"
     case Ground::Road:
     case Ground::Bank:
         c = shade(c, speck % 7 - 3);
+        break;
+    case Ground::Mud:
+        c = shade(c, (speck % 9 - 4) * 2);
+        break;
+    case Ground::Trench:
+        c = shade(c, speck % 5 - 2);
+        break;
+    case Ground::Crater:
+        c = shade(c, s.row ? 26 : speck % 5 - 2); // a lighter rim
         break;
     }
     return pack(c);

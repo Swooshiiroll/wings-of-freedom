@@ -34,7 +34,8 @@ A starter is much slower than the types it meets from wave 5.
 
 ## Points
 
-- **Kills:** fighters **100**, bombers **250**. Light and heavy types get their own values later.
+- **Kills:** fighters **100**, bombers **250**; flak guns **50** (light) and **150** (heavy), also in
+  chains. Light and heavy plane types get their own values later.
 - **Chains:** a kill within **20 s** of the last raises the multiplier by **0.5** (x1, x1.5, x2 …
   up to **x4**). 20 s without a kill resets it.
 - **Banking:** points count **only if you get home** off the south edge. Otherwise that run's points

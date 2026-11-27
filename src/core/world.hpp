@@ -7,6 +7,7 @@
 #include "core/ai.hpp"
 #include "core/body.hpp"
 #include "core/damage.hpp"
+#include "core/flak.hpp"
 #include "core/flight.hpp"
 #include "core/gunners.hpp"
 #include "core/input.hpp"
@@ -58,6 +59,7 @@ struct Rules {
     AiParams ai;
     WaveParams wave;
     GunnerParams gunner;
+    FlakParams flak;
     UpgradeParams upgrade;
     ScoreParams score;
     Prices price;
@@ -99,6 +101,7 @@ struct World {
     std::vector<Event> events;   // what happened in the last tick
     std::vector<Pilot> pilots;   // the enemy planes' AI pilots
     WaveState waves;             // when enemies arrive, and the kill count
+    FlakField flak;              // the enemy's guns on the ground
     Rng rng{0x5eedu};            // where hits land; seed it per run
     std::int64_t tick = 0;
 };

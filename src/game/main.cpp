@@ -818,10 +818,84 @@ void draw_bullseye(SDL_Renderer* r, const ViewXf& xf, const Target& t, float rad
 // bombs, tracers, then the drones and planes from the lowest (the farthest) up. Everything is sized
 // by its depth (core/view_xf.hpp). `plane` is the player's and `enemies` the others (bodies 1 on),
 // as drawn this frame.
+// The overlay's flak line: how many guns, and the nearest one still working.
+std::string flak_line(const World& world, const Body& plane) {
+    int alive = 0;
+    const FlakGun* nearest = nullptr;
+    float best = 0.0f;
+    for (const FlakGun& g : world.flak.guns) {
+        if (!g.alive) {
+            continue;
+        }
+        ++alive;
+        const float d = std::hypot(g.x - plane.x, g.y - plane.y);
+        if (nearest == nullptr || d < best) {
+            nearest = &g;
+            best = d;
+        }
+    }
+    if (nearest == nullptr) {
+        return "flak none";
+    }
+    return format("flak %d guns  nearest %.0f,%.0f (%.0f u)", alive,
+                  static_cast<double>(nearest->x), static_cast<double>(nearest->y),
+                  static_cast<double>(best));
+}
+
+// The flak guns on the ground: sandbagged emplacements with their barrels toward you, flashing as
+// they fire; wrecks where they were destroyed.
+void draw_flak(SDL_Renderer* r, const ViewXf& xf, const World& world, const Body& plane,
+               float gun_radius) {
+    const float k = xf.scale_at(0.0f);
+    int out_w = 0;
+    int out_h = 0;
+    SDL_GetCurrentRenderOutputSize(r, &out_w, &out_h);
+    for (const FlakGun& g : world.flak.guns) {
+        const SDL_FPoint at = on_view(xf, g.x, g.y, 0.0f);
+        if (at.x < -40.0f || at.y < -40.0f || at.x > static_cast<float>(out_w) + 40.0f ||
+            at.y > static_cast<float>(out_h) + 40.0f) {
+            continue;
+        }
+        const bool heavy = g.kind == FlakKind::Heavy;
+        const float radius = heavy ? gun_radius * 1.4f : gun_radius;
+        if (!g.alive) {
+            game::fill_ground_disc(r, xf, g.x, g.y, 0.0f, radius,
+                                   SDL_FColor{0.12f, 0.10f, 0.08f, 0.85f});
+            game::fill_ground_disc(r, xf, g.x + 2.0f, g.y - 1.0f, 0.0f, radius * 0.35f,
+                                   SDL_FColor{0.35f, 0.33f, 0.30f, 0.9f});
+            continue;
+        }
+        game::fill_ground_disc(r, xf, g.x, g.y, 0.0f, radius,
+                               SDL_FColor{0.60f, 0.50f, 0.32f, 1.0f}); // sandbags
+        game::fill_ground_disc(r, xf, g.x, g.y, 0.0f, radius * 0.65f,
+                               SDL_FColor{0.24f, 0.19f, 0.13f, 1.0f});
+        // The gun and its barrel, trained on you.
+        const SDL_FPoint to = on_view(xf, plane.x, plane.y, plane.z);
+        const float dx = to.x - at.x;
+        const float dy = to.y - at.y;
+        const float len = std::max(1.0f, std::hypot(dx, dy));
+        const float barrel = std::max(2.0f, (heavy ? 13.0f : 8.0f) * k);
+        const SDL_FPoint tip{at.x + dx / len * barrel, at.y + dy / len * barrel};
+        const SDL_FRect mount{std::round(at.x - 2.0f), std::round(at.y - 2.0f), 4.0f, 3.0f};
+        SDL_SetRenderDrawColor(r, 40, 46, 40, 255);
+        SDL_RenderFillRect(r, &mount);
+        SDL_RenderLine(r, at.x, at.y - 1.0f, tip.x, tip.y);
+        if (heavy) {
+            SDL_RenderLine(r, at.x + 1.0f, at.y - 1.0f, tip.x + 1.0f, tip.y);
+        }
+        if (g.since_fired_s < 0.06f) {
+            const SDL_FRect flash{std::round(tip.x - 2.0f), std::round(tip.y - 2.0f), 4.0f, 4.0f};
+            SDL_SetRenderDrawColor(r, 255, 220, 110, 255);
+            SDL_RenderFillRect(r, &flash);
+        }
+    }
+}
+
 void draw_scene(SDL_Renderer* r, const ViewXf& xf, const World& world, const Body& plane,
                 const std::vector<Body>& enemies, game::PlaneSprites& sprites,
                 const game::Effects& effects, const Tuning& tuning, bool marker) {
     effects.draw_ground(r, xf, tuning.look.scorch_fade_s);
+    draw_flak(r, xf, world, plane, tuning.rules.flak.gun_radius_u);
     for (const Target& t : world.targets) {
         if (t.kind == TargetKind::Ground) {
             draw_bullseye(r, xf, t, tuning.rules.targets.ground_radius_u);
@@ -1379,6 +1453,7 @@ int main(int argc, char** argv) {
             world.rng = Rng(splitmix64(seed + runs++)); // where hits land, different each run
             world.bodies.push_back(b);
             world.waves = start_waves(tuning.rules, fighter_tree(enemy_nation), opts.wave);
+            world.flak = place_flak(enemy_nation, tuning.rules.flak, world.rng);
             banner_s = 0.0f;
             marker = has_upgrade(player_upgrades, Upgrade::Sight);
             score = RunScore{};
@@ -1496,7 +1571,8 @@ int main(int argc, char** argv) {
                 nation,
                 hangar_mode,
                 0,
-                world.waves.through};
+                world.waves.through,
+                world.flak.destroyed};
             if (hangar_mode) {
                 my_progress().points += summary.payout.total;
                 summary.points_now = my_progress().points;
@@ -1694,6 +1770,9 @@ int main(int argc, char** argv) {
                             banner += format(", %d ESCORT%s", ev.by, ev.by == 1 ? "" : "S");
                         }
                         banner_s = 6.0f;
+                    } else if (ev.kind == EventKind::FlakDown && ev.by == 0) {
+                        banner = format("FLAK GUN DESTROYED  +%d", score.points - points_before);
+                        banner_s = 2.0f;
                     } else if (ev.kind == EventKind::BomberThrough) {
                         banner = format("BOMBER REACHED YOUR BASE (%d)", world.waves.through);
                         banner_s = 4.0f;
@@ -1827,7 +1906,8 @@ int main(int argc, char** argv) {
                             marker ? "  marker on" : ""),
                      format("enemies %d  wave %d (next in %.0f s)  waiting %d",
                             enemies_alive(world), world.waves.current,
-                            static_cast<double>(world.waves.timer_s), world.waves.waiting)},
+                            static_cast<double>(world.waves.timer_s), world.waves.waiting),
+                     flak_line(world, plane)},
                     SDL_Color{236, 232, 200, 255});
             }
             game::draw_menu(renderer, menu, settings, tuning.rules.weapon, fit.w, fit.h);
