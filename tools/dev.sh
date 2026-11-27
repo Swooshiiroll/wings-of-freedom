@@ -86,6 +86,12 @@ stack_build() {
   rm -rf "$stage" && mkdir -p "$stage"
   "$CMAKE" --install "$CMAKE_DIR" --config Release --component game --prefix "$stage/$name" || return 1
   cp README.md CHANGELOG.md "$stage/$name/"
+  # The updater ships inside every build, so players can pull in the next one from the game folder.
+  if is_windows; then
+    cp tools/update-game.ps1 tools/update-game.cmd "$stage/$name/"
+  else
+    cp tools/update-game.sh "$stage/$name/" && chmod +x "$stage/$name/update-game.sh"
+  fi
   rm -f build/*
   if is_windows; then
     (cd "$stage" && "$CMAKE" -E tar cf "../../build/$name-$v-windows-x64.zip" --format=zip "$name") || return 1
