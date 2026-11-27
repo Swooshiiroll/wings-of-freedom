@@ -1,5 +1,6 @@
 # Pure C++20 simulation core: no SDL, no I/O. Unit tests link only this.
 add_library(wof_core STATIC
+  ai.cpp
   camera.cpp
   damage.cpp
   fighter.cpp
@@ -12,6 +13,7 @@ add_library(wof_core STATIC
   targets.cpp
   tuning.cpp
   view.cpp
+  waves.cpp
   weapons.cpp
   world.cpp)
 target_include_directories(wof_core PUBLIC ${PROJECT_SOURCE_DIR}/src)

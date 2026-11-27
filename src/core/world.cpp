@@ -142,17 +142,72 @@ void debug_hits(World& w, std::size_t body, HitFrom from, float damage, int coun
     }
 }
 
+namespace {
+
+// The pilot flying body `i`, or nullptr (a player's).
+Pilot* pilot_of(World& w, std::size_t i) noexcept {
+    for (Pilot& p : w.pilots) {
+        if (p.body == static_cast<int>(i)) {
+            return &p;
+        }
+    }
+    return nullptr;
+}
+
+// Enemy fighters never run out (design/flight.md, Enemies): their guns and fuel are topped up.
+void top_up(Body& b, const PlaneRules& plane) noexcept {
+    for (int g = 0; g < plane.gun_count && g < kGunSlots; ++g) {
+        const auto i = static_cast<std::size_t>(g);
+        b.loadout.guns[i].rounds = plane.guns[i].rounds;
+    }
+    b.fuel = 1.0f;
+}
+
+// A kill is an enemy going down (or gone) after the player damaged or rammed it.
+void credit_kills(World& w) {
+    for (const Event& e : w.events) {
+        int enemy = -1;
+        if ((e.kind == EventKind::RoundHitPlane || e.kind == EventKind::BlastHitPlane) &&
+            e.by == 0) {
+            enemy = e.who;
+        } else if (e.kind == EventKind::Collision && (e.who == 0 || e.by == 0)) {
+            enemy = e.who == 0 ? e.by : e.who;
+        }
+        if (enemy > 0) {
+            if (Pilot* p = pilot_of(w, static_cast<std::size_t>(enemy)); p != nullptr) {
+                p->hurt = true;
+            }
+        }
+    }
+    for (Pilot& p : w.pilots) {
+        const Body& b = w.bodies[static_cast<std::size_t>(p.body)];
+        const bool lost = b.damage.going_down || b.outcome == Outcome::Crashed ||
+                          b.outcome == Outcome::ShotDown || b.outcome == Outcome::PilotKilled;
+        if (p.hurt && !p.counted && lost) {
+            p.counted = true;
+            ++w.waves.kills;
+            w.events.push_back(Event{EventKind::EnemyDown, p.body, 0, b.x, b.y, b.z, 0.0f});
+        }
+    }
+}
+
+} // namespace
+
 void step(World& world, std::span<const InputCommand> commands, const Rules& rules) {
     world.events.clear();
+    update_waves(world, rules);
     move_targets(world.targets, rules.targets, kTickSeconds);
     for (std::size_t i = 0; i < world.bodies.size(); ++i) {
         Body& b = world.bodies[i];
         if (b.outcome != Outcome::Flying) {
             continue;
         }
-        // Each plane flies by its own type's rules.
+        // Each plane flies by its own type's rules, on its player's command or its AI pilot's.
         const PlaneRules& plane = plane_of(rules, b);
-        const InputCommand cmd = i < commands.size() ? commands[i] : InputCommand{};
+        Pilot* pilot = pilot_of(world, i);
+        const InputCommand cmd = pilot != nullptr      ? ai_command(*pilot, world, rules, world.rng)
+                                 : i < commands.size() ? commands[i]
+                                                       : InputCommand{};
         const Handling h = handling_of(b, plane.damage);
         if (h.top_speed_share < 1.0f) {
             // A damaged engine: a lower top speed, and the thrust (so acceleration) to match.
@@ -165,10 +220,14 @@ void step(World& world, std::span<const InputCommand> commands, const Rules& rul
         if (!b.damage.going_down) {
             fire_weapons(world, i, cmd, rules);
         }
+        if (pilot != nullptr) {
+            top_up(world.bodies[i], plane);
+        }
         apply_edges(world.bodies[i], rules.edge, kTickSeconds);
     }
     move_projectiles(world, rules);
     collide(world, rules);
+    credit_kills(world);
     ++world.tick;
 }
 

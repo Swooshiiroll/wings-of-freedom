@@ -1,6 +1,7 @@
 # Unit tests: core library only, so they run headless (no window, no GPU) locally and on CI.
 add_executable(wof_tests
   test_main.cpp
+  test_ai.cpp
   test_planes.cpp
   test_camera.cpp
   test_damage.cpp
@@ -13,6 +14,7 @@ add_executable(wof_tests
   test_targets.cpp
   test_tuning.cpp
   test_view.cpp
+  test_waves.cpp
   test_weapons.cpp
   test_world.cpp)
 target_link_libraries(wof_tests PRIVATE wof_core doctest::doctest wof_warnings)

@@ -70,3 +70,20 @@ TEST_CASE("The view scales the world about its centre, by each point's depth") {
     CHECK(xf.at(1010.0f, 2000.0f, 300.0f).x - xf.at(1000.0f, 2000.0f, 300.0f).x ==
           doctest::Approx(10.0f * 0.625f));
 }
+
+TEST_CASE("Edge arrows: none for what's on screen, else on the edge toward it") {
+    const EdgeArrow in = edge_arrow(100.0f, 100.0f, 480, 270, 10.0f);
+    CHECK(in.on_screen);
+    const EdgeArrow right = edge_arrow(2000.0f, 135.0f, 480, 270, 10.0f);
+    CHECK_FALSE(right.on_screen);
+    CHECK(right.x == doctest::Approx(470.0f));
+    CHECK(right.y == doctest::Approx(135.0f));
+    CHECK(right.angle_rad == doctest::Approx(0.0f));
+    const EdgeArrow below = edge_arrow(240.0f, 900.0f, 480, 270, 10.0f);
+    CHECK(below.y == doctest::Approx(260.0f));
+    CHECK(below.angle_rad == doctest::Approx(1.5707963f));
+    const EdgeArrow corner = edge_arrow(-760.0f, -865.0f, 480, 270, 10.0f); // up and left
+    CHECK(corner.y == doctest::Approx(10.0f));
+    CHECK(corner.x < 240.0f);
+    CHECK(corner.x > 10.0f);
+}

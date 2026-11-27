@@ -200,7 +200,7 @@ Damage (PR 4) and enemies (PR 6) come after weapons, so there are practice targe
   use the fighter model, tinted orange-red.
 - **8 ground targets** (white and red bullseyes, 10 u across) sit along the way north.
 - Hits don't hurt them. They glow, and their hit count shows for 2 s. The readout shows the total.
-- They're on by default until enemies arrive. **F2** or `--no-targets` turns them off.
+- Off at the start since enemies arrived. **F2** or `--targets` turns them on.
 
 ## Damage
 
@@ -284,6 +284,9 @@ Enemy planes use the same flight and damage model as the player, driven by AI in
 The enemy is the **other nation** (`planes.md`): fly the US and you fight Germany's He 51s and He
 111Bs over German flak; fly Germany and you fight US P-26As and B-10Bs over US flak.
 
+**Built in three steps** (owner, 2026-11-27): fighters and waves, then bombers and their gunners,
+then flak.
+
 ### Fighters
 
 | | |
@@ -293,6 +296,16 @@ The enemy is the **other nation** (`planes.md`): fly the US and you fight German
 | Turn-fighter | Gets on your tail and stays there |
 | Dive-and-climb | Climbs above you, dives through, climbs away |
 | Head-on | Lines up for passes from the front |
+
+- **Rookies that sharpen** (owner, 2026-11-27): a wave-1 pilot's aim is off by up to **8°** and it
+  looks at you every **0.5 s**; each wave sharpens that, down to **2°** and **0.15 s**.
+- **Unlimited ammunition and fuel** (owner).
+- Every pilot leads its shots, fires within **220 u** with its nose within **5°** of its aim, pulls
+  up before **40 u** (2,000 ft), turns back **250 u** inside the edges, breaks off rather than ram,
+  and keeps clear of the other enemies.
+- **Dive-and-climb** gets **80 u** (4,000 ft) above you before it attacks; **head-on** gets **400 u**
+  in front first.
+- **A kill** is an enemy that goes down after you have damaged or rammed it.
 
 ### Bombers
 
@@ -334,6 +347,13 @@ The enemy is the **other nation** (`planes.md`): fly the US and you fight German
 
 - The first wave arrives at **10 s**, then one every **40 s**, from the north edge.
 - **Wave n** brings **1 + n/2 fighters** (rounded down). Every 3rd wave adds **2 bombers**.
+- Fighters arrive **within about 3,000 ft of your height** (owner, 2026-11-27). At most **6** are in
+  the air; the rest of a wave waits for a place.
+- **Every wave is announced** with a banner (its size and height), and the readout counts waves
+  and kills (owner).
+- **Off-screen enemies** get an arrow at the screen edge, with their height against yours (owner).
+- **Bombers** (owner, 2026-11-27) stay at 8,000-15,000 ft, fly at their real cruising speed, and
+  are announced with their height about **45 s** before they arrive, so you can climb to them.
 - **1 more flak gun** is placed every 2 waves, up to **16**.
 
 ## HUD
@@ -408,9 +428,10 @@ The enemy is the **other nation** (`planes.md`): fly the US and you fight German
   `tuning-format<N>.txt` (a file with no format line is format 1) and the defaults are written, so
   its old ceiling, tank and zoom numbers don't quietly win. Each plane's speeds, climb, stall, turn, pitch rate and tank
   come from its real stats through the `scale.*` keys, so they're no longer in the file.
-- **F2** practice targets on/off (`--no-targets`), **F3** the height rule (`--height-rule`), **F4**
+- **F2** practice targets on/off (`--targets` starts with them on), **F3** the height rule
+  (`--height-rule`), **F4**
   the bomb marker.
-- **Damage testing until enemies arrive** (owner, 2026-11-26):
+- **Damage testing** (owner, 2026-11-26, for before enemies; still handy):
   - **F5** takes a 5-round gun burst from a random side;
   - **F6** takes a flak-sized hit (12 damage);
   - **F7** repairs everything;
@@ -433,8 +454,9 @@ The enemy is the **other nation** (`planes.md`): fly the US and you fight German
    - the 30,000 ft ceiling with the ground zoom, and real mph and feet;
    - the He 51 model;
    - choosing the US or Germany.
-6. Enemies: the other nation's fighters (three styles), bombers with three gunners, light and heavy
-   flak, waves. The B-10B and He 111B models.
+6. Enemies, in three builds (owner, 2026-11-27): the other nation's fighters (three styles) and
+   waves; then bombers with three gunners and the B-10B and He 111B models; then light and heavy
+   flak.
 7. HUD, pause and controls menus, rebinding, the nation screen, the run summary.
 
 The simulation (`src/core`) has no SDL in it. It's deterministic for a given seed and list of
@@ -473,6 +495,9 @@ input commands, so tests can replay scripted flights.
   - past a soft edge the countdown runs, stops when the plane flies back in, and destroys it at 0;
   - leaving south ends the run;
   - wave sizes follow the formula.
+- **Enemies:** pilots turn to their target and only fire close and nose on, pull out of dives, stay
+  in the area, get onto a tail, climb before diving, aim better each wave, and never run out; kills
+  are credited; edge arrows point the right way.
 - **Determinism:** the same seed and inputs give the same result.
 
 **Playtest by the owner:** the CI Windows build. Numbers change in `tuning.txt` from the notes.
