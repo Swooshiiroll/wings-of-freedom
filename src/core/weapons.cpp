@@ -98,15 +98,19 @@ void burst(World& w, const Rules& rules, float gx, float gy, int owner) {
     const WeaponParams& p = rules.weapon;
     w.events.push_back(Event{EventKind::Blast, -1, owner, gx, gy, 0.0f, 0.0f});
     for (std::size_t j = 0; j < w.bodies.size(); ++j) {
-        const Body& b = w.bodies[j];
+        Body& b = w.bodies[j];
         if (b.outcome != Outcome::Flying) {
             continue;
         }
         const float d = std::sqrt((b.x - gx) * (b.x - gx) + (b.y - gy) * (b.y - gy) + b.z * b.z);
         const float damage = blast_damage_at(p, d);
         if (damage > 0.0f) {
-            w.events.push_back(
-                Event{EventKind::BlastHitPlane, static_cast<int>(j), owner, b.x, b.y, b.z, damage});
+            // Blasts land like a flak burst's hits (design/flight.md, Where hits land).
+            const Part part = pick_part(b, HitFrom::Burst, rules.damage, w.rng);
+            apply_hit(b, part, damage, rules.damage);
+            Event e{EventKind::BlastHitPlane, static_cast<int>(j), owner, b.x, b.y, b.z, damage};
+            e.part = static_cast<std::int8_t>(part);
+            w.events.push_back(e);
         }
     }
     for (std::size_t k = 0; k < w.targets.size(); ++k) {
@@ -302,8 +306,15 @@ void move_projectiles(World& w, const Rules& rules) {
         const float hy = r.y + (y1 - r.y) * best_t;
         const float hz = r.z + (z1 - r.z) * best_t;
         if (hit_body >= 0) {
-            w.events.push_back(Event{EventKind::RoundHitPlane, hit_body, r.owner, hx, hy, hz,
-                                     static_cast<float>(p.round_damage)});
+            // The part it lands on depends on where it came from: back along its path.
+            Body& target = w.bodies[static_cast<std::size_t>(hit_body)];
+            const auto damage = static_cast<float>(p.round_damage);
+            const Part part =
+                pick_part(target, hit_from(target, -r.vx, -r.vy), rules.damage, w.rng);
+            apply_hit(target, part, damage, rules.damage);
+            Event e{EventKind::RoundHitPlane, hit_body, r.owner, hx, hy, hz, damage};
+            e.part = static_cast<std::int8_t>(part);
+            w.events.push_back(e);
             continue;
         }
         if (hit_drone >= 0) {

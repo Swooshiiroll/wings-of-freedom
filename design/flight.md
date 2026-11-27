@@ -123,7 +123,8 @@ The simulation runs at a fixed **60 ticks per second**.
 - Fixed, firing forward along the nose, pitch included. **Two guns** in the cowling (the P-26's
   layout), 1 u either side of the nose, fire in turn.
 - **12 rounds/s**, **600 rounds** (50 s of fire). Rounds leave at **360 u/s** plus the plane's
-  speed and last **0.8 s**. **1 damage** per hit.
+  speed and last **0.8 s**. **2 damage** per hit (owner, 2026-11-26, with the pilot's wounds
+  below, so every part matters).
 - **Every 3rd round is a tracer** (owner, 2026-11-26), drawn as a short streak. The others are
   invisible but hit all the same.
 - **Hitting a plane:** a round's path passes within **8 u** of it on the ground, and the round is
@@ -180,9 +181,29 @@ Damage (PR 4) and enemies (PR 5) come after weapons, so there are practice targe
 | Engine | 40 | Top speed and acceleration fall, to **60%** at 1 HP | No thrust: glide home |
 | Left wing, right wing | 40 each | Turn rate falls, to **60%** at 1 HP; the weaker wing sets it. The plane doesn't pull to one side | The wing breaks off and the plane crashes |
 | Fuselage | 60 | Fuel leaks, growing to a full tank in **60 s** at 1 HP | All fuel is lost (glide home); then a **tail** of **20 HP** takes the hits, and losing it is a crash |
-| Pilot | 3 hits | | The third hit kills the pilot and the plane crashes |
+| Pilot | 3 wounds | | The third wound kills the pilot and the plane crashes |
 
+- **A pilot wound is 5 damage reaching the pilot** (owner, 2026-11-26, "parts matter").
+  - With 2-damage rounds, from ahead the engine fails or the pilot dies after about 40 rounds
+    (about 3.5 s on target).
+  - From behind it's about 75 rounds (the fuselage, then the tail).
 - **The effects are gradual:** they grow smoothly as HP falls.
+  - **Top speed and acceleration:** 60% + 40% × the engine's share of its HP.
+  - **Turn rate:** 60% + 40% × the weaker wing's share.
+  - **Leak:** (1 − the fuselage's share) of a full tank per 60 s.
+- **Going down** (owner, 2026-11-26): a lost wing, a lost tail or a killed pilot sends the plane
+  down out of control.
+  - It spins at **180°/s** toward a lost wing, nose at **-35°**, with the engine off and the
+    controls doing nothing.
+  - It trails heavy black smoke and explodes on the ground. The run ends then, as **SHOT DOWN** or
+    **PILOT KILLED**.
+- **How damage shows on the plane** (owner, 2026-11-26):
+  - a DANGER engine trails grey smoke, and a CRITICAL or destroyed one black;
+  - a leaking fuselage trails a thin fuel spray;
+  - a lost wing or tail is missing from the sprite. Those sprites are baked the first time they're
+    needed.
+
+  Until PR 6's damage diagram, the readout shows each part's stage in colour.
 - **The display is stepped.** The HUD and the damage diagram show each part in one of four stages,
   plus destroyed:
 
@@ -206,14 +227,23 @@ The part that takes a hit depends on where it comes from, relative to the plane'
 
 Flying so the enemy is behind you protects the engine and pilot, at the cost of the fuselage.
 
+- **How a direction is chosen:** a round's direction is back along its path. Bomb blasts land like
+  flak bursts.
+- **The wings' share:** it goes to a random wing, or to the side's own wing for side hits.
+- **A destroyed fuselage:** hits that land on it go to the tail.
+- **Tuning:** the table is in tuning.txt as `hit.ahead.engine` and so on.
+
 ### Collisions
 
 - **The ground:** touching it is a crash. Landing on runways comes later.
-- **Two planes:** they touch when their outlines overlap within **6 u** of height.
-  - The one with the **lower total HP** (engine + both wings + fuselage + tail) is destroyed.
-    The pilot isn't counted, since pilot hits aren't HP.
-  - The other takes damage equal to the destroyed plane's remaining total, spread over its parts.
+- **Two planes:** they touch when their outlines overlap within **6 u** of height. Each outline
+  is taken as a **7 u** circle, so their centres are within 14 u across.
+  - The one with the **lower total HP** (engine + both wings + fuselage + tail) is destroyed
+    there and then, in a fireball. The pilot isn't counted, since pilot hits aren't HP.
+  - The other takes damage equal to the destroyed plane's remaining total, spread evenly over its
+    five parts.
   - If the totals are equal, both are destroyed.
+  - Practice drones don't collide.
 - **Friendly fire** is always on. In v0.1 that only matters for bombers' gunners and the flak,
   whose shots can hit their own side.
 
@@ -318,6 +348,12 @@ Enemy planes use the same flight and damage model as the player, driven by AI in
 - `--sprite-sheet FILE`: saves every baked plane pose to a PNG and exits.
 - **F2** practice targets on/off (`--no-targets`), **F3** the height rule (`--height-rule`), **F4**
   the bomb marker.
+- **Damage testing until enemies arrive** (owner, 2026-11-26):
+  - **F5** takes a 5-round gun burst from a random side;
+  - **F6** takes a flak-sized hit (12 damage);
+  - **F7** repairs everything;
+  - `--damage engine=10,lwing=0,rwing=,fuselage=,tail=,pilot=` starts with damage, for
+    screenshots.
 - **F1:** an overlay of hitboxes, part HP numbers, and AI styles.
 - **Switches** for the bomb marker and for invulnerability.
 

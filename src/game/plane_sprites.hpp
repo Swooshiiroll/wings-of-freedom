@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 
 #include <cstdint>
+#include <map>
 #include <vector>
 
 #include "core/body.hpp"
@@ -50,10 +51,22 @@ class PlaneSprites {
 
   private:
     SDL_Renderer* renderer_;
-    SDL_Texture* plane_ = nullptr;
-    SDL_Texture* shadow_ = nullptr;
-    std::vector<std::uint32_t> plane_pixels_; // kept for save_sheet
-    double bake_ms_ = 0.0;
+    // A plane atlas and its shadow atlas, for one set of parts.
+    struct Atlas {
+        SDL_Texture* plane = nullptr;
+        SDL_Texture* shadow = nullptr;
+    };
+
+    // Bakes the atlases for the model's `parts` (keeping the plane's pixels in `keep` if given).
+    Atlas bake_atlas(std::uint32_t parts, std::vector<std::uint32_t>* keep) const;
+
+    // The atlases for a set of parts, baked the first time they're needed (a plane that's lost a
+    // wing or its tail: about 0.1 s, once).
+    const Atlas& atlas_for(std::uint32_t parts) const;
+
+    mutable std::map<std::uint32_t, Atlas> atlases_; // by the parts drawn
+    std::vector<std::uint32_t> plane_pixels_;        // the whole plane's, kept for save_sheet
+    mutable double bake_ms_ = 0.0;
 };
 
 } // namespace wof::game

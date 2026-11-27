@@ -57,48 +57,64 @@ Body start_body(const FlightParams& p, float x, float y, float heading_deg) noex
     return b;
 }
 
-void fly(Body& b, const InputCommand& cmd, const FlightParams& p, const Aero& a,
-         float dt) noexcept {
-    // Throttle, then fuel: burn follows the throttle, down to idle_burn at idle.
+void fly(Body& b, const InputCommand& in, const FlightParams& p, const Aero& a, float dt,
+         const Handling& h) noexcept {
+    // Going down, the controls do nothing: the plane spins with its nose down.
+    const bool spinning = b.damage.going_down;
+    const InputCommand cmd = spinning ? InputCommand{} : in;
+
+    // Throttle, then fuel: burn follows the throttle, down to idle_burn at idle, plus any leak.
     b.throttle = std::clamp(b.throttle + axis(cmd.throttle) * p.throttle_per_s * dt, 0.0f, 1.0f);
+    b.fuel = std::max(0.0f, b.fuel - h.leak_per_s * dt);
     if (b.engine_on) {
         const float burn =
             (p.idle_burn + (1.0f - p.idle_burn) * b.throttle) * dt / std::max(1.0f, p.tank_s);
         b.fuel = std::max(0.0f, b.fuel - burn);
-        if (b.fuel <= 0.0f) {
-            b.engine_on = false; // the plane glides from here
-        }
+    }
+    if (b.fuel <= 0.0f) {
+        b.engine_on = false; // the plane glides from here
     }
 
-    // Stall: below stall_u_s until back above stall_recover_u_s. The nose drops on its own and
-    // the controls go soft.
-    if (!b.stalled && b.speed_u_s < p.stall_u_s) {
-        b.stalled = true;
-    } else if (b.stalled && b.speed_u_s > p.stall_recover_u_s) {
+    if (spinning) {
         b.stalled = false;
+        b.pitch_deg = approach(b.pitch_deg, h.spin_pitch_deg, p.pitch_rate_deg_s * dt);
+        b.heading_deg = wrap_heading(b.heading_deg + h.spin_deg_s * dt);
+        b.bank_deg = approach(b.bank_deg, (h.spin_deg_s < 0.0f ? -1.0f : 1.0f) * p.bank_deg,
+                              p.bank_rate_deg_s * dt);
     }
-    const float control = b.stalled ? p.stall_control : 1.0f;
 
-    // Pitch: W/S move it; let go and it eases back to level. A stall pulls the nose down.
-    const float pitch_in = axis(cmd.pitch) * control;
-    const float pitch_step = p.pitch_rate_deg_s * dt;
-    if (pitch_in != 0.0f) {
-        b.pitch_deg += pitch_in * pitch_step;
-    } else if (!b.stalled) {
-        b.pitch_deg = approach(b.pitch_deg, 0.0f, pitch_step);
-    }
-    if (b.stalled && b.pitch_deg > p.stall_nose_deg) {
-        b.pitch_deg = std::max(p.stall_nose_deg, b.pitch_deg - p.stall_nose_rate_deg_s * dt);
-    }
-    if (b.z >= p.ceiling_u && b.pitch_deg > 0.0f) {
-        b.pitch_deg = approach(b.pitch_deg, 0.0f, pitch_step); // nothing to climb into
-    }
-    b.pitch_deg = std::clamp(b.pitch_deg, -p.pitch_limit_deg, p.pitch_limit_deg);
+    if (!spinning) {
+        // Stall: below stall_u_s until back above stall_recover_u_s. The nose drops on its own
+        // and the controls go soft.
+        if (!b.stalled && b.speed_u_s < p.stall_u_s) {
+            b.stalled = true;
+        } else if (b.stalled && b.speed_u_s > p.stall_recover_u_s) {
+            b.stalled = false;
+        }
+        const float control = b.stalled ? p.stall_control : 1.0f;
 
-    // Turning, and the bank that shows it.
-    const float turn_in = axis(cmd.turn) * control;
-    b.heading_deg = wrap_heading(b.heading_deg + turn_in * turn_rate(p, b.speed_u_s) * dt);
-    b.bank_deg = approach(b.bank_deg, axis(cmd.turn) * p.bank_deg, p.bank_rate_deg_s * dt);
+        // Pitch: W/S move it; let go and it eases back to level. A stall pulls the nose down.
+        const float pitch_in = axis(cmd.pitch) * control;
+        const float pitch_step = p.pitch_rate_deg_s * dt;
+        if (pitch_in != 0.0f) {
+            b.pitch_deg += pitch_in * pitch_step;
+        } else if (!b.stalled) {
+            b.pitch_deg = approach(b.pitch_deg, 0.0f, pitch_step);
+        }
+        if (b.stalled && b.pitch_deg > p.stall_nose_deg) {
+            b.pitch_deg = std::max(p.stall_nose_deg, b.pitch_deg - p.stall_nose_rate_deg_s * dt);
+        }
+        if (b.z >= p.ceiling_u && b.pitch_deg > 0.0f) {
+            b.pitch_deg = approach(b.pitch_deg, 0.0f, pitch_step); // nothing to climb into
+        }
+        b.pitch_deg = std::clamp(b.pitch_deg, -p.pitch_limit_deg, p.pitch_limit_deg);
+
+        // Turning (slower with a damaged wing), and the bank that shows it.
+        const float turn_in = axis(cmd.turn) * control;
+        b.heading_deg =
+            wrap_heading(b.heading_deg + turn_in * turn_rate(p, b.speed_u_s) * h.turn_share * dt);
+        b.bank_deg = approach(b.bank_deg, axis(cmd.turn) * p.bank_deg, p.bank_rate_deg_s * dt);
+    }
 
     // Speed along the flight path: thrust, drag, and gravity along the climb or dive.
     const float pitch = b.pitch_deg * kDegToRad;

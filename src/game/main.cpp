@@ -48,12 +48,14 @@
 
 #include "core/body.hpp"
 #include "core/camera.hpp"
+#include "core/damage.hpp"
 #include "core/fixed_step.hpp"
 #include "core/flight.hpp"
 #include "core/ground.hpp"
 #include "core/hash.hpp"
 #include "core/iso.hpp"
 #include "core/map.hpp"
+#include "core/rng.hpp"
 #include "core/targets.hpp"
 #include "core/tuning.hpp"
 #include "core/units.hpp"
@@ -94,8 +96,9 @@ struct Options {
     bool overlay = false;
     HeightRule height_rule = HeightRule::Forgiving;
     bool no_targets = false;
-    bool hold_fire = false; // --shot: hold the guns
-    bool hold_bomb = false; // --shot: hold the bomb release
+    bool hold_fire = false;       // --shot: hold the guns
+    bool hold_bomb = false;       // --shot: hold the bomb release
+    const char* damage = nullptr; // --damage engine=10,lwing=0,...
     const char* sprite_sheet = nullptr;
 };
 
@@ -201,6 +204,8 @@ int parse_options(int argc, char** argv, Options& out) {
             out.hold_fire = true;
         } else if (std::strcmp(argv[i], "--bomb") == 0) {
             out.hold_bomb = true;
+        } else if (std::strcmp(argv[i], "--damage") == 0 && has_value) {
+            out.damage = argv[++i];
         } else {
             std::fprintf(stderr,
                          "usage: WingsOfFreedom [--seed N] [--window WxH] [--shot FILE.png] "
@@ -517,10 +522,165 @@ const char* banner_of(Outcome o) {
         return "LEFT THE BATTLE AREA";
     case Outcome::ReturnedHome:
         return "RETURNED TO BASE";
+    case Outcome::ShotDown:
+        return "SHOT DOWN";
+    case Outcome::PilotKilled:
+        return "PILOT KILLED";
     case Outcome::Flying:
         break;
     }
     return "";
+}
+
+// Developer tool (--damage): sets parts' HP (and the pilot's damage) from "engine=10,lwing=0,...",
+// then lets the damage model react (a lost wing sends the plane down, and so on). False on a bad
+// spec.
+bool apply_damage_spec(const char* spec, Body& b, const DamageParams& d) {
+    std::string s(spec);
+    std::size_t at = 0;
+    while (at < s.size()) {
+        const std::size_t comma = s.find(',', at);
+        const std::string item = s.substr(at, comma == std::string::npos ? comma : comma - at);
+        at = comma == std::string::npos ? s.size() : comma + 1;
+        const std::size_t eq = item.find('=');
+        float v = 0.0f;
+        if (eq == std::string::npos || !parse_number(item.substr(eq + 1).c_str(), v)) {
+            return false;
+        }
+        const std::string key = item.substr(0, eq);
+        if (key == "engine") {
+            b.damage.engine = v;
+            apply_hit(b, Part::Engine, 0.0f, d);
+        } else if (key == "lwing") {
+            b.damage.left_wing = v;
+            apply_hit(b, Part::LeftWing, 0.0f, d);
+        } else if (key == "rwing") {
+            b.damage.right_wing = v;
+            apply_hit(b, Part::RightWing, 0.0f, d);
+        } else if (key == "fuselage") {
+            b.damage.fuselage = std::max(0.001f, v);
+            apply_hit(b, Part::Fuselage, v <= 0.0f ? 0.001f : 0.0f, d);
+        } else if (key == "tail") {
+            b.damage.tail = v;
+            apply_hit(b, Part::Tail, 0.0f, d);
+        } else if (key == "pilot") {
+            apply_hit(b, Part::Cockpit, v, d);
+        } else {
+            return false;
+        }
+    }
+    return true;
+}
+
+// What damaged planes leave behind each tick: engine smoke (grey at DANGER, black at CRITICAL or
+// when it's gone), a fuel spray while the fuselage leaks, heavy black smoke while going down, and a
+// fireball where a plane's flight ends in a crash or in the air.
+void emit_trails(const World& w, const std::vector<Body>& before, game::Effects& fx,
+                 const DamageParams& d) {
+    using Trail = game::Effects::Trail;
+    for (std::size_t i = 0; i < w.bodies.size(); ++i) {
+        const Body& b = w.bodies[i];
+        const bool ended_badly = b.outcome == Outcome::Crashed || b.outcome == Outcome::ShotDown ||
+                                 b.outcome == Outcome::PilotKilled;
+        if (i < before.size() && before[i].outcome == Outcome::Flying && ended_badly) {
+            fx.explode(b.x, b.y, b.z, 16.0f);
+        }
+        if (b.outcome != Outcome::Flying) {
+            continue;
+        }
+        // Puffs come from just behind the nose, so they trail as the plane flies on.
+        const float h = b.heading_deg * 3.14159265f / 180.0f;
+        const float x = b.x + std::sin(h) * 3.0f;
+        const float y = b.y + std::cos(h) * 3.0f;
+        const std::int64_t t = w.tick;
+        const Stage engine = part_stage(b, Part::Engine, d);
+        if (b.damage.going_down) {
+            if (t % 2 == 0) {
+                fx.trail(x, y, b.z, Trail::Black);
+            }
+        } else if (engine == Stage::Critical || engine == Stage::Destroyed) {
+            if (t % 3 == 0) {
+                fx.trail(x, y, b.z, Trail::Black);
+            }
+        } else if (engine == Stage::Danger && t % 6 == 0) {
+            fx.trail(x, y, b.z, Trail::Grey);
+        }
+        if (b.damage.fuselage > 0.0f && b.damage.fuselage < d.fuselage_hp && b.fuel > 0.0f &&
+            t % 4 == 0) {
+            fx.trail(b.x - std::sin(h) * 4.0f, b.y - std::cos(h) * 4.0f, b.z - 1.0f, Trail::Spray);
+        }
+    }
+}
+
+// The colour a part's stage is shown in.
+SDL_Color stage_colour(Stage s) {
+    switch (s) {
+    case Stage::Ok:
+        return {120, 220, 120, 255};
+    case Stage::Warning:
+        return {240, 220, 90, 255};
+    case Stage::Danger:
+        return {255, 160, 60, 255};
+    case Stage::Critical:
+        return {255, 80, 60, 255};
+    case Stage::Destroyed:
+        return {150, 150, 150, 255};
+    }
+    return {255, 255, 255, 255};
+}
+
+// A line of text in coloured pieces.
+struct Piece {
+    std::string text;
+    SDL_Color colour;
+};
+using RichLine = std::vector<Piece>;
+
+// Lines of coloured pieces on a dark backing, with the block's bottom-left at (x, bottom).
+void draw_rich_block(SDL_Renderer* r, float x, float bottom, const std::vector<RichLine>& lines) {
+    std::size_t widest = 0;
+    for (const RichLine& l : lines) {
+        std::size_t n = 0;
+        for (const Piece& p : l) {
+            n += p.text.size();
+        }
+        widest = std::max(widest, n);
+    }
+    const float h = static_cast<float>(lines.size()) * 10.0f + 2.0f;
+    const SDL_FRect back{x, bottom - h, static_cast<float>(widest) * kGlyph + 4.0f, h};
+    SDL_SetRenderDrawColor(r, 0, 0, 0, 160);
+    SDL_RenderFillRect(r, &back);
+    float y = bottom - h + 2.0f;
+    for (const RichLine& l : lines) {
+        float cx = x + 2.0f;
+        for (const Piece& p : l) {
+            SDL_SetRenderDrawColor(r, p.colour.r, p.colour.g, p.colour.b, p.colour.a);
+            SDL_RenderDebugText(r, cx, y, p.text.c_str());
+            cx += static_cast<float>(p.text.size()) * kGlyph;
+        }
+        y += 10.0f;
+    }
+}
+
+// The damage line: each part's stage in its colour.
+RichLine damage_line(const Body& b, const DamageParams& d) {
+    const SDL_Color label{236, 232, 200, 255};
+    RichLine line;
+    const auto add = [&](const char* name, Part p) {
+        const Stage s = part_stage(b, p, d);
+        line.push_back(Piece{name, label});
+        line.push_back(Piece{stage_name(s), stage_colour(s)});
+        line.push_back(Piece{"  ", label});
+    };
+    add("ENG ", Part::Engine);
+    add("LW ", Part::LeftWing);
+    add("RW ", Part::RightWing);
+    add("FUS ", Part::Fuselage);
+    add("TAIL ", Part::Tail);
+    line.push_back(Piece{"PILOT ", label});
+    line.push_back(Piece{std::to_string(b.damage.wounds) + "/" + std::to_string(d.pilot_wounds),
+                         stage_colour(part_stage(b, Part::Cockpit, d))});
+    return line;
 }
 
 } // namespace
@@ -604,6 +764,7 @@ int main(int argc, char** argv) {
         bool marker = false;      // the bomb marker (a developer switch until it's an upgrade)
         float own_blast_s = 0.0f; // how long "OWN BLAST" still shows
         float own_blast_damage = 0.0f;
+        std::uint64_t runs = 0;
         const auto new_run = [&]() {
             const float x =
                 opts.has_at ? static_cast<float>(opts.at_x) : static_cast<float>(kMapWidthU) * 0.5f;
@@ -619,7 +780,13 @@ int main(int argc, char** argv) {
                 b.throttle = opts.throttle_pct / 100.0f;
             }
             arm(b, tuning.rules.weapon);
+            repair(b, tuning.rules.damage);
+            if (opts.damage != nullptr && !apply_damage_spec(opts.damage, b, tuning.rules.damage)) {
+                SDL_Log("--damage: expected engine=, lwing=, rwing=, fuselage=, tail= or pilot= "
+                        "with numbers, separated by commas");
+            }
             world = World{};
+            world.rng = Rng(splitmix64(seed + runs++)); // where hits land, different each run
             world.bodies.push_back(b);
             if (targets_on) {
                 world.targets = practice_targets(tuning.rules.targets);
@@ -669,6 +836,20 @@ int main(int argc, char** argv) {
                                                               kHeightRules);
                     } else if (e.key.key == SDLK_F4) {
                         marker = !marker;
+                    } else if (!run_over && e.key.key == SDLK_F5) {
+                        // Developer tool: a gun burst from a random side.
+                        constexpr std::array<HitFrom, 4> kSides = {HitFrom::Ahead, HitFrom::Behind,
+                                                                   HitFrom::Left, HitFrom::Right};
+                        const HitFrom from = kSides[world.rng.next_below(4)];
+                        debug_hits(world, 0, from,
+                                   static_cast<float>(tuning.rules.weapon.round_damage), 5,
+                                   tuning.rules);
+                        effects.add(world.events, tuning.rules.weapon.blast_radius_u);
+                    } else if (!run_over && e.key.key == SDLK_F6) {
+                        // Developer tool: a flak-sized hit (design/flight.md, Flak guns).
+                        debug_hits(world, 0, HitFrom::Burst, 12.0f, 1, tuning.rules);
+                    } else if (!run_over && e.key.key == SDLK_F7) {
+                        repair(world.bodies[0], tuning.rules.damage);
                     } else if (run_over && (e.key.key == SDLK_RETURN ||
                                             e.key.key == SDLK_KP_ENTER || e.key.key == SDLK_R)) {
                         new_run();
@@ -689,6 +870,7 @@ int main(int argc, char** argv) {
             // no input), so a screenshot is the same every time. When the run is over, it waits.
             const Uint64 now = SDL_GetTicksNS();
             const int ticks = shot_mode ? 1 : step.advance(static_cast<std::int64_t>(now - last));
+            const float frame_s = std::min(0.25f, static_cast<float>(now - last) / 1e9f);
             last = now;
             const bool* keys = SDL_GetKeyboardState(nullptr);
             tuning.rules.height_rule = height_rule;
@@ -711,6 +893,11 @@ int main(int argc, char** argv) {
                         own_blast_damage = ev.damage;
                     }
                 }
+                emit_trails(world, previous, effects, tuning.rules.damage);
+            }
+            if (world.bodies[0].outcome != Outcome::Flying && !shot_mode) {
+                // The run is over and the world waits, but the fire and smoke play out.
+                effects.tick(frame_s, tuning.look.scorch_fade_s);
             }
             const float alpha = shot_mode ? 1.0f : step.alpha();
 
@@ -740,6 +927,9 @@ int main(int argc, char** argv) {
             if (!plane.engine_on) {
                 flags_line += "ENGINE OFF  ";
             }
+            if (plane.damage.going_down) {
+                flags_line += "GOING DOWN  ";
+            }
             if (own_blast_s > 0.0f) {
                 flags_line += format("OWN BLAST -%.0f", static_cast<double>(own_blast_damage));
             }
@@ -747,21 +937,23 @@ int main(int argc, char** argv) {
             for (const Target& t : world.targets) {
                 hits += t.hits;
             }
-            std::vector<std::string> readout = {
-                format("THR %3.0f%%  %3.0f MPH  %5.0f FT  FUEL %3.0f%%",
-                       static_cast<double>(plane.throttle * 100.0f),
-                       static_cast<double>(plane.speed_u_s * kMphPerUs),
-                       static_cast<double>(plane.z * kFeetPerU),
-                       static_cast<double>(plane.fuel * 100.0f)),
-                format("GUN %3d  BOMBS %d  [%s]  RULE %s  HITS %d", plane.loadout.rounds,
-                       plane.loadout.bombs, heavy_name(plane.loadout.heavy),
-                       height_rule_name(height_rule), hits)};
+            const SDL_Color text{236, 232, 200, 255};
+            std::vector<RichLine> readout = {
+                {Piece{format("THR %3.0f%%  %3.0f MPH  %5.0f FT  FUEL %3.0f%%",
+                              static_cast<double>(plane.throttle * 100.0f),
+                              static_cast<double>(plane.speed_u_s * kMphPerUs),
+                              static_cast<double>(plane.z * kFeetPerU),
+                              static_cast<double>(plane.fuel * 100.0f)),
+                       text}},
+                {Piece{format("GUN %3d  BOMBS %d  [%s]  RULE %s  HITS %d", plane.loadout.rounds,
+                              plane.loadout.bombs, heavy_name(plane.loadout.heavy),
+                              height_rule_name(height_rule), hits),
+                       text}},
+                damage_line(plane, tuning.rules.damage)};
             if (!flags_line.empty()) {
-                readout.push_back(flags_line);
+                readout.push_back({Piece{flags_line, SDL_Color{255, 150, 110, 255}}});
             }
-            const float block_h = static_cast<float>(readout.size()) * 10.0f + 2.0f;
-            draw_text_block(renderer, 2.0f, static_cast<float>(fit.h) - block_h - 2.0f, readout,
-                            SDL_Color{236, 232, 200, 255});
+            draw_rich_block(renderer, 2.0f, static_cast<float>(fit.h) - 2.0f, readout);
             if (plane.edge_countdown_s >= 0.0f && plane.outcome == Outcome::Flying) {
                 draw_text_centred(renderer, fit.w, 40.0f,
                                   {format("RETURN TO THE BATTLE AREA  %d",

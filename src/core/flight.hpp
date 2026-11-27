@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/body.hpp"
+#include "core/damage.hpp"
 #include "core/input.hpp"
 
 namespace wof {
@@ -63,7 +64,10 @@ struct Aero {
 [[nodiscard]] Body start_body(const FlightParams& p, float x, float y, float heading_deg) noexcept;
 
 // One tick of flight for one plane: throttle, fuel, stall, pitch, turn, bank, speed and position.
-// Doesn't apply the ground or the edges (step() in world.hpp does).
-void fly(Body& b, const InputCommand& cmd, const FlightParams& p, const Aero& a, float dt) noexcept;
+// `h` is how damage changes it (core/damage.hpp): a slower turn, a fuel leak, and while going
+// down, a spin that ignores the controls. A damaged engine's lower top speed comes in through `a`
+// (step() works one out for it). Doesn't apply the ground or the edges (step() does).
+void fly(Body& b, const InputCommand& cmd, const FlightParams& p, const Aero& a, float dt,
+         const Handling& h = Handling{}) noexcept;
 
 } // namespace wof

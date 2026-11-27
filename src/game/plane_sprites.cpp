@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <utility>
 
+#include "core/damage.hpp"
 #include "core/fighter.hpp"
 #include "core/iso.hpp"
 #include "core/raster.hpp"
@@ -42,15 +44,18 @@ SDL_Texture* upload(SDL_Renderer* r, const std::vector<std::uint32_t>& pixels) {
 } // namespace
 
 PlaneSprites::~PlaneSprites() {
-    SDL_DestroyTexture(plane_);
-    SDL_DestroyTexture(shadow_);
+    for (auto& entry : atlases_) {
+        SDL_DestroyTexture(entry.second.plane);
+        SDL_DestroyTexture(entry.second.shadow);
+    }
 }
 
-bool PlaneSprites::bake() {
+PlaneSprites::Atlas PlaneSprites::bake_atlas(std::uint32_t parts,
+                                             std::vector<std::uint32_t>* keep) const {
     const Uint64 start = SDL_GetTicksNS();
     const std::vector<Block> model = fighter_model();
     const auto n = static_cast<std::size_t>(kAtlasW) * static_cast<std::size_t>(kAtlasH);
-    plane_pixels_.assign(n, 0u);
+    std::vector<std::uint32_t> plane_pixels(n, 0u);
     std::vector<std::uint32_t> shadow_pixels(n, 0u);
     constexpr float kMid = static_cast<float>(kCell) * 0.5f;
     for (int h = 0; h < kColumns; ++h) {
@@ -60,18 +65,36 @@ bool PlaneSprites::bake() {
                                 static_cast<float>(p - kPitches / 2) * 10.0f,
                                 static_cast<float>(b - 1) * kBakedBankDeg};
                 const int row = p * kBanks + b;
-                blit(render_model(model, pose, kCell, kCell, kMid, kMid), plane_pixels_, h, row);
-                blit(render_shadow(model, pose, kCell, kCell, kMid, kMid), shadow_pixels, h, row);
+                blit(render_model(model, pose, kCell, kCell, kMid, kMid, parts), plane_pixels, h,
+                     row);
+                blit(render_shadow(model, pose, kCell, kCell, kMid, kMid, parts), shadow_pixels, h,
+                     row);
             }
         }
     }
-    SDL_DestroyTexture(plane_);
-    SDL_DestroyTexture(shadow_);
-    plane_ = upload(renderer_, plane_pixels_);
-    shadow_ = upload(renderer_, shadow_pixels);
-    bake_ms_ = static_cast<double>(SDL_GetTicksNS() - start) / 1e6;
-    SDL_Log("plane sprites: %d poses baked in %.1f ms", kColumns * kRows, bake_ms_);
-    return plane_ != nullptr && shadow_ != nullptr;
+    Atlas a{upload(renderer_, plane_pixels), upload(renderer_, shadow_pixels)};
+    const double ms = static_cast<double>(SDL_GetTicksNS() - start) / 1e6;
+    SDL_Log("plane sprites (parts 0x%02x): %d poses baked in %.1f ms", parts, kColumns * kRows, ms);
+    if (keep != nullptr) {
+        *keep = std::move(plane_pixels);
+        bake_ms_ = ms;
+    }
+    return a;
+}
+
+bool PlaneSprites::bake() {
+    const Atlas a = bake_atlas(kAllParts, &plane_pixels_);
+    atlases_[kAllParts] = a;
+    return a.plane != nullptr && a.shadow != nullptr;
+}
+
+const PlaneSprites::Atlas& PlaneSprites::atlas_for(std::uint32_t parts) const {
+    const auto found = atlases_.find(parts);
+    if (found != atlases_.end()) {
+        return found->second;
+    }
+    // A plane missing a wing or its tail: baked the first time one is seen.
+    return atlases_[parts] = bake_atlas(parts, nullptr);
 }
 
 PlaneSprites::Cell PlaneSprites::cell_of(const Body& b) noexcept {
@@ -82,7 +105,8 @@ PlaneSprites::Cell PlaneSprites::cell_of(const Body& b) noexcept {
 
 void PlaneSprites::draw(const Body& b, PixelPt origin, bool shadow, SDL_Color tint,
                         bool flash) const {
-    SDL_Texture* atlas = shadow ? shadow_ : plane_;
+    const Atlas& set = atlas_for(kAllParts & ~missing_parts(b));
+    SDL_Texture* atlas = shadow ? set.shadow : set.plane;
     if (atlas == nullptr) {
         return;
     }
