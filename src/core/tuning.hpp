@@ -13,7 +13,7 @@ namespace wof {
 // keeps them in tuning.txt next to the executable and reloads that file whenever it changes.
 struct Tuning {
     CameraParams camera;
-    StandInParams stand_in;
+    Rules rules; // flight and edges
     GroundParams ground;
 
     friend bool operator==(const Tuning&, const Tuning&) = default;
@@ -23,6 +23,7 @@ struct Tuning {
 // comment line per section.
 //
 //   camera.lead_u = 40
+//   flight.max_level_u_s = 150
 //   ground.field_max_u = 160
 [[nodiscard]] std::string to_tuning(const Tuning& t);
 

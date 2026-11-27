@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/body.hpp"
 #include "core/iso.hpp"
 #include "core/world.hpp"
 

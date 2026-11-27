@@ -78,14 +78,30 @@ The simulation runs at a fixed **60 ticks per second**.
     also drops the bombs.
   - **Max level speed** is **150 u/s** at full throttle. **Dive limit** is **240 u/s**; the plane
     can't go faster than that.
-- **Pitch:** W/S changes it at **60°/s**, up to **±40°**. The climb rate is speed × sin(pitch).
-  Best sustained climb is about **18 u/s** at full throttle, so deck to ceiling takes about 13 s.
-- **Turning:** **100°/s** at the best turn speed of **110 u/s**, and slower above or below it.
-  At best speed, a full circle takes about 3.6 s.
+  - **How it's worked out** (so all of these numbers hold together):
+    - Drag is a parasitic part that grows with speed squared, plus an induced part that shrinks
+      with it. The best glide below fixes both.
+    - The propeller's thrust is full up to **110 u/s**, then falls as 1/speed, scaled by the
+      throttle. Its power is set so that full throttle levels off at 150.
+- **Pitch:** W/S changes it at **60°/s**, up to **±40°**. **Let go and the nose eases back to
+  level** at the same rate (owner, 2026-11-26). The climb rate is speed × sin(pitch).
+  - The best sustained climb comes out at about **19 u/s**, near 110 u/s, so deck to ceiling
+    takes about 13 s.
+  - Holding S climbs at up to 40° and loses speed fast: from 110 u/s to a stall in about 2 s.
+- **Turning:** **100°/s** at the best turn speed of **110 u/s**.
+  - Below that speed the rate falls with speed (50°/s at 55); above it, with 1/speed (73°/s at
+    150).
+  - At best speed, a full circle takes about 3.6 s.
+- **Bank:** the plane banks **30°** into a turn and levels its wings after. It's for looks only.
 - **Throttle:** 0-100% in steps while Shift/Ctrl is held, at **50% per second**.
-- **Stall:** below **55 u/s** the nose drops on its own, and turn and pitch control go soft until
-  speed comes back. Height is the safety margin.
-- **Ceiling:** above **240 u** the plane can't climb any further.
+- **Stall:** below **55 u/s**, until speed is back above **63 u/s**. Height is the safety margin.
+  - The nose drops on its own toward **-30°**, at **40°/s**.
+  - Turn and pitch control work at **30%**.
+- **Ceiling:** above **240 u** the plane can't climb any further, and the nose is pushed back to
+  level.
+- **A run starts** in the air near the south edge, heading north at **120 u** and **110 u/s**,
+  with **80%** throttle.
+- **The ground:** touching it is a crash, and the run ends.
 
 ### Fuel
 
@@ -241,6 +257,8 @@ Enemy planes use the same flight and damage model as the player, driven by AI in
 - **End of a run:** shot down, crashed, pilot killed, left the battle area, or returned to base.
   A summary shows the
   cause, time flown, kills by type, and bombers that reached base. A key starts a new run.
+  - **Until the summary arrives (PR 6):** the view freezes with a banner giving the cause and the
+    time flown. Enter or R starts a new run (owner, 2026-11-26).
 - **Pause menu (Esc):** resume, restart, controls (rebinding), options (gunnery height rule),
   quit.
 
@@ -248,8 +266,17 @@ Enemy planes use the same flight and damage model as the player, driven by AI in
 
 - Planes are **simple blocky 3D shapes**, baked when the game starts into sprites at:
   - **32 headings**;
-  - **3 pitches** (dive, level, climb);
+  - **9 pitches**, one every 10° from -40° to +40° (owner, 2026-11-26), so the nose visibly
+    rises and drops;
   - **3 banks** (left, level, right).
+- That's 864 poses, in 48x48 cells, baked in about 0.1 s.
+- **The player's fighter** is a blocky original model in the shape of the **Boeing P-26
+  "Peashooter"** (owner, 2026-11-26).
+  - Its shape: low wing, big round radial cowling, wheel spats, open cockpit with headrest.
+  - Its colours: olive drab fuselage, yellow wings and tail, a red spinner. No national markings.
+  - The flight numbers above are the game's, not the real P-26's (about 234 mph top speed).
+- The models are drawn in the true 2:1 view, flat-shaded by a sun from the upper left. A 1 px
+  dark outline makes them read on any field.
 - Lost wings and the tail are left off the model, so damage shows at every angle without
   drawing each one.
 - Shadows are the same shapes flattened onto the ground.
@@ -260,8 +287,10 @@ Enemy planes use the same flight and damage model as the player, driven by AI in
 - `--seed N`, `--wave N` (start at a wave), `--window WxH`.
 - `--shot FILE`: fly `--ticks N` ticks (default 120) with no input, save the view as a PNG, and
   exit, for checking the drawing.
-  - `--heading DEG`, `--height U` and `--at X,Y` set where the plane starts.
+  - `--heading DEG`, `--height U`, `--pitch DEG`, `--throttle PCT` and `--at X,Y` set how the
+    plane starts.
   - `--overlay` starts with the F1 overlay shown.
+- `--sprite-sheet FILE`: saves every baked plane pose to a PNG and exits.
 - **F1:** an overlay of hitboxes, part HP numbers, and AI styles.
 - **Switches** for the bomb marker and for invulnerability.
 

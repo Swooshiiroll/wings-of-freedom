@@ -4,6 +4,8 @@
 #include <span>
 #include <vector>
 
+#include "core/body.hpp"
+#include "core/flight.hpp"
 #include "core/input.hpp"
 
 namespace wof {
@@ -11,27 +13,20 @@ namespace wof {
 inline constexpr int kTicksPerSecond = 60;
 inline constexpr float kTickSeconds = 1.0f / static_cast<float>(kTicksPerSecond);
 
-// The stand-in plane's numbers (tuning.txt, `stand_in.*`). PR 1 only: it gives the camera something
-// to follow and has no physics. Real flight (design/flight.md, Flight) replaces it in PR 2.
-struct StandInParams {
-    float speed_u_s = 110.0f;  // fixed speed
-    float turn_deg_s = 100.0f; // at full turn input
-    float climb_u_s = 18.0f;   // at full pitch input, up or down
-    float ceiling_u = 240.0f;  // the highest it can go
+// The battle area's edges (design/flight.md, World and view; tuning.txt `edge.*`).
+struct EdgeParams {
+    float warning_u = 200.0f;  // a warning shows this close to the east, west or north edge
+    float countdown_s = 10.0f; // past one of them, this long to fly back in
 
-    friend constexpr bool operator==(const StandInParams&, const StandInParams&) = default;
+    friend constexpr bool operator==(const EdgeParams&, const EdgeParams&) = default;
 };
 
-// A plane's position and direction. x east, y north, z height, in u; the heading is a compass angle
-// in degrees (0 north, 90 east), always in [0, 360).
-struct Body {
-    float x = 0.0f;
-    float y = 0.0f;
-    float z = 0.0f;
-    float heading_deg = 0.0f;
-    float speed_u_s = 0.0f;
+// Everything step() needs to know about the rules.
+struct Rules {
+    FlightParams flight;
+    EdgeParams edge;
 
-    friend constexpr bool operator==(const Body&, const Body&) = default;
+    friend constexpr bool operator==(const Rules&, const Rules&) = default;
 };
 
 // Everything that flies. Any number of planes; nothing here assumes there is only one player.
@@ -40,8 +35,15 @@ struct World {
     std::int64_t tick = 0;
 };
 
+// The ground and the edges, after a plane has moved:
+// - touching the ground is a crash;
+// - crossing the south edge is a return to base;
+// - near the east, west or north edge a warning shows, and past one a countdown runs: flying
+//   back in stops it (it starts from the top next time), and at 0 the plane self-destructs.
+void apply_edges(Body& b, const EdgeParams& e, float dt) noexcept;
+
 // Advances the world one tick (1/60 s). commands[i] drives bodies[i]; a body without a command gets
-// no input that tick.
-void step(World& world, std::span<const InputCommand> commands, const StandInParams& p);
+// no input. Bodies whose flight has ended stay where they are.
+void step(World& world, std::span<const InputCommand> commands, const Rules& rules);
 
 } // namespace wof
