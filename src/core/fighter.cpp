@@ -318,6 +318,156 @@ std::vector<Block> he51_model() {
     return m;
 }
 
+namespace {
+
+constexpr Rgb8 kBlue{44, 82, 148}; // the B-10B's true blue
+constexpr Rgb8 kBlueDark{34, 62, 112};
+constexpr Rgb8 kRlm63{162, 166, 154};    // the Do 23's light grey
+constexpr Rgb8 kRlmBrown{110, 90, 62};   // the He 111's splinter brown
+constexpr Rgb8 kRlmSplinter{70, 88, 58}; // and green
+
+// A radial engine's nacelle at x, from y0 to y1, with a dark face and a red hub.
+void radial(std::vector<Block>& m, float x, float y0, float y1, float z, Rgb8 colour, Part part) {
+    m.push_back(box(x - 2.0f, x + 2.0f, y0, y1, z - 1.8f, z + 1.8f, colour, part));
+    m.push_back(box(x - 1.6f, x + 1.6f, y1, y1 + 0.4f, z - 1.4f, z + 1.4f, kDark, part));
+    m.push_back(
+        box(x - 0.6f, x + 0.6f, y1 + 0.4f, y1 + 1.6f, z - 0.6f, z + 0.6f, kSpinnerColour, part));
+}
+
+// A long inline engine's nacelle at x, pointed, with a red spinner.
+void inline_engine(std::vector<Block>& m, float x, float y0, float y1, float z, Rgb8 colour,
+                   Part part) {
+    Block nacelle =
+        taper_y(y0, 1.7f, z - 1.7f, z + 1.5f, y1, 1.0f, z - 0.9f, z + 0.9f, colour, part);
+    for (Vec3& c : nacelle.corners) {
+        c.x += x;
+    }
+    m.push_back(nacelle);
+    m.push_back(box(x - 0.6f, x + 0.6f, y1, y1 + 1.6f, z - 0.6f, z + 0.6f, kSpinnerColour, part));
+}
+
+// The two sides: -1 left (Engine, LeftWing), 1 right (Engine2, RightWing).
+constexpr Part wing_of(float side) {
+    return side < 0.0f ? Part::LeftWing : Part::RightWing;
+}
+constexpr Part engine_of(float side) {
+    return side < 0.0f ? Part::Engine : Part::Engine2;
+}
+
+} // namespace
+
+// The Keystone B-6A: a big twin-engined biplane, radials between the wings, open cockpits, olive
+// drab and yellow. About 58 u across and 38 u long.
+std::vector<Block> b6_model() {
+    std::vector<Block> m;
+    m.push_back(
+        taper_y(13.0f, 1.8f, -1.6f, 2.0f, 17.0f, 0.9f, -0.8f, 1.2f, kArmyOlive, Part::Fuselage));
+    m.push_back(box(-1.8f, 1.8f, -4.0f, 13.0f, -1.6f, 2.0f, kArmyOlive, Part::Fuselage));
+    m.push_back(
+        taper_y(-4.0f, 1.8f, -1.6f, 2.0f, -20.0f, 0.5f, 0.0f, 1.2f, kArmyOlive, Part::Tail));
+    for (const float side : {-1.0f, 1.0f}) {
+        const Part wing = wing_of(side);
+        m.push_back(
+            slab(side * 1.8f, side * 27.0f, -2.0f, 5.0f, -1.6f, 0.9f, 0.8f, wing, kArmyYellow));
+        m.push_back(
+            slab(side * 0.3f, side * 29.0f, -1.0f, 6.0f, 6.0f, 0.9f, 0.6f, wing, kArmyYellow));
+        m.push_back(
+            box(side * 13.0f - 0.2f, side * 13.0f + 0.2f, 1.0f, 1.6f, -0.6f, 6.4f, kDark, wing));
+        m.push_back(
+            box(side * 23.0f - 0.2f, side * 23.0f + 0.2f, 1.0f, 1.6f, -0.3f, 6.6f, kDark, wing));
+        radial(m, side * 8.0f, 2.0f, 7.0f, 2.2f, kArmyOliveDark, engine_of(side));
+        m.push_back(box(side * 8.0f - 0.5f, side * 8.0f + 0.5f, 2.5f, 3.5f, -4.0f, 0.4f, kDark,
+                        Part::Fuselage));
+        m.push_back(box(side * 8.0f - 0.8f, side * 8.0f + 0.8f, 1.5f, 4.5f, -5.8f, -3.6f, kDark,
+                        Part::Fuselage));
+    }
+    m.push_back(box(-8.0f, 8.0f, -20.0f, -15.5f, 0.4f, 0.9f, kArmyYellow, Part::Tail));
+    m.push_back(fin_blade(-21.0f, -15.5f, 7.0f, kArmyYellow));
+    m.push_back(box(-0.9f, 0.9f, 8.0f, 9.0f, 2.0f, 2.9f, kGlass, Part::Cockpit));
+    m.push_back(box(-0.45f, 0.45f, 6.2f, 7.2f, 2.0f, 3.2f, kLeather, Part::Cockpit));
+    m.push_back(box(-0.45f, 0.45f, -4.5f, -3.5f, 2.0f, 3.0f, kLeather, Part::Cockpit));
+    return m;
+}
+
+// The Dornier Do 23G: a shoulder-wing twin with long inline engines, a boxy fuselage and big
+// spatted wheels, in light grey. About 64 u across and 48 u long.
+std::vector<Block> do23_model() {
+    std::vector<Block> m;
+    m.push_back(taper_y(16.0f, 2.0f, -2.2f, 1.8f, 22.0f, 1.0f, -1.2f, 0.8f, kGlass, Part::Cockpit));
+    m.push_back(box(-2.0f, 2.0f, -6.0f, 16.0f, -2.2f, 1.8f, kRlm63, Part::Fuselage));
+    m.push_back(taper_y(-6.0f, 2.0f, -2.2f, 1.8f, -26.0f, 0.5f, 0.0f, 1.4f, kRlm63, Part::Tail));
+    for (const float side : {-1.0f, 1.0f}) {
+        const Part wing = wing_of(side);
+        m.push_back(low_wing(side * 1.8f, side * 26.0f, -3.0f, 7.0f, -2.0f, 5.5f, 1.8f, 2.8f, 0.6f,
+                             wing, kRlm63));
+        m.push_back(low_wing(side * 26.0f, side * 32.0f, -2.0f, 5.5f, -0.5f, 3.5f, 2.4f, 3.2f, 0.2f,
+                             wing, kRlm63));
+        inline_engine(m, side * 9.0f, 1.0f, 11.0f, 1.2f, kGreyMetal, engine_of(side));
+        m.push_back(box(side * 9.0f - 0.5f, side * 9.0f + 0.5f, 4.0f, 5.0f, -4.0f, 0.0f, kDark,
+                        Part::Fuselage));
+        m.push_back(box(side * 9.0f - 1.2f, side * 9.0f + 1.2f, 2.5f, 7.0f, -6.0f, -3.6f, kRlm63,
+                        Part::Fuselage));
+    }
+    m.push_back(box(-9.0f, 9.0f, -25.0f, -20.0f, 0.6f, 1.1f, kRlm63, Part::Tail));
+    m.push_back(fin_blade(-26.5f, -19.0f, 8.0f, kRlm63));
+    m.push_back(box(-1.0f, 1.0f, 9.0f, 12.0f, 1.8f, 3.0f, kGlass, Part::Cockpit));
+    m.push_back(box(-0.45f, 0.45f, -3.0f, -2.0f, 1.8f, 2.8f, kLeather, Part::Cockpit));
+    return m;
+}
+
+// The Martin B-10B: a mid-wing twin with two radials, a glazed nose turret and a long canopy;
+// true blue with chrome yellow wings. About 55 u across and 35 u long.
+std::vector<Block> b10_model() {
+    std::vector<Block> m;
+    m.push_back(taper_y(12.0f, 1.9f, -2.4f, 2.0f, 16.0f, 1.2f, -1.4f, 1.0f, kGlass, Part::Cockpit));
+    m.push_back(box(-1.9f, 1.9f, -3.0f, 12.0f, -2.4f, 2.0f, kBlue, Part::Fuselage));
+    m.push_back(taper_y(-3.0f, 1.9f, -2.4f, 2.0f, -18.0f, 0.4f, 0.0f, 1.2f, kBlue, Part::Tail));
+    for (const float side : {-1.0f, 1.0f}) {
+        const Part wing = wing_of(side);
+        m.push_back(low_wing(side * 1.8f, side * 27.5f, -3.0f, 6.0f, -0.5f, 3.0f, -0.6f, 0.4f, 1.8f,
+                             wing, kArmyYellow));
+        m.push_back(box(side * 7.5f - 1.9f, side * 7.5f + 1.9f, -4.0f, 3.0f, -1.6f, 1.4f, kBlueDark,
+                        engine_of(side)));
+        radial(m, side * 7.5f, 3.0f, 8.0f, -0.1f, kBlue, engine_of(side));
+    }
+    m.push_back(box(-7.5f, 7.5f, -18.0f, -14.0f, 0.5f, 1.0f, kArmyYellow, Part::Tail));
+    m.push_back(fin_blade(-19.0f, -13.5f, 6.5f, kArmyYellow));
+    m.push_back(box(-0.9f, 0.9f, 4.0f, 9.0f, 2.0f, 3.2f, kGlass, Part::Cockpit));
+    m.push_back(box(-0.9f, 0.9f, -4.0f, -1.0f, 2.0f, 3.0f, kGlass, Part::Cockpit));
+    return m;
+}
+
+// The Heinkel He 111B: a twin with rounded wings, inline engines, a glazed nose, a stepped cockpit
+// and a belly gun; green and brown splinter over pale blue. About 58 u across and 45 u long.
+std::vector<Block> he111_model() {
+    std::vector<Block> m;
+    m.push_back(taper_y(15.0f, 2.0f, -2.2f, 1.6f, 21.0f, 0.8f, -1.2f, 0.4f, kGlass, Part::Cockpit));
+    m.push_back(box(-2.0f, 2.0f, 4.0f, 15.0f, 0.0f, 1.8f, kRlmSplinter, Part::Fuselage));
+    m.push_back(box(-2.0f, 2.0f, -6.0f, 4.0f, 0.0f, 1.8f, kRlmBrown, Part::Fuselage));
+    m.push_back(box(-2.0f, 2.0f, -6.0f, 15.0f, -2.2f, 0.0f, kRlmBlue, Part::Fuselage));
+    m.push_back(
+        taper_y(-6.0f, 2.0f, -2.2f, 1.8f, -23.0f, 0.4f, 0.0f, 1.2f, kRlmSplinter, Part::Tail));
+    for (const float side : {-1.0f, 1.0f}) {
+        const Part wing = wing_of(side);
+        m.push_back(low_wing(side * 1.8f, side * 12.0f, -4.0f, 8.0f, -4.5f, 7.0f, -1.0f, 0.2f, 0.8f,
+                             wing, kRlmBrown));
+        m.push_back(low_wing(side * 12.0f, side * 23.0f, -4.5f, 7.0f, -3.0f, 4.5f, -0.2f, 0.8f,
+                             1.0f, wing, kRlmSplinter));
+        m.push_back(low_wing(side * 23.0f, side * 29.0f, -3.0f, 4.5f, -0.5f, 2.0f, 0.8f, 1.5f, 0.6f,
+                             wing, kRlmBrown));
+        inline_engine(m, side * 8.0f, 1.0f, 12.0f, -0.2f, kRlmSplinter, engine_of(side));
+    }
+    m.push_back(low_wing(-0.5f, -9.0f, -23.0f, -17.0f, -22.5f, -20.0f, 0.6f, 1.1f, 0.0f, Part::Tail,
+                         kRlmSplinter));
+    m.push_back(low_wing(0.5f, 9.0f, -23.0f, -17.0f, -22.5f, -20.0f, 0.6f, 1.1f, 0.0f, Part::Tail,
+                         kRlmSplinter));
+    m.push_back(fin_blade(-24.0f, -17.5f, 7.0f, kRlmBrown));
+    m.push_back(box(-1.2f, 1.2f, 9.0f, 14.0f, 1.8f, 2.9f, kGlass, Part::Cockpit));
+    m.push_back(box(-0.9f, 0.9f, -4.0f, -1.5f, 1.8f, 2.8f, kGlass, Part::Cockpit));
+    m.push_back(box(-1.1f, 1.1f, -4.0f, -1.0f, -3.8f, -2.2f, kDark, Part::Fuselage));
+    return m;
+}
+
 std::vector<Block> plane_model(ModelId id) {
     switch (id) {
     case ModelId::He51:
@@ -330,6 +480,14 @@ std::vector<Block> plane_model(ModelId id) {
         return p36_model();
     case ModelId::Bf109:
         return bf109_model();
+    case ModelId::B6:
+        return b6_model();
+    case ModelId::Do23:
+        return do23_model();
+    case ModelId::B10:
+        return b10_model();
+    case ModelId::He111:
+        return he111_model();
     case ModelId::P26:
         break;
     }

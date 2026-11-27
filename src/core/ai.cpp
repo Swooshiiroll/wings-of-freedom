@@ -65,6 +65,54 @@ struct Wish {
     bool slow = false;
 };
 
+// The throttle to hold a speed: up when slow, back when fast.
+[[nodiscard]] std::int8_t throttle_for(float speed, float want) noexcept {
+    return to_axis(speed < want - 1.0f ? 1.0f : speed > want + 1.0f ? -1.0f : 0.0f);
+}
+
+// The flying every duty shares at the end: not into the ground or a stall.
+void keep_flying(Pilot& p, const Body& self, const PlaneRules& plane, const AiParams& a,
+                 Wish& w) noexcept {
+    const float sink = std::min(0.0f, self.speed_u_s * std::sin(self.pitch_deg * kToRad)) *
+                       plane.flight.height_share;
+    if (self.z + sink * 1.5f < a.floor_u) {
+        w.pitch = 30.0f;
+        w.shoot = false;
+        p.doing = Phase::Recover;
+    }
+    if (self.stalled || self.speed_u_s < plane.flight.stall_u_s * 1.2f) {
+        w.pitch = std::min(w.pitch, -5.0f);
+    }
+}
+
+// The middle of a raid's bombers still flying, and their course. False if none are.
+[[nodiscard]] bool formation_of(const World& world, int raid, float& x, float& y, float& z,
+                                float& course) noexcept {
+    int n = 0;
+    x = 0.0f;
+    y = 0.0f;
+    z = 0.0f;
+    for (const Pilot& other : world.pilots) {
+        const Body& o = world.bodies[static_cast<std::size_t>(other.body)];
+        if (other.duty != Duty::Bomb || other.raid != raid || o.outcome != Outcome::Flying ||
+            o.damage.going_down) {
+            continue;
+        }
+        x += o.x;
+        y += o.y;
+        z += o.z;
+        course = other.course_deg;
+        ++n;
+    }
+    if (n == 0) {
+        return false;
+    }
+    x /= static_cast<float>(n);
+    y /= static_cast<float>(n);
+    z /= static_cast<float>(n);
+    return true;
+}
+
 // Another AI's plane close enough in front to be in the way of this one's rounds.
 [[nodiscard]] bool friend_in_line(const World& w, const Pilot& p, const Body& self,
                                   float range) noexcept {
@@ -119,6 +167,10 @@ const char* phase_name(Phase p) noexcept {
         return "pull up";
     case Phase::Return:
         return "turn back";
+    case Phase::Course:
+        return "on course";
+    case Phase::Guard:
+        return "guard";
     }
     return "?";
 }
@@ -152,6 +204,55 @@ InputCommand ai_command(Pilot& p, const World& world, const Rules& rules, Rng& r
     const PlaneRules& plane = plane_of(rules, self);
     const AiParams& a = rules.ai;
     const bool hunting = target.outcome == Outcome::Flying;
+    const auto command = [&](const Wish& w, std::int8_t throttle) {
+        const float pitch =
+            std::clamp(w.pitch, -plane.flight.pitch_limit_deg, plane.flight.pitch_limit_deg);
+        c.turn = turn_toward(self.heading_deg, w.heading);
+        c.pitch = pitch_toward(self.pitch_deg, pitch);
+        c.throttle = throttle;
+    };
+
+    // A bomber holds its course, height and speed whatever happens (design/flight.md, Bombers).
+    if (p.duty == Duty::Bomb) {
+        Wish w{p.course_deg, std::clamp(climb_pitch(p.height_u - self.z), -15.0f, 15.0f), false,
+               false};
+        p.doing = Phase::Course;
+        keep_flying(p, self, plane, a, w);
+        command(w, throttle_for(self.speed_u_s, p.cruise_u_s));
+        return c;
+    }
+    // An escort keeps its station by its bombers until you come near them.
+    if (p.duty == Duty::Escort) {
+        float fx = 0.0f;
+        float fy = 0.0f;
+        float fz = 0.0f;
+        float course = 180.0f;
+        if (!formation_of(world, p.raid, fx, fy, fz, course)) {
+            p.duty = Duty::Hunt; // nothing left to guard
+        } else {
+            const float away = hunting ? std::hypot(target.x - fx, target.y - fy) : 1e9f;
+            p.engaged = p.engaged ? away <= a.escort_return_u : away < a.escort_break_u;
+            if (!p.engaged) {
+                const float h = course * kToRad;
+                const float tx =
+                    fx + std::sin(h) * p.station_ahead_u + std::cos(h) * p.station_right_u;
+                const float ty =
+                    fy + std::cos(h) * p.station_ahead_u - std::sin(h) * p.station_right_u;
+                const float dx = tx - self.x;
+                const float dy = ty - self.y;
+                const float along = dx * std::sin(h) + dy * std::cos(h);
+                const float want = along > 20.0f    ? plane.flight.max_level_u_s
+                                   : along < -20.0f ? p.cruise_u_s * 0.8f
+                                                    : p.cruise_u_s;
+                Wish w{std::hypot(dx, dy) > 100.0f ? bearing(dx, dy) : course,
+                       climb_pitch(fz + 20.0f - self.z), false, false};
+                p.doing = Phase::Guard;
+                keep_flying(p, self, plane, a, w);
+                command(w, throttle_for(self.speed_u_s, want));
+                return c;
+            }
+        }
+    }
 
     // A look at the target now and then; between looks, it's where it was heading.
     p.look_s -= kTickSeconds;
@@ -289,13 +390,14 @@ InputCommand ai_command(Pilot& p, const World& world, const Rules& rules, Rng& r
     }
     p.doing = p.phase;
 
-    // Other enemies: don't fly into each other.
+    // Other enemies: don't fly into each other (bombers are bigger).
     for (const Pilot& other : world.pilots) {
         const Body& o = world.bodies[static_cast<std::size_t>(other.body)];
         if (other.body == p.body || o.outcome != Outcome::Flying) {
             continue;
         }
-        if (std::hypot(o.x - self.x, o.y - self.y) < 25.0f && std::abs(o.z - self.z) < 8.0f) {
+        const float clear = 25.0f * plane_type(o.type).size;
+        if (std::hypot(o.x - self.x, o.y - self.y) < clear && std::abs(o.z - self.z) < 8.0f) {
             const float away = wrap180(bearing(o.x - self.x, o.y - self.y) - self.heading_deg);
             w.heading = self.heading_deg + (away > 0.0f ? -60.0f : 60.0f);
             w.shoot = false;
@@ -314,24 +416,9 @@ InputCommand ai_command(Pilot& p, const World& world, const Rules& rules, Rng& r
         p.doing = Phase::Return;
     }
 
-    // Never into the ground: look a moment ahead.
-    const float sink = std::min(0.0f, self.speed_u_s * std::sin(self.pitch_deg * kToRad)) *
-                       plane.flight.height_share;
-    if (self.z + sink * 1.5f < a.floor_u) {
-        w.pitch = 30.0f;
-        w.shoot = false;
-        p.doing = Phase::Recover;
-    }
-    // Keep flying: no climbing into a stall.
-    if (self.stalled || self.speed_u_s < plane.flight.stall_u_s * 1.2f) {
-        w.pitch = std::min(w.pitch, -5.0f);
-    }
-
-    const float pitch =
-        std::clamp(w.pitch, -plane.flight.pitch_limit_deg, plane.flight.pitch_limit_deg);
-    c.turn = turn_toward(self.heading_deg, w.heading);
-    c.pitch = pitch_toward(self.pitch_deg, pitch);
-    c.throttle = to_axis(w.slow ? -1.0f : 1.0f);
+    // Never into the ground or a stall.
+    keep_flying(p, self, plane, a, w);
+    command(w, to_axis(w.slow ? -1.0f : 1.0f));
     c.guns = w.shoot && hunting && d < a.fire_range_u &&
              std::abs(wrap180(aim_heading - self.heading_deg)) < a.fire_cone_deg &&
              std::abs(aim_pitch - self.pitch_deg) < a.fire_cone_deg &&

@@ -322,6 +322,7 @@ void draw_summary(SDL_Renderer* r, const Summary& s, int view_w, int view_h) {
     rows.emplace_back("SHOT DOWN: " + std::to_string(s.score.fighters) + " FIGHTERS, " +
                           std::to_string(s.score.bombers) + " BOMBERS",
                       "");
+    rows.emplace_back("BOMBERS THROUGH TO YOUR BASE: " + std::to_string(s.through), "");
     rows.emplace_back("", "");
     rows.emplace_back("KILL POINTS", number(s.payout.points));
     if (s.payout.banked) {

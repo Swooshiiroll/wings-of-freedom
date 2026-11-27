@@ -203,6 +203,27 @@ Blast radius and damage scale with the cube root of the bomb's weight. A 100 lb 
   up from the shadow to the plane, so the plane rides higher on screen as you climb. Up high the
   shadow also sits a little toward the screen's centre (perspective, as the camera looks ahead).
 
+### The early bombers (the first raids)
+
+| | Keystone B-6A | Dornier Do 23G |
+|---|---|---|
+| Nation | US | Germany |
+| In service | 1931 | 1934 |
+| Top speed | 120 mph [23][24] | 160 mph [25][26] |
+| Cruise | 103 mph [23] | 130 mph [25][26] |
+| Climb | 690 ft/min [24] | 890 ft/min [25][26] |
+| Stall | 55 mph (est.) | 65 mph (est.) |
+| Full circle (real) | 30 s (est.) | 32 s (est.) |
+| Endurance | 8 h (825 mi at cruise) [23] | 7.5 h [25] |
+| Engines | 2 | 2 |
+| Guns | 3 × .30: nose, rear cockpit, ventral [24]; 500 rounds each (est.) | 3 × 7.92 mm MG 15: nose, dorsal, ventral [25][26]; 750 each (est.) |
+| Bombs | 4 × 500 lb (2,000 lb standard [24]) | 4 × 250 kg (1,000 kg [25]) |
+| Raid height | up to 12,000 ft (ceiling 14,100 ft [23]) | up to 12,000 ft (ceiling 13,800 ft [25]) |
+| Colours | olive drab, chrome yellow wings and tail | light grey |
+
+The later bombers raid from wave 9 at their real cruising speeds: the **B-10B 193 mph** [5] and
+the **He 111B-2 229 mph** [7] (owner, 2026-11-27).
+
 ## The later roster (names only; an open list)
 
 | Era | US | UK | Germany | Italy | Japan | USSR |
@@ -247,3 +268,7 @@ Blast radius and damage scale with the cube root of the bomb's weight. A 100 lb 
 20. [Warbirds Resource Group: Bf 109B](https://warbirdsresourcegroup.org/LRG/luftwaffe_messerschmitt_bf109b_specifications.html)
 21. [Wikipedia: Curtiss P-36](https://en.wikipedia.org/wiki/Curtiss_P-36_Hawk)
 22. [HistoryOfWar: Bf 109C](https://www.historyofwar.org/articles/weapons_bf_109C.html)
+23. [Wikipedia: Keystone B-6](https://en.wikipedia.org/wiki/Keystone_B-6)
+24. [HistoryOfWar: Keystone B-6A](https://www.historyofwar.org/articles/weapons_keystone_B-6A_Panther.html)
+25. [Wikipedia: Dornier Do 23](https://en.wikipedia.org/wiki/Dornier_Do_23)
+26. [Warbirds Resource Group: Do 23G](https://warbirdsresourcegroup.org/LRG/luftwaffe_dornier_do23_specifications.html)

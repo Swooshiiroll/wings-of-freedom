@@ -24,6 +24,7 @@ Rules quiet_rules() {
     Rules r;
     r.ai.fire_range_u = 0.0f;
     r.damage.collision_radius_u = 0.0f;
+    r.wave.raid_every = 0; // fighters only: bombers have their own tests
     r.rederive();
     return r;
 }

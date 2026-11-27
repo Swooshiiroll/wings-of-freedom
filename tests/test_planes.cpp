@@ -142,8 +142,10 @@ TEST_CASE("A twin's engine hits go to the engine on the hit's side, or either") 
     const auto at = [](const std::array<int, kParts>& c, Part p) {
         return static_cast<float>(c[static_cast<std::size_t>(p)]) / 200.0f; // percent
     };
+    // The nose gunner takes 10% of hits from ahead, out of the engines' 45.
     CHECK(at(ahead, Part::Engine) + at(ahead, Part::Engine2) ==
-          doctest::Approx(45.0f).epsilon(0.04));
+          doctest::Approx(35.0f).epsilon(0.04));
+    CHECK(at(ahead, Part::NoseGunner) == doctest::Approx(10.0f).epsilon(0.08));
     CHECK(std::abs(at(ahead, Part::Engine) - at(ahead, Part::Engine2)) < 1.5f);
     CHECK(left[static_cast<std::size_t>(Part::Engine2)] == 0);
     CHECK(at(left, Part::Engine) == doctest::Approx(10.0f).epsilon(0.15));

@@ -98,4 +98,4 @@ damage to your pilot (the P-36's also halves fuel leaks). Tanks can't be dropped
 
 ## Not in this
 
-Flying the bombers, pilots and the campaign (v0.2), and later eras.
+Flying the bombers (the enemy raids are in `flight.md`), pilots and the campaign (v0.2), and later eras.

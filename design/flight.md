@@ -319,32 +319,44 @@ then flak.
 
 ### Bombers
 
-- The enemy nation's bomber (He 111B-2 or B-10B), with its real stats.
-- Every 3rd wave brings a formation (owner, 2026-11-27): **a pair** at wave 3, **a V of three**
-  from wave 6, **five** from wave 9.
-- From wave 6 they have **escort fighters**: one for each pair (three bring 1, five bring 2).
-  Escorts **guard** their bombers: they break off to fight you near the formation and return if
-  you pull away. Neither bombers nor escorts count toward the 6 fighters in the air at most.
-- They come in at the north edge and fly **south at 8,000-15,000 ft** (160-300 u) and their real
-  cruising speed (B-10B **193 mph**, He 111B-2 **229 mph**) to bomb your base, **holding course**
-  under fire. Escorted formations slow to a speed their escorts can hold.
-- They're **announced as they enter**: how many, their height and direction.
-- They're tough: **two engines of 60 HP each** (losing one halves the power), each wing **100**,
-  fuselage **160**, tail **40**.
+Four, with their real stats (`planes.md`). The early ones fly the first raids so the early
+fighters can catch them (owner, 2026-11-27).
+
+| | Waves 3 and 6 | Wave 9 on | Toughness (engine / wing / fuselage / tail) |
+|---|---|---|---|
+| US | Keystone B-6A (cruise 103 mph) | Martin B-10B (193 mph) | 45 / 75 / 120 / 30, then 60 / 100 / 160 / 40 |
+| Germany | Dornier Do 23G (130 mph) | Heinkel He 111B-2 (229 mph) | the same |
+
+- **Every 3rd wave** brings a formation: **a pair** at wave 3, **a V of three** at wave 6, **five**
+  from wave 9, spaced **80 u** across and **50 u** back (`wave.*`, start values).
+- From wave 6 they have **escort fighters**: one for each pair (three bring 1, five bring 2), of the
+  enemy types for that wave. Escorts **guard** their bombers: they break off to fight you within
+  **600 u** of the formation and return once you're beyond **1,200 u** (start values). Neither
+  bombers nor escorts count toward the 6 fighters in the air at most.
+- They come in at the **north edge** within **3,000 u** of your base's line and fly **straight to
+  your base**, **holding course** under fire, at their real cruising speed: the early ones at
+  **8,000-12,000 ft** (their real ceiling), the later ones at **8,000-15,000 ft**. Escorted
+  formations slow to **90%** of their slowest escort's top speed.
+- They're **announced as they enter**: how many, their height, their direction from you, and any
+  escorts.
+- **Two engines** (losing one halves the power). They're **bigger marks**: rounds and rams reach
+  twice a fighter's distance.
 - **Three gunners** (nose, dorsal, ventral), with the bomber's real guns and rate, fire at any
-  plane within **160 u** in their arcs, in **short bursts** (about 0.6 s on and off). They follow
-  your enemy aim setting and sharpen with later waves (owner, 2026-11-27).
+  player within **160 u** in their arcs, in **short bursts** (0.6 s on, 0.6 s off). They follow
+  your enemy aim setting and sharpen with later waves. They hold fire rather than hit their own
+  side.
   - **Nose:** forward, ±60° of the nose.
-  - **Dorsal:** behind and above, ±120° of the tail.
-  - **Ventral:** behind and below, ±60° of the tail.
+  - **Dorsal:** behind and level or above, ±120° of the tail.
+  - **Ventral:** behind and level or below, ±60° of the tail.
 - **Each gunner can be knocked out on its own.** It takes **3 wounds** (5 damage each), like a
   pilot, and then stops firing; the bomber flies on.
   - The nose gunner takes **10%** of hits from ahead, out of the engines' share.
   - The dorsal and ventral gunners each take **8%** of hits from behind, out of the fuselage's
-    share.
-- In v0.1 a bomber reaching the south edge shows "Bomber reached base" and adds to a counter in
-  the summary. It costs nothing until v0.2.
-- Their off-screen arrows are drawn larger than fighters'.
+    share. A knocked-out gunner's share goes back.
+- A bomber reaching the south edge shows **"Bomber reached your base"**, counted in the run
+  summary. It costs nothing until v0.2. A falling bomber crossing the edge doesn't count.
+- Shooting one down is worth **250 points** (`aircraft_tree.md`). Their off-screen arrows are drawn
+  larger.
 
 ### Flak guns
 
@@ -368,7 +380,7 @@ then flak.
   east or west edge**, never the south (owner, 2026-11-27): those arriving together from one
   edge, abreast of you or north of you. On this map the first fight comes about **2 minutes** in.
 - **Wave n** brings **1 + n/2 fighters** (rounded down). Every 3rd wave adds a bomber formation
-  (above).
+  (above), outside the 6 at most.
 - The fighters **grow up the enemy's aircraft tree**: step 1 in waves 1-4, mixed with step 2 in
   5-8, steps 2 and 3 in 9-12, step 3 from wave 13 (`aircraft_tree.md`).
 - Fighters arrive **within about 3,000 ft of your height** (owner, 2026-11-27). At most **6** are in

@@ -26,7 +26,7 @@ struct IntKey {
 };
 
 // Every value, in the file's order. The int ranges match validate(GroundParams&).
-constexpr std::array<FloatKey, 89> kFloats = {{
+constexpr std::array<FloatKey, 102> kFloats = {{
     {"Camera: how far ahead it looks (u), and how fast that swings round after a turn (per s)",
      "camera.lead_u", [](Tuning& t) -> float& { return t.camera.lead_u; }, 0.0f, 400.0f},
     {nullptr, "camera.lead_ease", [](Tuning& t) -> float& { return t.camera.lead_ease; }, 0.1f,
@@ -220,9 +220,40 @@ constexpr std::array<FloatKey, 89> kFloats = {{
      [](Tuning& t) -> float& { return t.rules.upgrade.armour_pilot; }, 0.1f, 1.0f},
     {nullptr, "upgrade.sealed_leak",
      [](Tuning& t) -> float& { return t.rules.upgrade.sealed_leak; }, 0.1f, 1.0f},
+    {"Gunners: a bomber's fire at planes within the range (u), a burst and a pause (s) at a time, "
+     "each in its arc (degrees from the nose, or from the tail); within level_u above or below "
+     "counts as level",
+     "gunner.range_u", [](Tuning& t) -> float& { return t.rules.gunner.range_u; }, 0.0f, 1000.0f},
+    {nullptr, "gunner.burst_s", [](Tuning& t) -> float& { return t.rules.gunner.burst_s; }, 0.05f,
+     60.0f},
+    {nullptr, "gunner.pause_s", [](Tuning& t) -> float& { return t.rules.gunner.pause_s; }, 0.05f,
+     60.0f},
+    {nullptr, "gunner.nose_arc_deg",
+     [](Tuning& t) -> float& { return t.rules.gunner.nose_arc_deg; }, 0.0f, 180.0f},
+    {nullptr, "gunner.dorsal_arc_deg",
+     [](Tuning& t) -> float& { return t.rules.gunner.dorsal_arc_deg; }, 0.0f, 180.0f},
+    {nullptr, "gunner.ventral_arc_deg",
+     [](Tuning& t) -> float& { return t.rules.gunner.ventral_arc_deg; }, 0.0f, 180.0f},
+    {nullptr, "gunner.level_u", [](Tuning& t) -> float& { return t.rules.gunner.level_u; }, 0.0f,
+     100.0f},
+    {"Bomber raids: from this height (u) up to the plane's top, in within this of your base's "
+     "line, spaced across and back (u)",
+     "wave.raid_low_u", [](Tuning& t) -> float& { return t.rules.wave.raid_low_u; }, 20.0f, 500.0f},
+    {nullptr, "wave.raid_x_u", [](Tuning& t) -> float& { return t.rules.wave.raid_x_u; }, 0.0f,
+     14000.0f},
+    {nullptr, "wave.raid_spacing_u",
+     [](Tuning& t) -> float& { return t.rules.wave.raid_spacing_u; }, 40.0f, 1000.0f},
+    {nullptr, "wave.raid_back_u", [](Tuning& t) -> float& { return t.rules.wave.raid_back_u; },
+     0.0f, 1000.0f},
+    {"Escorts: fight you within the first distance of their bombers, back to them beyond the "
+     "second (u)",
+     "ai.escort_break_u", [](Tuning& t) -> float& { return t.rules.ai.escort_break_u; }, 0.0f,
+     30000.0f},
+    {nullptr, "ai.escort_return_u", [](Tuning& t) -> float& { return t.rules.ai.escort_return_u; },
+     0.0f, 30000.0f},
 }};
 
-constexpr std::array<IntKey, 48> kInts = {{
+constexpr std::array<IntKey, 52> kInts = {{
     {"Waves: enemy fighters in the air at once, at most", "wave.max_alive",
      [](Tuning& t) -> int& { return t.rules.wave.max_alive; }, 1, 64},
     {"Waves: the enemy's fighters move up a stage of its aircraft tree every this many waves",
@@ -309,6 +340,15 @@ constexpr std::array<IntKey, 48> kInts = {{
     {nullptr, "price.bombs", [](Tuning& t) -> int& { return t.rules.price.bombs; }, 0, 1000000},
     {nullptr, "price.armour", [](Tuning& t) -> int& { return t.rules.price.armour; }, 0, 1000000},
     {nullptr, "price.sight", [](Tuning& t) -> int& { return t.rules.price.sight; }, 0, 1000000},
+    {"Bomber raids: every this many waves (0: none), the later bombers from this wave; and the "
+     "gunners' shares of hits (percent) from ahead and, each, from behind",
+     "wave.raid_every", [](Tuning& t) -> int& { return t.rules.wave.raid_every; }, 0, 1000},
+    {nullptr, "wave.raid_later", [](Tuning& t) -> int& { return t.rules.wave.raid_later; }, 1,
+     1000},
+    {nullptr, "damage.nose_gunner_pct",
+     [](Tuning& t) -> int& { return t.rules.damage.nose_gunner_pct; }, 0, 100},
+    {nullptr, "damage.rear_gunner_pct",
+     [](Tuning& t) -> int& { return t.rules.damage.rear_gunner_pct; }, 0, 50},
 }};
 
 void section(std::string& out, const char* name) {

@@ -8,6 +8,7 @@
 #include "core/body.hpp"
 #include "core/damage.hpp"
 #include "core/flight.hpp"
+#include "core/gunners.hpp"
 #include "core/input.hpp"
 #include "core/plane_rules.hpp"
 #include "core/planes.hpp"
@@ -56,6 +57,7 @@ struct Rules {
     PlaneScale scale;
     AiParams ai;
     WaveParams wave;
+    GunnerParams gunner;
     UpgradeParams upgrade;
     ScoreParams score;
     Prices price;

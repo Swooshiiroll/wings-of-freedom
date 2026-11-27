@@ -112,6 +112,8 @@ enum class EventKind : std::uint8_t {
     Collision,      // who: the plane destroyed (-1: both); by: the other
     WaveArrived,    // who: the wave's number; damage: how many planes; z: about their height
     EnemyDown,      // who: the enemy plane counted as a kill
+    RaidArrived,    // who: the wave; by: escorts; damage: bombers; x, y, z: the formation
+    BomberThrough,  // who: a bomber that reached your base
 };
 
 struct Event {

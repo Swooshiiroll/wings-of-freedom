@@ -51,6 +51,10 @@ PlaneRules derive_plane(const PlaneType& t, const FlightParams& base, const Dama
     r.aero = aero_of(r.flight);
     r.damage = damage;
     r.damage.engines = t.engines;
+    r.damage.gunners = 0;
+    for (int g = 0; g < t.gun_count; ++g) {
+        r.damage.gunners += t.guns[static_cast<std::size_t>(g)].mount != Mount::Fixed ? 1 : 0;
+    }
     r.damage.engine_hp = t.engine_hp;
     r.damage.wing_hp = t.wing_hp;
     r.damage.fuselage_hp = t.fuselage_hp;

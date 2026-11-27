@@ -59,12 +59,14 @@ struct Sighting {
     float angle_rad = 0.0f; // on screen, from the view's centre
     float distance = 0.0f;  // across the ground, u
     float dz = 0.0f;        // its height less yours, u
+    bool bomber = false;
 };
 enum class HeightMark : std::uint8_t { Lower, Level, Higher };
 struct ArrowGroup {
     float angle_rad = 0.0f;
     HeightMark mark = HeightMark::Level;
     std::size_t nearest = 0; // the sighting the arrow points at
+    bool bomber = false;     // any of them a bomber
 };
 [[nodiscard]] std::vector<ArrowGroup> group_arrows(const std::vector<Sighting>& seen,
                                                    float spread_rad, float level_u);

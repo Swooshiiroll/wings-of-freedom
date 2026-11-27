@@ -3,6 +3,7 @@ add_executable(wof_tests
   test_main.cpp
   test_menu.cpp
   test_ai.cpp
+  test_bombers.cpp
   test_planes.cpp
   test_camera.cpp
   test_dashboard.cpp

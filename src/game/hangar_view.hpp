@@ -29,6 +29,7 @@ struct Summary {
     Nation nation = Nation::US;
     bool kept = false; // progress is saved: the banked points are the nation's now
     int points_now = 0;
+    int through = 0; // enemy bombers that reached your base
 };
 
 // `view_h` is the world's rows, above the dashboard.

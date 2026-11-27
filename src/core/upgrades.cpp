@@ -81,6 +81,8 @@ void fit_guns(PlaneType& t, PlaneId plane) noexcept {
         break;
     case PlaneId::B10B:
     case PlaneId::He111B2:
+    case PlaneId::B6A:
+    case PlaneId::Do23G:
         break;
     }
 }
@@ -110,6 +112,8 @@ void fit_bombs(PlaneType& t, PlaneId plane) noexcept {
         break;
     case PlaneId::B10B:
     case PlaneId::He111B2:
+    case PlaneId::B6A:
+    case PlaneId::Do23G:
         break;
     }
 }

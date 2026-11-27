@@ -10,7 +10,9 @@ struct Rules;
 // Enemy waves (design/flight.md, Waves): the first after first_s, then one every every_s, each
 // bringing 1 + n/2 fighters in from the north, east or west edge near the player's height. At most
 // max_alive are in the air; the rest of a wave waits for a place. Their fighters grow with the
-// waves up the enemy's aircraft tree (design/aircraft_tree.md).
+// waves up the enemy's aircraft tree (design/aircraft_tree.md). Every raid_every-th wave also
+// brings a formation of bombers for your base, with escorts from the second; neither counts
+// toward max_alive (design/flight.md, Bombers).
 
 // The waves' numbers (tuning.txt `wave.*`), all (start) values.
 struct WaveParams {
@@ -22,6 +24,12 @@ struct WaveParams {
     float along_u = 6000.0f;       // how far along the edge from abreast of you (or north)
     float edge_inset_u = 300.0f;   // how far inside the edge they appear
     int tier_every = 4;            // the enemy moves a stage up its tree every this many waves
+    int raid_every = 3;            // a bomber raid every this many waves (0: none)
+    int raid_later = 9;            // the later bombers raid from this wave
+    float raid_low_u = 160.0f;     // raids fly from this height (8,000 ft) up to the plane's top
+    float raid_x_u = 3000.0f;      // and come in within this of your base's line
+    float raid_spacing_u = 80.0f;  // across, between the bombers of a formation
+    float raid_back_u = 50.0f;     // and back
 
     friend constexpr bool operator==(const WaveParams&, const WaveParams&) = default;
 };
@@ -40,6 +48,21 @@ struct TierSpan {
     return {lo > last ? last : lo, stage > last ? last : stage};
 }
 
+// The bombers wave n brings: none, a pair at the first raid (wave 3), a V of three at the second,
+// five after.
+[[nodiscard]] constexpr int raid_size(int n, int every) noexcept {
+    if (every <= 0 || n <= 0 || n % every != 0) {
+        return 0;
+    }
+    const int raid = n / every;
+    return raid == 1 ? 2 : raid == 2 ? 3 : 5;
+}
+// And its escorts: one for each pair, from the second raid.
+[[nodiscard]] constexpr int raid_escorts(int n, int every) noexcept {
+    const int bombers = raid_size(n, every);
+    return bombers > 0 && n / every >= 2 ? bombers / 2 : 0;
+}
+
 // 1 + n/2 fighters, rounded down.
 [[nodiscard]] constexpr int wave_size(int n) noexcept {
     return 1 + n / 2;
@@ -54,6 +77,8 @@ struct WaveState {
     int current = 0;      // the last wave's number: its pilots' skill
     int waiting = 0;      // planes of the waves so far still to arrive
     int kills = 0;
+    int raids = 0;   // raids so far
+    int through = 0; // bombers that reached your base
 
     friend constexpr bool operator==(const WaveState&, const WaveState&) = default;
 };
@@ -66,7 +91,8 @@ struct WaveState {
 // EventKind::WaveArrived marks each new wave.
 void update_waves(World& w, const Rules& rules);
 
-// Enemy fighters in the air and not going down.
+// Enemy wave fighters in the air and not going down: what max_alive limits (not bombers or their
+// escorts).
 [[nodiscard]] int enemies_alive(const World& w) noexcept;
 
 } // namespace wof

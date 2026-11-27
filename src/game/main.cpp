@@ -314,8 +314,7 @@ int parse_options(int argc, char** argv, Options& out) {
             }
         } else if (std::strcmp(argv[i], "--plane") == 0 && has_value) {
             const char* id = argv[++i];
-            out.has_plane =
-                find_plane(id, out.plane) && plane_type(out.plane).role == Role::Fighter;
+            out.has_plane = find_plane(id, out.plane);
             if (!out.has_plane) {
                 std::fprintf(stderr, "--plane takes p12e, p26a, p36a, ar65, he51b or bf109b\n");
                 return 2;
@@ -734,11 +733,15 @@ void draw_enemy_arrows(SDL_Renderer* r, const ViewXf& xf, const Body& plane,
         }
         const SDL_FPoint at = on_view(xf, b.x, b.y, b.z);
         const EdgeArrow a = edge_arrow(at.x, at.y, view_w, view_h, 12.0f);
-        if (a.on_screen) {
+        // A bomber partly in view needs no arrow over it: allow for its size.
+        const bool bomber = plane_type(b.type).role == Role::Bomber;
+        const float reach = bomber ? 30.0f * xf.scale_at(b.z) : 0.0f;
+        if (a.on_screen || (at.x > -reach && at.x < static_cast<float>(view_w) + reach &&
+                            at.y > -reach && at.y < static_cast<float>(view_h) + reach)) {
             continue;
         }
         seen.push_back({std::atan2(at.y - cy, at.x - cx), std::hypot(b.x - plane.x, b.y - plane.y),
-                        b.z - plane.z});
+                        b.z - plane.z, bomber});
         arrows.push_back(a);
     }
     const SDL_FColor red{1.0f, 0.38f, 0.25f, 1.0f};
@@ -753,12 +756,14 @@ void draw_enemy_arrows(SDL_Renderer* r, const ViewXf& xf, const Body& plane,
         const EdgeArrow& a = arrows[g.nearest];
         const float c = std::cos(a.angle_rad);
         const float s = std::sin(a.angle_rad);
-        triangle({a.x + c * 7.0f, a.y + s * 7.0f},
-                 {a.x - c * 3.0f - s * 5.0f, a.y - s * 3.0f + c * 5.0f},
-                 {a.x - c * 3.0f + s * 5.0f, a.y - s * 3.0f - c * 5.0f}, red);
+        const float k = g.bomber ? 1.7f : 1.0f; // a bomber's arrow is bigger
+        triangle({a.x + c * 7.0f * k, a.y + s * 7.0f * k},
+                 {a.x - c * 3.0f * k - s * 5.0f * k, a.y - s * 3.0f * k + c * 5.0f * k},
+                 {a.x - c * 3.0f * k + s * 5.0f * k, a.y - s * 3.0f * k - c * 5.0f * k}, red);
         // The height mark, just inside the arrow.
-        const float x = std::round(std::clamp(a.x - c * 14.0f, 6.0f, cx * 2.0f - 6.0f));
-        const float y = std::round(std::clamp(a.y - s * 14.0f, 6.0f, cy * 2.0f - 6.0f));
+        const float inset = g.bomber ? 19.0f : 14.0f;
+        const float x = std::round(std::clamp(a.x - c * inset, 6.0f, cx * 2.0f - 6.0f));
+        const float y = std::round(std::clamp(a.y - s * inset, 6.0f, cy * 2.0f - 6.0f));
         const SDL_FRect back{x - 6.0f, y - 6.0f, 12.0f, 12.0f};
         SDL_SetRenderDrawColor(r, 0, 0, 0, 150);
         SDL_RenderFillRect(r, &back);
@@ -786,7 +791,10 @@ void draw_pilot_labels(SDL_Renderer* r, const ViewXf& xf, const World& world,
         }
         const Body& b = enemies[i];
         const SDL_FPoint at = on_view(xf, b.x, b.y, b.z);
-        const std::string text = format("%s: %s", style_name(p.style), phase_name(p.doing));
+        const char* who = p.duty == Duty::Bomb     ? "bomber"
+                          : p.duty == Duty::Escort ? "escort"
+                                                   : style_name(p.style);
+        const std::string text = format("%s: %s", who, phase_name(p.doing));
         draw_text_block(r, std::round(at.x - static_cast<float>(text.size()) * kGlyph * 0.5f),
                         std::round(at.y - 34.0f), {text}, SDL_Color{255, 190, 160, 255});
     }
@@ -1048,7 +1056,7 @@ void emit_trails(const World& w, const std::vector<Body>& before, game::Effects&
         const bool ended_badly = b.outcome == Outcome::Crashed || b.outcome == Outcome::ShotDown ||
                                  b.outcome == Outcome::PilotKilled;
         if (i < before.size() && before[i].outcome == Outcome::Flying && ended_badly) {
-            fx.explode(b.x, b.y, b.z, 16.0f);
+            fx.explode(b.x, b.y, b.z, 16.0f * plane_type(b.type).size);
         }
         if (b.outcome != Outcome::Flying) {
             continue;
@@ -1057,8 +1065,9 @@ void emit_trails(const World& w, const std::vector<Body>& before, game::Effects&
         // Puffs come from just behind the nose (or a twin's engine on each wing), so they trail as
         // the plane flies on.
         const float h = b.heading_deg * 3.14159265f / 180.0f;
-        const float x = b.x + std::sin(h) * 3.0f;
-        const float y = b.y + std::cos(h) * 3.0f;
+        const float size = plane_type(b.type).size;
+        const float x = b.x + std::sin(h) * 3.0f * size;
+        const float y = b.y + std::cos(h) * 3.0f * size;
         const std::int64_t t = w.tick;
         if (b.damage.going_down) {
             if (t % 2 == 0) {
@@ -1071,7 +1080,8 @@ void emit_trails(const World& w, const std::vector<Body>& before, game::Effects&
                     continue;
                 }
                 // A twin's engines sit out on the wings: left (Engine) and right (Engine2).
-                const float side = !twin ? 0.0f : (engine_part == Part::Engine ? -5.0f : 5.0f);
+                const float out = 4.0f * size;
+                const float side = !twin ? 0.0f : (engine_part == Part::Engine ? -out : out);
                 const float ex = x + std::cos(h) * side;
                 const float ey = y - std::sin(h) * side;
                 const Stage engine = part_stage(b, engine_part, d);
@@ -1169,6 +1179,12 @@ int main(int argc, char** argv) {
     }
     const bool shot_mode = opts.shot != nullptr;
     const bool tool_mode = shot_mode || opts.sprite_sheet != nullptr;
+    // Bombers can only be looked at (--sprite-sheet), not flown yet.
+    if (opts.has_plane && opts.sprite_sheet == nullptr &&
+        plane_type(opts.plane).role != Role::Fighter) {
+        std::fprintf(stderr, "--plane takes a fighter (bombers only with --sprite-sheet)\n");
+        return 2;
+    }
 
     SDL_SetAppMetadata("Wings of Freedom", WOF_VERSION, "io.github.swooshiiroll.wingsoffreedom");
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -1251,6 +1267,9 @@ int main(int argc, char** argv) {
             for (std::size_t step = 1; step < enemy.size(); ++step) {
                 sprites.queue(plane_type(enemy[step]).model);
             }
+            const Bombers raiders = bombers_of(enemy_nation);
+            sprites.queue(plane_type(raiders.early).model);
+            sprites.queue(plane_type(raiders.later).model);
             return true;
         };
         // The practice drones are the P-26.
@@ -1476,7 +1495,8 @@ int main(int argc, char** argv) {
                 payout(score, me, plane_of(tuning.rules, me).damage, tuning.rules.score),
                 nation,
                 hangar_mode,
-                0};
+                0,
+                world.waves.through};
             if (hangar_mode) {
                 my_progress().points += summary.payout.total;
                 summary.points_now = my_progress().points;
@@ -1653,8 +1673,31 @@ int main(int argc, char** argv) {
                 }
                 emit_trails(world, previous, effects, tuning.rules);
                 banner_s = std::max(0.0f, banner_s - kTickSeconds);
+                bool raid_now = false; // a raid's warning outranks its wave's
                 for (const Event& ev : world.events) {
-                    if (ev.kind == EventKind::WaveArrived) {
+                    raid_now = raid_now || ev.kind == EventKind::RaidArrived;
+                }
+                for (const Event& ev : world.events) {
+                    if (ev.kind == EventKind::RaidArrived) {
+                        const Body& me = world.bodies.front();
+                        const float bearing =
+                            std::atan2(ev.x - me.x, ev.y - me.y) * 180.0f / 3.14159265f;
+                        constexpr std::array<const char*, 8> kWays = {
+                            "NORTH", "NORTH-EAST", "EAST", "SOUTH-EAST",
+                            "SOUTH", "SOUTH-WEST", "WEST", "NORTH-WEST"};
+                        const auto way = static_cast<std::size_t>(
+                            std::lround(wrap_heading(bearing) / 45.0f) % 8);
+                        banner = format("BOMBERS: %d AT %s, %s", static_cast<int>(ev.damage),
+                                        height_text(ev.z, units_of(settings.units, nation)).c_str(),
+                                        kWays[way]);
+                        if (ev.by > 0) {
+                            banner += format(", %d ESCORT%s", ev.by, ev.by == 1 ? "" : "S");
+                        }
+                        banner_s = 6.0f;
+                    } else if (ev.kind == EventKind::BomberThrough) {
+                        banner = format("BOMBER REACHED YOUR BASE (%d)", world.waves.through);
+                        banner_s = 4.0f;
+                    } else if (ev.kind == EventKind::WaveArrived && !raid_now) {
                         const int count = static_cast<int>(ev.damage);
                         banner =
                             format("WAVE %d: %d ENEMY FIGHTER%s AT %s", ev.who, count,

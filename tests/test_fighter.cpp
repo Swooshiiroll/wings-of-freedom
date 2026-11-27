@@ -366,3 +366,48 @@ TEST_CASE("Every fighter points its nose along its heading, shows its pitch and 
         }
     }
 }
+
+TEST_CASE("Bombers fit their double cells at every pose and size, and are about twice a fighter") {
+    for (const ModelId id : {ModelId::B6, ModelId::Do23, ModelId::B10, ModelId::He111}) {
+        CAPTURE(static_cast<int>(id));
+        REQUIRE(model_cells(id) == 2);
+        for (const int step : {2, 4, 8, 12}) {
+            const int cell = 6 * step * model_cells(id);
+            const std::vector<Block> m =
+                scaled_model(plane_model(id), static_cast<float>(step) / 8.0f);
+            const int canvas = cell * 2;
+            const int lo = cell / 2;
+            const int hi = lo + cell;
+            for (int h = 0; h < 32; h += 3) {
+                for (int p = -40; p <= 40; p += 40) {
+                    for (const float bank : {-30.0f, 0.0f, 30.0f}) {
+                        const Sprite s = render_model(
+                            m, Pose{static_cast<float>(h) * 11.25f, static_cast<float>(p), bank},
+                            canvas, canvas, static_cast<float>(canvas) * 0.5f,
+                            static_cast<float>(canvas) * 0.5f);
+                        int outside = 0;
+                        for (int y = 0; y < canvas; ++y) {
+                            for (int x = 0; x < canvas; ++x) {
+                                const bool in = x >= lo && x < hi && y >= lo && y < hi;
+                                outside += !in && s.block_at(x, y) != -1 ? 1 : 0;
+                            }
+                        }
+                        CAPTURE(step);
+                        CAPTURE(h);
+                        CAPTURE(p);
+                        REQUIRE(outside == 0);
+                    }
+                }
+            }
+        }
+        // Across: well over a fighter's.
+        float widest = 0.0f;
+        for (const Block& b : plane_model(id)) {
+            for (const Vec3& c : b.corners) {
+                widest = std::max(widest, std::abs(c.x));
+            }
+        }
+        CHECK(widest >= 27.0f);
+        CHECK(widest <= 33.0f);
+    }
+}
