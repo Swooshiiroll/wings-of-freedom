@@ -74,6 +74,9 @@ void Effects::add(const std::vector<Event>& events, float blast_radius_u) {
         case EventKind::RoundHitPlane:
             sparks_.push_back(Mark{e.x, e.y, 0.0f, 1.5f, e.z});
             break;
+        case EventKind::FlakBurst: // damage: the burst's radius
+            flak_.push_back(Mark{e.x, e.y, 0.0f, e.damage, e.z});
+            break;
         default:
             break;
         }
@@ -96,6 +99,7 @@ void Effects::tick(float dt, float scorch_fade_s) {
     age(booms_, dt, kBoomS);
     age(scorches_, dt, scorch_fade_s);
     age(sparks_, dt, kSparkS);
+    age(flak_, dt, kFlakS);
     for (Mark& m : smoke_) {
         m.age += dt;
     }
@@ -110,6 +114,7 @@ void Effects::clear() {
     scorches_.clear();
     smoke_.clear();
     sparks_.clear();
+    flak_.clear();
 }
 
 void Effects::draw_ground(SDL_Renderer* r, const ViewXf& xf, float scorch_fade_s) const {
@@ -151,6 +156,19 @@ void Effects::draw_air(SDL_Renderer* r, const ViewXf& xf) const {
         fill_ground_disc(r, xf, m.x, m.y, m.z + t * 14.0f, m.size * (0.25f + 0.35f * t),
                          SDL_FColor{0.20f, 0.18f, 0.16f, 0.7f * (1.0f - t)});
         ground_ring(r, xf, m.x, m.y, m.z, m.size * t, SDL_FColor{1.0f, 0.62f, 0.25f, 1.0f - t});
+    }
+    // Heavy flak: a flash, then a black cloud that swells and fades.
+    for (const Mark& m : flak_) {
+        const float t = m.age / kFlakS;
+        if (m.age < 0.08f) {
+            fill_ground_disc(r, xf, m.x, m.y, m.z, m.size * 0.5f,
+                             SDL_FColor{1.0f, 0.75f, 0.35f, 0.95f});
+        }
+        const SDL_FColor smoke{0.08f, 0.07f, 0.07f, 0.8f * (1.0f - t)};
+        const float rad = m.size * (0.5f + 0.4f * t);
+        fill_ground_disc(r, xf, m.x, m.y, m.z, rad, smoke);
+        fill_ground_disc(r, xf, m.x - rad * 0.7f, m.y, m.z + 3.0f, rad * 0.7f, smoke);
+        fill_ground_disc(r, xf, m.x + rad * 0.6f, m.y + rad * 0.4f, m.z - 2.0f, rad * 0.6f, smoke);
     }
     // Sparks where rounds strike a plane.
     for (const Mark& m : sparks_) {

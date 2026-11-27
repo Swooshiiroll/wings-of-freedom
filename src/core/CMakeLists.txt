@@ -7,6 +7,7 @@ add_library(wof_core STATIC
   dashboard.cpp
   fighter.cpp
   fixed_step.cpp
+  flak.cpp
   flight.cpp
   ground.cpp
   gunners.cpp

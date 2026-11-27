@@ -11,6 +11,7 @@ them under its version (see CLAUDE.md, "Releasing").
 - `design/planes.md`: real planes, nations and eras; the v0.1 roster (P-26A, He 51B, B-10B, He 111B-2) with sources and the scale; `game.md` and `flight.md` reworked to match (30,000 ft ceiling with the ground zooming out, guns by calibre, twin engines, choosing your nation).
 
 ### Added
+- Enemy flak: a front line of gun groups with trenches and shell holes halfway up the map and sites beyond; machine guns, then light cannon from wave 5 and heavy guns from wave 9, with reinforcements; destroyed by strafing or bombs for 50 or 150 points.
 - Enemy bombers: the Keystone B-6A and Dornier Do 23G in the first raids, the B-10B and He 111B-2 from wave 9; formations every 3rd wave flying to your base, warned as they enter; nose, dorsal and ventral gunners in bursts that can be knocked out; escorts from wave 6; a counter for bombers that reach your base; larger bomber arrows.
 - The aircraft tree: points from kills with chains, banked only when you get home (with condition and wave bonuses); a run summary; a hangar after the nation screen to buy the next fighter and six upgrades per plane; the bomb sight as an upgrade; progress saved in `progress.txt`; points and chain on the dashboard.
 - The aircraft tree's planes: the P-12E, Ar 65E, P-36A and Bf 109B with their real stats and models; the P-26A starts with two .30s; enemy fighters grow up their tree with the waves; a plane screen with all six (and `--plane`).

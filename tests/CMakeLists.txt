@@ -9,6 +9,7 @@ add_executable(wof_tests
   test_dashboard.cpp
   test_damage.cpp
   test_fighter.cpp
+  test_flak.cpp
   test_fixed_step.cpp
   test_flight.cpp
   test_ground.cpp

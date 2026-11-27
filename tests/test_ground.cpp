@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdlib>
+#include <utility>
 
 #include "core/hash.hpp"
 #include "core/map.hpp"
@@ -50,7 +51,7 @@ TEST_CASE("The farmland has every kind of ground") {
             ++counts[static_cast<std::size_t>(sample_ground(p, kSeed, x, y).kind)];
         }
     }
-    for (int k = 0; k < kGroundKinds; ++k) {
+    for (int k = 0; k < static_cast<int>(Ground::Mud); ++k) { // the front line is below
         CAPTURE(ground_name(static_cast<Ground>(k)));
         CHECK(counts[static_cast<std::size_t>(k)] > 0);
     }
@@ -170,4 +171,29 @@ TEST_CASE("validate keeps the ground's numbers usable") {
     CHECK(p.field_max_u == 200);
     CHECK(p.weights[static_cast<std::size_t>(Ground::Pasture)] == 1);
     CHECK(p.block_u == 64);
+}
+
+TEST_CASE("The front line is a band of mud, trenches and shell holes halfway up the map") {
+    const GroundParams p;
+    std::array<int, kGroundKinds> on{};
+    std::array<int, kGroundKinds> off{};
+    for (int wx = 2000; wx < 4000; wx += 3) {
+        for (int dw = -150; dw <= 150; dw += 3) {
+            // The farmland unit under world (wx, wy): turned 45 degrees.
+            const auto at = [](int x, int y) {
+                const int fx = static_cast<int>(static_cast<float>(x - y) * 0.7071f);
+                const int fy = static_cast<int>(static_cast<float>(x + y) * 0.7071f);
+                return std::pair{fx, fy};
+            };
+            const auto [bx, by] = at(wx, kFrontU + dw);
+            ++on[static_cast<std::size_t>(sample_ground(p, kSeed, bx, by).kind)];
+            const auto [fx, fy] = at(wx, kFrontU - 1000 + dw);
+            ++off[static_cast<std::size_t>(sample_ground(p, kSeed, fx, fy).kind)];
+        }
+    }
+    for (const Ground g : {Ground::Mud, Ground::Trench, Ground::Crater}) {
+        CAPTURE(ground_name(g));
+        CHECK(on[static_cast<std::size_t>(g)] > 100);
+        CHECK(off[static_cast<std::size_t>(g)] == 0);
+    }
 }

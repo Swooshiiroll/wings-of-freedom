@@ -22,6 +22,7 @@ class Effects {
     static constexpr float kSmokeS = 1.2f;
     static constexpr float kSprayS = 0.5f;
     static constexpr float kSparkS = 0.12f;
+    static constexpr float kFlakS = 1.4f; // a heavy burst's black cloud
 
     enum class Trail : std::uint8_t { Grey, Black, Spray };
 
@@ -61,6 +62,7 @@ class Effects {
     std::vector<Mark> scorches_;
     std::vector<Mark> smoke_;
     std::vector<Mark> sparks_;
+    std::vector<Mark> flak_;
 };
 
 // A filled circle of `radius` u on the ground (an ellipse on screen), centred on (x, y) at height

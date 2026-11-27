@@ -218,6 +218,7 @@ void count_through(World& w) {
 void step(World& world, std::span<const InputCommand> commands, const Rules& rules) {
     world.events.clear();
     update_waves(world, rules);
+    update_flak(world, rules);
     move_targets(world.targets, rules.targets, kTickSeconds);
     for (std::size_t i = 0; i < world.bodies.size(); ++i) {
         Body& b = world.bodies[i];

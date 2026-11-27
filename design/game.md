@@ -141,7 +141,8 @@ full design, with sources, is in `planes.md`.
 The first set, for v0.1, all real types of the enemy nation:
 - **Enemy fighters** that chase and shoot you;
 - **Enemy bombers**, bigger and tougher, with nose, dorsal and ventral gunners;
-- **Flak guns** on the ground, real light and heavy types. Light flak is deadly low and can't reach
+- **Flak guns** on the ground, along the enemy's front line and at sites beyond it: machine guns,
+  then light cannon and heavy guns as the battle goes on. Light flak is deadly low and can't reach
   high. Heavy flak reaches most of the way up and is less accurate the higher you fly. They are
   also the first ground targets to bomb.
 

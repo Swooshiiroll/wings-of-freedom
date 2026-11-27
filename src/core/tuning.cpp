@@ -26,7 +26,7 @@ struct IntKey {
 };
 
 // Every value, in the file's order. The int ranges match validate(GroundParams&).
-constexpr std::array<FloatKey, 102> kFloats = {{
+constexpr std::array<FloatKey, 108> kFloats = {{
     {"Camera: how far ahead it looks (u), and how fast that swings round after a turn (per s)",
      "camera.lead_u", [](Tuning& t) -> float& { return t.camera.lead_u; }, 0.0f, 400.0f},
     {nullptr, "camera.lead_ease", [](Tuning& t) -> float& { return t.camera.lead_ease; }, 0.1f,
@@ -251,9 +251,23 @@ constexpr std::array<FloatKey, 102> kFloats = {{
      30000.0f},
     {nullptr, "ai.escort_return_u", [](Tuning& t) -> float& { return t.rules.ai.escort_return_u; },
      0.0f, 30000.0f},
+    {"Flak: guns spread round their group's middle (u); sites between these far beyond the front "
+     "line (u); a gun's size for strafing and bombs (u); heavy bursts scatter this (u), plus this "
+     "per u of your height",
+     "flak.spread_u", [](Tuning& t) -> float& { return t.rules.flak.spread_u; }, 0.0f, 1000.0f},
+    {nullptr, "flak.site_near_u", [](Tuning& t) -> float& { return t.rules.flak.site_near_u; },
+     0.0f, 14000.0f},
+    {nullptr, "flak.site_far_u", [](Tuning& t) -> float& { return t.rules.flak.site_far_u; }, 0.0f,
+     14000.0f},
+    {nullptr, "flak.gun_radius_u", [](Tuning& t) -> float& { return t.rules.flak.gun_radius_u; },
+     1.0f, 100.0f},
+    {nullptr, "flak.scatter_u", [](Tuning& t) -> float& { return t.rules.flak.scatter_u; }, 0.0f,
+     200.0f},
+    {nullptr, "flak.scatter_per_u", [](Tuning& t) -> float& { return t.rules.flak.scatter_per_u; },
+     0.0f, 5.0f},
 }};
 
-constexpr std::array<IntKey, 52> kInts = {{
+constexpr std::array<IntKey, 64> kInts = {{
     {"Waves: enemy fighters in the air at once, at most", "wave.max_alive",
      [](Tuning& t) -> int& { return t.rules.wave.max_alive; }, 1, 64},
     {"Waves: the enemy's fighters move up a stage of its aircraft tree every this many waves",
@@ -349,6 +363,31 @@ constexpr std::array<IntKey, 52> kInts = {{
      [](Tuning& t) -> int& { return t.rules.damage.nose_gunner_pct; }, 0, 100},
     {nullptr, "damage.rear_gunner_pct",
      [](Tuning& t) -> int& { return t.rules.damage.rear_gunner_pct; }, 0, 50},
+    {"Flak: groups on the front line and guns in each, the strongpoints among them, sites beyond "
+     "and guns in each; machine guns become cannon at one wave and heavy guns arrive at another; a "
+     "gun added every this many waves, up to a most",
+     "flak.front_groups", [](Tuning& t) -> int& { return t.rules.flak.front_groups; }, 0, 200},
+    {nullptr, "flak.guns_per_group", [](Tuning& t) -> int& { return t.rules.flak.guns_per_group; },
+     0, 20},
+    {nullptr, "flak.strongpoints", [](Tuning& t) -> int& { return t.rules.flak.strongpoints; }, 0,
+     200},
+    {nullptr, "flak.sites", [](Tuning& t) -> int& { return t.rules.flak.sites; }, 0, 100},
+    {nullptr, "flak.guns_per_site", [](Tuning& t) -> int& { return t.rules.flak.guns_per_site; }, 0,
+     20},
+    {nullptr, "flak.cannon_wave", [](Tuning& t) -> int& { return t.rules.flak.cannon_wave; }, 1,
+     1000},
+    {nullptr, "flak.heavy_wave", [](Tuning& t) -> int& { return t.rules.flak.heavy_wave; }, 1,
+     1000},
+    {nullptr, "flak.reinforce_every",
+     [](Tuning& t) -> int& { return t.rules.flak.reinforce_every; }, 0, 1000},
+    {nullptr, "flak.reinforce_max", [](Tuning& t) -> int& { return t.rules.flak.reinforce_max; }, 0,
+     200},
+    {"Points for destroying a flak gun", "score.flak_light",
+     [](Tuning& t) -> int& { return t.rules.score.flak_light; }, 0, 100000},
+    {nullptr, "score.flak_heavy", [](Tuning& t) -> int& { return t.rules.score.flak_heavy; }, 0,
+     100000},
+    {"The front line's band of trenches across the map (u; 0: none)", "ground.front_depth_u",
+     [](Tuning& t) -> int& { return t.ground.front_depth_u; }, 0, 4000},
 }};
 
 void section(std::string& out, const char* name) {

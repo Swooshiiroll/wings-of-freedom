@@ -360,19 +360,28 @@ fighters can catch them (owner, 2026-11-27).
 
 ### Flak guns
 
-- On the ground, **8 at the start**, in clusters across the middle and north of the map. They're
-  the enemy nation's **real light and heavy guns** (`planes.md`), half of each.
-- **Light flak** (2 cm Flak 30, or the US 37 mm M1) fires aimed streams of shells at its real
-  rate, like guns leading the target.
-  - Deadly low; out of reach above about 3,500 ft (German) or 10,500 ft (US).
-  - Range across the ground is **240 u**.
-- **Heavy flak** (8.8 cm Flak 18, or the US 3-inch M3) fires timed bursts at its real rate (one
-  every 3-4 s) at where a plane is heading.
-  - It reaches about 26,000-28,000 ft, with a range of **400 u** across the ground.
-  - **Less accurate the higher you are:** burst scatter is **4 u** plus **0.15 u** per unit of
-    the target's height.
-  - Each burst has a blast radius of about **15 u** and does about **13 damage** at the centre.
-- **30 HP** (heavy guns 45). Bombs and strafing destroy them.
+The enemy nation's real guns (`planes.md`; owner, 2026-11-27).
+
+- **Where:** a **front line halfway up** the map (about 2 minutes' flying from your base), **14
+  groups of 3** spread across it with gaps to slip through, four of them **strongpoints**; and **6
+  sites** of 3 guns farther north, where ground targets will go (`flak.*`, start values).
+- **The front line shows:** a 400 u band of mud, zigzag trenches and shell holes.
+- **They step up with the waves:**
+  - waves 1-4: **machine guns**;
+  - from wave 5, surviving machine guns are **swapped in place** for **light cannon**;
+  - from wave 9, **heavy guns** at the sites and the strongpoints.
+- **Reinforcements:** a gun added to a group or site every 2 waves, up to 8. Destroyed guns stay
+  destroyed, as wrecks.
+- **Aim:** like the enemy pilots, following your enemy aim setting and sharpening with the waves.
+  - Machine guns and cannon fire aimed streams at their real rate, every round a tracer.
+  - Heavy guns fire timed shells to where you're heading. Bursts scatter **4 u** plus **0.15 u**
+    per u of your height, and damage like a bomb's blast.
+- Guns fire only at players and hold fire rather than shoot through their own planes. A burst can
+  still catch an enemy that flies into it.
+- **Warning:** only what you see: flashes, tracers and black bursts.
+- **Destroying them:** strafe (rounds reaching the ground on the gun) or bomb. A machine gun has
+  **20 HP**, a cannon **30**, a heavy **45**. Light guns are worth **50 points**, heavy ones
+  **150**, in chains like kills.
 
 ### Waves
 
@@ -390,7 +399,6 @@ fighters can catch them (owner, 2026-11-27).
 - **Off-screen enemies** get an arrow at the screen edge (owner, 2026-11-27). Enemies in about the
   same direction share one. A mark beside it says **higher**, **level** (within about 1,000 ft)
   or **lower**, for the nearest of them. No numbers.
-- **1 more flak gun** is placed every 2 waves, up to **16**.
 
 ## HUD
 
@@ -556,5 +564,4 @@ speed shows in mph, and bomber gunners are knocked out as described under Bomber
 The gunners' hit shares (as written under Bombers) and their cruising heights of 8,000-15,000 ft
 are confirmed (owner, 2026-11-27). Still open, from the real-planes rework (and `planes.md`'s own
 open questions):
-1. **Flak ranges across the ground** (light 240 u, heavy 400 u) and heavy-gun HP (45): start
-   values to check in play.
+1. **Flak** reaches, groups and timing: start values to check in play.
