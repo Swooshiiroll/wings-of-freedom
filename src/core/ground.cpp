@@ -6,7 +6,6 @@
 
 #include "core/hash.hpp"
 #include "core/iso.hpp"
-#include "core/map.hpp"
 
 namespace wof {
 namespace {
@@ -92,13 +91,13 @@ struct Origin {
     return false;
 }
 
-// The river's bend points: one every river_step_u north, each up to river_swing_u east or west of
-// the river's line (somewhere in the middle half of the battle area, by seed).
-[[nodiscard]] int bend_x(const GroundParams& p, std::uint64_t seed, int k) noexcept {
-    const int base = kMapWidthU / 2 + below(hash2(seed, 0, 0, kSaltRiverBase), kMapWidthU / 2 + 1) -
-                     kMapWidthU / 4;
+// River `n`'s bend points: one every river_step_u north, each up to river_swing_u east or west of
+// the river's line (somewhere in the middle half of its strip of kRiverEveryU, by seed).
+[[nodiscard]] int bend_x(const GroundParams& p, std::uint64_t seed, int n, int k) noexcept {
+    const int base = n * kRiverEveryU + kRiverEveryU / 4 +
+                     below(hash2(seed, n, 0, kSaltRiverBase), kRiverEveryU / 2 + 1);
     const int swing = p.river_swing_u;
-    return base + below(hash2(seed, k, 0, kSaltRiver), 2 * swing + 1) - swing;
+    return base + below(hash2(seed, k, n, kSaltRiver), 2 * swing + 1) - swing;
 }
 
 // The river's centre at y and its slope there (east per unit north, in 1/65536ths). Between bend
@@ -107,13 +106,13 @@ struct RiverAt {
     int x = 0;
     std::int64_t slope_q16 = 0;
 };
-[[nodiscard]] RiverAt river_at(const GroundParams& p, std::uint64_t seed, int y) noexcept {
+[[nodiscard]] RiverAt river_at(const GroundParams& p, std::uint64_t seed, int n, int y) noexcept {
     const int step = p.river_step_u;
     const int k = floor_div(y, step);
     const std::int64_t t = y - static_cast<std::int64_t>(k) * step;
     const std::int64_t s = step;
-    const std::int64_t x0 = bend_x(p, seed, k);
-    const std::int64_t dx = bend_x(p, seed, k + 1) - x0;
+    const std::int64_t x0 = bend_x(p, seed, n, k);
+    const std::int64_t dx = bend_x(p, seed, n, k + 1) - x0;
     const std::int64_t s3 = s * s * s;
     const std::int64_t eased = t * t * (3 * s - 2 * t); // 0 .. s^3
     const std::int64_t slope = dx * 6 * t * (s - t);    // d(eased * dx) / dt
@@ -161,7 +160,7 @@ bool validate(GroundParams& p) noexcept {
     p.river_u = std::clamp(p.river_u, 0, 400);
     p.river_bank_u = std::clamp(p.river_bank_u, 0, 64);
     p.river_step_u = std::clamp(p.river_step_u, 32, 1024);
-    p.river_swing_u = std::clamp(p.river_swing_u, 0, 2048);
+    p.river_swing_u = std::clamp(p.river_swing_u, 0, 1024);
     int total = 0;
     for (int& w : p.weights) {
         w = std::clamp(w, 0, 1000);
@@ -213,8 +212,8 @@ Ground field_kind(const GroundParams& p, const FieldRect& f) noexcept {
     return Ground::Pasture;
 }
 
-int river_centre_x(const GroundParams& p, std::uint64_t seed, int y) noexcept {
-    return river_at(p, seed, y).x;
+int river_centre_x(const GroundParams& p, std::uint64_t seed, int y, int river) noexcept {
+    return river_at(p, seed, river, y).x;
 }
 
 GroundSample sample_ground(const GroundParams& p, std::uint64_t seed, int x, int y) noexcept {
@@ -222,7 +221,8 @@ GroundSample sample_ground(const GroundParams& p, std::uint64_t seed, int x, int
         return {Ground::Road, false, 0}; // bridges too: roads are drawn over the river
     }
     if (p.river_u > 0) {
-        const RiverAt r = river_at(p, seed, y);
+        // Only the river of this strip can be near (its swing and width stay inside it).
+        const RiverAt r = river_at(p, seed, floor_div(x, kRiverEveryU), y);
         // Distance across the river, not along x: scaled by 1 / sqrt(1 + slope^2).
         const std::int64_t across = std::llabs(static_cast<std::int64_t>(x) - r.x);
         const std::int64_t d =

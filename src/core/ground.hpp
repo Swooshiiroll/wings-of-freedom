@@ -39,6 +39,9 @@ enum class Ground : std::uint8_t {
 inline constexpr int kGroundKinds = 10;
 inline constexpr int kFieldKinds = 6; // Wheat to Woods: what a field can be
 
+// One river winds north to south through each strip of the farmland this wide (u).
+inline constexpr int kRiverEveryU = 6000;
+
 [[nodiscard]] const char* ground_name(Ground g) noexcept;
 
 // The ground's numbers (tuning.txt, `ground.*`), all (start) values, in world units.
@@ -90,7 +93,8 @@ struct GroundSample {
 [[nodiscard]] GroundSample sample_ground(const GroundParams& p, std::uint64_t seed, int x,
                                          int y) noexcept;
 
-// The river's centre line at y, in ground units east.
-[[nodiscard]] int river_centre_x(const GroundParams& p, std::uint64_t seed, int y) noexcept;
+// River `river`'s centre line at y, in farmland units (its strip starts at river x kRiverEveryU).
+[[nodiscard]] int river_centre_x(const GroundParams& p, std::uint64_t seed, int y,
+                                 int river = 0) noexcept;
 
 } // namespace wof

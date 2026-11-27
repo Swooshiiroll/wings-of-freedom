@@ -22,12 +22,12 @@ constexpr std::array<std::array<int, 4>, 6> kFaces = {{
     {{3, 0, 4, 7}},
 }};
 
-// Toward the sun: above, and to the upper left as seen on screen.
-constexpr Vec3 kSun{-0.35f, -0.46f, 0.82f};
+// Toward the sun: above, and to the left of the viewer (who looks north from the south).
+constexpr Vec3 kSun{-0.45f, -0.35f, 0.82f};
 constexpr float kAmbient = 0.52f;
 
-// A projected corner: pixel position, and depth (bigger is nearer the viewer, who looks from the
-// south-east and above).
+// A projected corner: pixel position, and depth (bigger is nearer the viewer, who looks north from
+// the south and above).
 struct Projected {
     float x = 0.0f;
     float y = 0.0f;
@@ -40,14 +40,29 @@ struct Projected {
 [[nodiscard]] Vec3 cross(Vec3 a, Vec3 b) noexcept {
     return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
 }
+
+// A part on the centreline narrower than a pixel (fin, spinner) would cover no pixel centre seen
+// end-on, heading north or south, and vanish.
+[[nodiscard]] bool centre_sliver(const Block& b) noexcept {
+    float lo = b.corners[0].x;
+    float hi = lo;
+    for (const Vec3& c : b.corners) {
+        lo = std::min(lo, c.x);
+        hi = std::max(hi, c.x);
+    }
+    return std::abs(lo + hi) < 0.01f && (hi - lo) * std::numbers::sqrt2_v<float> < 1.0f;
+}
+
 [[nodiscard]] float dot(Vec3 a, Vec3 b) noexcept {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
 [[nodiscard]] Projected project(Vec3 w, float ox, float oy, bool flat) noexcept {
+    constexpr float kRoot2 = std::numbers::sqrt2_v<float>;
     const float z = flat ? 0.0f : w.z;
-    return {ox + w.x + w.y, oy + (w.x - w.y) * 0.5f - kModelHeightPxPerU * z,
-            w.x - w.y + 0.8164966f * z};
+    // The same view as core/iso.hpp, with the model's own height; depth is along the view.
+    return {ox + kRoot2 * w.x, oy - 0.5f * kRoot2 * w.y - kModelHeightPxPerU * z,
+            0.5f * z - 0.8660254f * w.y};
 }
 
 // Fills a triangle into the sprite where it's nearer than what's there.
@@ -116,8 +131,9 @@ Sprite render(const std::vector<Block>& model, const Pose& pose, int w, int h, f
                       centre.z + world[k].z / 8.0f};
         }
         std::array<Projected, 8> pr{};
+        const float column = ox + (centre_sliver(blk) ? 0.5f : 0.0f); // so it still shows
         for (std::size_t k = 0; k < 8; ++k) {
-            pr[k] = project(world[k], ox, oy, flat);
+            pr[k] = project(world[k], column, oy, flat);
         }
         for (const auto& f : kFaces) {
             const auto c0 = static_cast<std::size_t>(f[0]);

@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+
 namespace wof {
 
 // The pixel-art view (design/flight.md, World and view): the art is 480x270, shown at the largest
@@ -47,5 +51,22 @@ struct EdgeArrow {
 };
 [[nodiscard]] EdgeArrow edge_arrow(float px, float py, int view_w, int view_h,
                                    float margin) noexcept;
+
+// One arrow stands for the enemies in about the same direction (design/flight.md, Enemies): the
+// nearest first, each joining a group within `spread_rad` of its angle, and the nearest of a group
+// giving its height mark.
+struct Sighting {
+    float angle_rad = 0.0f; // on screen, from the view's centre
+    float distance = 0.0f;  // across the ground, u
+    float dz = 0.0f;        // its height less yours, u
+};
+enum class HeightMark : std::uint8_t { Lower, Level, Higher };
+struct ArrowGroup {
+    float angle_rad = 0.0f;
+    HeightMark mark = HeightMark::Level;
+    std::size_t nearest = 0; // the sighting the arrow points at
+};
+[[nodiscard]] std::vector<ArrowGroup> group_arrows(const std::vector<Sighting>& seen,
+                                                   float spread_rad, float level_u);
 
 } // namespace wof

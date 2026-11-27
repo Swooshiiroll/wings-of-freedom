@@ -26,7 +26,7 @@ struct IntKey {
 };
 
 // Every value, in the file's order. The int ranges match validate(GroundParams&).
-constexpr std::array<FloatKey, 78> kFloats = {{
+constexpr std::array<FloatKey, 79> kFloats = {{
     {"Camera: how far ahead it looks (u), and how fast that swings round after a turn (per s)",
      "camera.lead_u", [](Tuning& t) -> float& { return t.camera.lead_u; }, 0.0f, 400.0f},
     {nullptr, "camera.lead_ease", [](Tuning& t) -> float& { return t.camera.lead_ease; }, 0.1f,
@@ -184,7 +184,7 @@ constexpr std::array<FloatKey, 78> kFloats = {{
      50.0f, 2000.0f},
     {nullptr, "ai.extend_s", [](Tuning& t) -> float& { return t.rules.ai.extend_s; }, 0.1f, 30.0f},
     {"Waves: the first and then every (s), arriving within this of your height (u), spread (u) "
-     "across, and inside the north edge (u); at most wave.max_alive in the air",
+     "along the edge, how far along it (u) and inside it (u); at most wave.max_alive in the air",
      "wave.first_s", [](Tuning& t) -> float& { return t.rules.wave.first_s; }, 0.0f, 600.0f},
     {nullptr, "wave.every_s", [](Tuning& t) -> float& { return t.rules.wave.every_s; }, 1.0f,
      600.0f},
@@ -192,8 +192,10 @@ constexpr std::array<FloatKey, 78> kFloats = {{
      [](Tuning& t) -> float& { return t.rules.wave.height_spread_u; }, 0.0f, 500.0f},
     {nullptr, "wave.spread_u", [](Tuning& t) -> float& { return t.rules.wave.spread_u; }, 0.0f,
      1000.0f},
-    {nullptr, "wave.north_inset_u", [](Tuning& t) -> float& { return t.rules.wave.north_inset_u; },
-     0.0f, 1000.0f},
+    {nullptr, "wave.along_u", [](Tuning& t) -> float& { return t.rules.wave.along_u; }, 0.0f,
+     30000.0f},
+    {nullptr, "wave.edge_inset_u", [](Tuning& t) -> float& { return t.rules.wave.edge_inset_u; },
+     0.0f, 2000.0f},
 }};
 
 constexpr std::array<IntKey, 37> kInts = {{
@@ -255,7 +257,7 @@ constexpr std::array<IntKey, 37> kInts = {{
     {nullptr, "ground.river_step_u", [](Tuning& t) -> int& { return t.ground.river_step_u; }, 32,
      1024},
     {nullptr, "ground.river_swing_u", [](Tuning& t) -> int& { return t.ground.river_swing_u; }, 0,
-     2048},
+     1024},
     {"Field kinds: how often each comes up, relative to the others", "ground.weight.wheat",
      [](Tuning& t) -> int& { return t.ground.weights[0]; }, 0, 1000},
     {nullptr, "ground.weight.barley", [](Tuning& t) -> int& { return t.ground.weights[1]; }, 0,

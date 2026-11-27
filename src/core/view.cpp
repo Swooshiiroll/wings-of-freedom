@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
 namespace wof {
 
@@ -35,6 +36,32 @@ EdgeArrow edge_arrow(float px, float py, int view_w, int view_h, float margin) n
     a.y = cy + dy * k;
     a.on_screen = false;
     return a;
+}
+
+std::vector<ArrowGroup> group_arrows(const std::vector<Sighting>& seen, float spread_rad,
+                                     float level_u) {
+    std::vector<std::size_t> order(seen.size());
+    for (std::size_t i = 0; i < order.size(); ++i) {
+        order[i] = i;
+    }
+    std::stable_sort(order.begin(), order.end(), [&seen](std::size_t a, std::size_t b) {
+        return seen[a].distance < seen[b].distance;
+    });
+    std::vector<ArrowGroup> groups;
+    for (const std::size_t i : order) {
+        const Sighting& s = seen[i];
+        const bool joins = std::any_of(groups.begin(), groups.end(), [&](const ArrowGroup& g) {
+            constexpr float kTurn = 2.0f * std::numbers::pi_v<float>;
+            return std::abs(std::remainder(s.angle_rad - g.angle_rad, kTurn)) <= spread_rad;
+        });
+        if (!joins) {
+            const HeightMark mark = s.dz > level_u    ? HeightMark::Higher
+                                    : s.dz < -level_u ? HeightMark::Lower
+                                                      : HeightMark::Level;
+            groups.push_back({s.angle_rad, mark, i});
+        }
+    }
+    return groups;
 }
 
 } // namespace wof

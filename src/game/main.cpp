@@ -635,49 +635,60 @@ void draw_text_centred(SDL_Renderer* r, int view_w, float y, const std::vector<s
     return {std::round(at.x - sw * 0.5f), std::round(at.y - sh * 0.5f), sw, sh};
 }
 
-// Arrows at the view's edge toward the enemies off screen, each with its height compared with
-// yours, in the setting's units (design/flight.md, Enemies). `view_h` is the world's rows, above
-// the dashboard. Labels that would cover one another are moved apart.
+// Arrows at the view's edge toward the enemies off screen: one per direction, with a mark for
+// higher, level (within about 1,000 ft) or lower than you (design/flight.md, Enemies). `view_h` is
+// the world's rows, above the dashboard.
 void draw_enemy_arrows(SDL_Renderer* r, const ViewXf& xf, const Body& plane,
-                       const std::vector<Body>& enemies, UnitSystem units, int view_w, int view_h) {
-    std::vector<SDL_FRect> labels;
+                       const std::vector<Body>& enemies, int view_w, int view_h) {
+    std::vector<Sighting> seen;
+    std::vector<EdgeArrow> arrows;
+    const float cx = static_cast<float>(view_w) * 0.5f;
+    const float cy = static_cast<float>(view_h) * 0.5f;
     for (const Body& b : enemies) {
         if (b.outcome != Outcome::Flying) {
             continue;
         }
         const SDL_FPoint at = on_view(xf, b.x, b.y, b.z);
-        const EdgeArrow a = edge_arrow(at.x, at.y, view_w, view_h, 10.0f);
+        const EdgeArrow a = edge_arrow(at.x, at.y, view_w, view_h, 12.0f);
         if (a.on_screen) {
             continue;
         }
+        seen.push_back({std::atan2(at.y - cy, at.x - cx), std::hypot(b.x - plane.x, b.y - plane.y),
+                        b.z - plane.z});
+        arrows.push_back(a);
+    }
+    const SDL_FColor red{1.0f, 0.38f, 0.25f, 1.0f};
+    const SDL_FColor mark_colour{1.0f, 0.8f, 0.7f, 1.0f};
+    const auto triangle = [r](SDL_FPoint a, SDL_FPoint b, SDL_FPoint c, SDL_FColor colour) {
+        const std::array<SDL_Vertex, 3> v{
+            {{a, colour, {0.0f, 0.0f}}, {b, colour, {0.0f, 0.0f}}, {c, colour, {0.0f, 0.0f}}}};
+        SDL_RenderGeometry(r, nullptr, v.data(), 3, nullptr, 0);
+    };
+    // 0.45 rad: about 25 degrees either way share an arrow; 20 u is 1,000 ft.
+    for (const ArrowGroup& g : group_arrows(seen, 0.45f, 20.0f)) {
+        const EdgeArrow& a = arrows[g.nearest];
         const float c = std::cos(a.angle_rad);
         const float s = std::sin(a.angle_rad);
-        const SDL_FColor red{1.0f, 0.38f, 0.25f, 1.0f};
-        const std::array<SDL_Vertex, 3> v{
-            {{{a.x + c * 7.0f, a.y + s * 7.0f}, red, {0.0f, 0.0f}},
-             {{a.x - c * 3.0f - s * 5.0f, a.y - s * 3.0f + c * 5.0f}, red, {0.0f, 0.0f}},
-             {{a.x - c * 3.0f + s * 5.0f, a.y - s * 3.0f - c * 5.0f}, red, {0.0f, 0.0f}}}};
-        SDL_RenderGeometry(r, nullptr, v.data(), 3, nullptr, 0);
-        // Its height against yours, just inside the arrow.
-        const std::string text = height_diff_text(b.z - plane.z, units);
-        const float w = static_cast<float>(text.size()) * kGlyph + 4.0f;
-        const float tx =
-            std::clamp(a.x - c * 24.0f - w * 0.5f, 0.0f, static_cast<float>(view_w) - w);
-        const float bottom = static_cast<float>(view_h) - 12.0f;
-        SDL_FRect box{std::round(tx), std::round(std::clamp(a.y - s * 14.0f - 5.0f, 0.0f, bottom)),
-                      w, 11.0f};
-        const float step = box.y < static_cast<float>(view_h) * 0.5f ? 12.0f : -12.0f;
-        for (int tries = 0; tries < 6; ++tries) {
-            const bool covered = std::any_of(labels.begin(), labels.end(), [&](const SDL_FRect& o) {
-                return SDL_HasRectIntersectionFloat(&box, &o);
-            });
-            if (!covered) {
-                break;
-            }
-            box.y = std::clamp(box.y + step, 0.0f, bottom);
+        triangle({a.x + c * 7.0f, a.y + s * 7.0f},
+                 {a.x - c * 3.0f - s * 5.0f, a.y - s * 3.0f + c * 5.0f},
+                 {a.x - c * 3.0f + s * 5.0f, a.y - s * 3.0f - c * 5.0f}, red);
+        // The height mark, just inside the arrow.
+        const float x = std::round(std::clamp(a.x - c * 14.0f, 6.0f, cx * 2.0f - 6.0f));
+        const float y = std::round(std::clamp(a.y - s * 14.0f, 6.0f, cy * 2.0f - 6.0f));
+        const SDL_FRect back{x - 6.0f, y - 6.0f, 12.0f, 12.0f};
+        SDL_SetRenderDrawColor(r, 0, 0, 0, 150);
+        SDL_RenderFillRect(r, &back);
+        if (g.mark == HeightMark::Higher) {
+            triangle({x, y - 4.0f}, {x + 4.0f, y + 3.0f}, {x - 4.0f, y + 3.0f}, mark_colour);
+        } else if (g.mark == HeightMark::Lower) {
+            triangle({x, y + 4.0f}, {x - 4.0f, y - 3.0f}, {x + 4.0f, y - 3.0f}, mark_colour);
+        } else {
+            SDL_SetRenderDrawColor(r, 255, 204, 178, 255);
+            const SDL_FRect upper{x - 4.0f, y - 3.0f, 8.0f, 2.0f};
+            const SDL_FRect lower{x - 4.0f, y + 1.0f, 8.0f, 2.0f};
+            SDL_RenderFillRect(r, &upper);
+            SDL_RenderFillRect(r, &lower);
         }
-        labels.push_back(box);
-        draw_text_block(r, box.x, box.y, {text}, SDL_Color{255, 190, 160, 255});
     }
 }
 
@@ -1463,8 +1474,7 @@ int main(int argc, char** argv) {
                 draw_pilot_labels(renderer, xf, world, enemies);
             }
 
-            draw_enemy_arrows(renderer, xf, plane, enemies, units_of(settings.units, nation), fit.w,
-                              world_h);
+            draw_enemy_arrows(renderer, xf, plane, enemies, fit.w, world_h);
 
             // The dashboard: every gauge and warning (design/dashboard.md).
             PanelState gauges = panel_state(world, previous[0], plane, tuning.rules, nation);
@@ -1508,9 +1518,9 @@ int main(int argc, char** argv) {
             }
 
             if (overlay) {
+                const GroundCell cell_below = farmland_of(plane.x, plane.y);
                 const GroundSample under =
-                    sample_ground(tuning.ground, seed, static_cast<int>(std::floor(plane.x)),
-                                  static_cast<int>(std::floor(plane.y)));
+                    sample_ground(tuning.ground, seed, cell_below.x, cell_below.y);
                 const game::PlaneSprites::Cell cell = game::PlaneSprites::cell_of(plane);
                 draw_text_block(
                     renderer, 0.0f, 0.0f,

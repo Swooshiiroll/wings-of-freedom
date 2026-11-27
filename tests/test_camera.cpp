@@ -28,7 +28,7 @@ TEST_CASE("The camera aims a little above halfway up from the shadow to the plan
     CHECK(cam.focus().y == doctest::Approx(shadow.y + (plane.y - shadow.y) * 0.6f));
 }
 
-TEST_CASE("The camera leads along the heading, so north leads up-right") {
+TEST_CASE("The camera leads along the heading, so north leads straight up") {
     CameraParams p; // lead 40 u
     Camera cam;
     const Body b = plane_at(1000.0f, 2000.0f, 0.0f, 0.0f);
@@ -36,8 +36,8 @@ TEST_CASE("The camera leads along the heading, so north leads up-right") {
     CHECK(cam.lead().x == doctest::Approx(0.0f));
     CHECK(cam.lead().y == doctest::Approx(40.0f));
     const ScreenPt centre = to_screen(b.x, b.y);
-    CHECK(cam.focus().x > centre.x); // right
-    CHECK(cam.focus().y < centre.y); // and up
+    CHECK(cam.focus().x == doctest::Approx(centre.x));
+    CHECK(cam.focus().y < centre.y); // up
 }
 
 TEST_CASE("After a turn the lead eases round instead of jumping") {

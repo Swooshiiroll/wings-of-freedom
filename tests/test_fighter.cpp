@@ -2,6 +2,7 @@
 #include "core/raster.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <initializer_list>
 #include <vector>
@@ -45,7 +46,7 @@ Sprite plane(const std::vector<Block>& m, float heading, float pitch, float bank
 }
 
 // Where the nose is drawn: the spinner rendered on its own (in the whole plane it's often behind
-// the cowling, seen from the south-east).
+// the cowling, seen from the south).
 Centre nose_at(float heading, float pitch) {
     std::vector<Block> spinner;
     for (const Block& b : fighter_model()) {
@@ -59,19 +60,19 @@ Centre nose_at(float heading, float pitch) {
 }
 } // namespace
 
-TEST_CASE("Heading north, the nose points up-right on screen") {
+TEST_CASE("Heading north, the nose points straight up the screen") {
     const Centre nose = nose_at(0.0f, 0.0f);
     REQUIRE(nose.count > 0);
-    CHECK(nose.x > kOrigin + 4.0f);
-    CHECK(nose.y < kOrigin - 1.0f);
+    CHECK(std::abs(nose.x - kOrigin) < 1.5f);
+    CHECK(nose.y < kOrigin - 4.0f);
 }
 
 TEST_CASE("Each heading points the nose its own way") {
-    // North-east is screen right, south-west left, north-west up, south-east down.
-    CHECK(nose_at(45.0f, 0.0f).x > kOrigin + 8.0f);
-    CHECK(nose_at(225.0f, 0.0f).x < kOrigin - 8.0f);
-    CHECK(nose_at(315.0f, 0.0f).y < kOrigin - 4.0f);
-    CHECK(nose_at(135.0f, 0.0f).y > kOrigin + 4.0f);
+    // East is screen right, west left, north up, south down.
+    CHECK(nose_at(90.0f, 0.0f).x > kOrigin + 8.0f);
+    CHECK(nose_at(270.0f, 0.0f).x < kOrigin - 8.0f);
+    CHECK(nose_at(0.0f, 0.0f).y < kOrigin - 4.0f);
+    CHECK(nose_at(180.0f, 0.0f).y > kOrigin + 4.0f);
 }
 
 TEST_CASE("Pitch shows: the nose rises when climbing and drops when diving") {
@@ -94,12 +95,12 @@ TEST_CASE("Banking right puts the right wing down") {
     const auto m = fighter_model();
     const auto right = [](const Block& b) { return b.part == Part::RightWing; };
     const auto left = [](const Block& b) { return b.part == Part::LeftWing; };
-    // Heading north-west, the nose points up the screen and the right wing to the right.
-    const Sprite banked = plane(m, 315.0f, 0.0f, 30.0f);
+    // Heading north, the nose points up the screen and the right wing to the right.
+    const Sprite banked = plane(m, 0.0f, 0.0f, 30.0f);
     CHECK(centre_of(banked, m, right).y > centre_of(banked, m, left).y + 2.0f);
-    const Sprite other = plane(m, 315.0f, 0.0f, -30.0f);
+    const Sprite other = plane(m, 0.0f, 0.0f, -30.0f);
     CHECK(centre_of(other, m, right).y < centre_of(other, m, left).y - 2.0f);
-    const Sprite level = plane(m, 315.0f, 0.0f, 0.0f);
+    const Sprite level = plane(m, 0.0f, 0.0f, 0.0f);
     CHECK(centre_of(level, m, right).y ==
           doctest::Approx(centre_of(level, m, left).y).epsilon(0.05));
 }
@@ -198,9 +199,9 @@ Centre he51_nose_at(float heading, float pitch) {
 } // namespace
 
 TEST_CASE("The He 51 points its nose along its heading, and its pitch shows") {
-    CHECK(he51_nose_at(45.0f, 0.0f).x > kOrigin + 8.0f);
-    CHECK(he51_nose_at(225.0f, 0.0f).x < kOrigin - 8.0f);
-    CHECK(he51_nose_at(315.0f, 0.0f).y < kOrigin - 4.0f);
+    CHECK(he51_nose_at(90.0f, 0.0f).x > kOrigin + 8.0f);
+    CHECK(he51_nose_at(270.0f, 0.0f).x < kOrigin - 8.0f);
+    CHECK(he51_nose_at(0.0f, 0.0f).y < kOrigin - 4.0f);
     for (const float heading : {0.0f, 120.0f, 250.0f}) {
         CAPTURE(heading);
         CHECK(he51_nose_at(heading, 40.0f).y < he51_nose_at(heading, 0.0f).y - 3.0f);
@@ -283,6 +284,38 @@ TEST_CASE("A scaled model fits its cell at the smallest and largest sprite sizes
                     }
                 }
             }
+        }
+    }
+}
+
+TEST_CASE("Seen from any heading, every part of the tail is drawn") {
+    for (const auto& model : {fighter_model(), he51_model()}) {
+        for (const Block& b : model) {
+            if (b.part != Part::Tail) {
+                continue;
+            }
+            const std::vector<Block> one{b};
+            for (int step = 0; step < 32; ++step) {
+                const float heading = static_cast<float>(step) * 11.25f;
+                CAPTURE(heading);
+                const Sprite s = plane(one, heading, 0.0f, 0.0f);
+                CHECK(std::any_of(s.block.begin(), s.block.end(), [](auto id) { return id >= 0; }));
+            }
+        }
+    }
+}
+
+TEST_CASE("Heading north or south, the spinner shows too") {
+    for (const auto& model : {fighter_model(), he51_model()}) {
+        std::vector<Block> spinner;
+        for (const Block& b : model) {
+            if (b.colour == kSpinnerColour) {
+                spinner.push_back(b);
+            }
+        }
+        for (const float heading : {0.0f, 180.0f}) {
+            const Sprite s = plane(spinner, heading, 0.0f, 0.0f);
+            CHECK(std::any_of(s.block.begin(), s.block.end(), [](auto id) { return id >= 0; }));
         }
     }
 }
