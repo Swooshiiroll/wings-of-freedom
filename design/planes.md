@@ -74,8 +74,8 @@ You fly the US or Germany. The other nation is the enemy.
 | Full circle (real) | 16 s (est.) | 13 s (est., biplane) | 30 s (est.) | 34 s (est.) |
 | Endurance | 1.8 h (360 mi) [2] | 2.0 h (est.) | 6.4 h (1,240 mi) [6] | 3 h (est.) |
 | Engines | 1 | 1 | 2 | 2 |
-| Guns | 2 × .30 cal, synchronised | 2 × 7.92 mm MG 17, synchronised, 500 rounds each [3] | 3 × .30 cal: nose, dorsal, ventral [5][6] | 3 × 7.92 mm MG 15: nose, dorsal, ventral [7] |
-| Rate and ammo | ~1,000 rounds/min each (est.); 500 rounds each (est.) | ~1,000 rounds/min each (est.) | ~1,000 rounds/min each (est.); 500 rounds each (est.) | ~1,000 rounds/min each (est.); 750 rounds each (ten 75-round drums, est.) |
+| Guns | 1 × .30 cal + 1 × .50 cal, synchronised (owner, 2026-11-26) | 2 × 7.92 mm MG 17, synchronised, 500 rounds each [3] | 3 × .30 cal: nose, dorsal, ventral [5][6] | 3 × 7.92 mm MG 15: nose, dorsal, ventral [7] |
+| Rate and ammo | .30: ~1,000 rounds/min, 500 rounds (est.); .50: ~600 rounds/min (est.), 200 rounds [13] | ~1,000 rounds/min each (est.) | ~1,000 rounds/min each (est.); 500 rounds each (est.) | ~1,000 rounds/min each (est.); 750 rounds each (ten 75-round drums, est.) |
 | Bombs | 2 × 100 lb (200 lb max [2]) | 6 × 10 kg [3] | 4 × 500 lb (2,260 lb max [5]) | 6 × 250 kg (1,500 kg max [7]) |
 | Crew | pilot | pilot | pilot, 3 gunners (the B-10B's crew of 4) | pilot, 3 gunners |
 | Colours | olive drab, chrome yellow wings and tail | light grey | true blue fuselage, chrome yellow wings | dark green and brown splinter, pale blue underneath |
@@ -84,7 +84,7 @@ Notes:
 - **P-26A climb:** some sources give "719 ft/min", which is really **719 m/min (= 2,360 ft/min)**.
 - **He 111B-2 speed:** sources range from 230 to 242 mph. The 242 mph figure is the later
   E-series [7].
-- **P-26A guns:** some carried one .30 and one .50 instead. v0.1 uses two .30s.
+- **P-26A guns:** one .30 and one .50 (owner, 2026-11-26), as some P-26As carried. The .50's 200 rounds come from a game reference [13], so they're an estimate too.
 
 ### Their game values (from the scale)
 
@@ -123,9 +123,11 @@ Notes:
 - **Each gun keeps its real rate and ammo.**
 - **Tracers:** every 3rd round per gun is a tracer.
 - **The readout** shows rounds left per gun type.
-- v0.1's planes all carry rifle-calibre guns. Two guns at about 1,000 rounds/min is about 33
-  rounds a second, so from ahead a fighter's engine fails after about 90 rounds (about 3 s on
-  target).
+- **How fast that kills:**
+  - **The He 51's** two rifle-calibre guns fire about 33 rounds and 33 damage a second. From
+    ahead, a fighter's engine fails after about 90 hits (about 3 s on target).
+  - **The P-26A's** .30 and .50 fire about 27 rounds but 42 damage a second. That's about 2 s on
+    target from ahead.
 
 ### Bombs by weight
 
@@ -175,7 +177,7 @@ Blast radius and damage scale with the cube root of the bomb's weight. A 100 lb 
 ## Open questions
 
 1. **The (est.) figures** in the v0.1 table: check them, or point to better sources.
-2. **P-26A armament:** two .30s, or one .30 and one .50?
+2. ~~P-26A armament~~: one .30 and one .50 (owner, 2026-11-26).
 3. **The scale factors** (speed 0.641, turn 4.44, climb 0.00636) are start values for
    playtesting.
 4. **The Pacific map** for Japan: in v0.3 with the other four nations, or later?
@@ -196,3 +198,4 @@ Blast radius and damage scale with the cube root of the bomb's weight. A 100 lb 
 10. [Wikipedia: 8.8 cm Flak 18/36/37/41](https://en.wikipedia.org/wiki/8.8_cm_Flak_18/36/37/41)
 11. [Wikipedia: 37 mm gun M1](https://en.wikipedia.org/wiki/37_mm_gun_M1)
 12. [Wikipedia: 3-inch anti-aircraft gun M3](https://en.wikipedia.org/wiki/3-inch_anti-aircraft_gun_M3); [WW2DB](https://ww2db.com/weapon.php?q=a161)
+13. [War Thunder wiki: P-26A-34 M2](https://wiki.warthunder.com/P-26A-34_M2) (the .50's 200 rounds; a game reference, so treated as an estimate)

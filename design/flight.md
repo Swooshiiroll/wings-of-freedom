@@ -137,9 +137,11 @@ The simulation runs at a fixed **60 ticks per second**.
 - Fixed, firing forward along the nose, pitch included.
 - **Each plane carries its real guns** (owner, 2026-11-26), with their real rate of fire and ammo.
   Damage depends on calibre (`planes.md`): rifle calibre 1, .50 cal 2.5, 20 mm 8.
-- **The P-26A:** two .30 cal guns in the cowling, 1 u either side of the nose, each at about
-  1,000 rounds/min with 500 rounds. That's about 33 rounds a second together, for about 30 s of
-  fire.
+- **The P-26A:** one **.30 cal** and one **.50 cal** in the cowling (owner, 2026-11-26), 1 u
+  either side of the nose.
+  - The .30 fires about 1,000 rounds/min with 500 rounds: about 30 s of fire.
+  - The .50 fires about 600 rounds/min with 200 rounds: about 20 s of fire, at 2.5 damage a hit.
+  - Together that's about 27 rounds and 42 damage a second.
 - **The He 51:** two 7.92 mm MG 17s, the same way.
 - Rifle-calibre rounds leave at **360 u/s** plus the plane's speed and last **0.8 s**. That's a
   game value, not the real muzzle velocity.
