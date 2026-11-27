@@ -104,3 +104,12 @@ Logs go to `out/`.
 - **No platform-specific code** outside SDL: Windows and Linux now, Android kept possible.
 - **Gameplay numbers are (start) values** in a live-reloaded tuning file, tuned by playtest.
 - **Original art only.** Ultimate Air Combat is a style reference; nothing is copied from it.
+- **Pixel-perfect view:** the world is drawn 1:1 in art pixels into a render target the size of the
+  view, and shown at a whole-number scale (`core/view.hpp`). Never draw at a fractional scale.
+  The pure maths (projection, view fit, camera) stays in `src/core`.
+- **Ground generation is integer-only** (hashes, no floats), so a seed gives the same farmland on
+  MSVC and GCC, as co-op clients will generate it themselves. The golden hash in
+  `tests/test_ground.cpp` pins it on both. If you change the generator on purpose, update the hash
+  in the same pull request and say why.
+- **Smoke run:** `WingsOfFreedom --shot out/shot.png` flies 120 ticks with no input, saves the view
+  as a PNG and exits. `--window`, `--heading`, `--height`, `--at` and `--overlay` set up the shot.

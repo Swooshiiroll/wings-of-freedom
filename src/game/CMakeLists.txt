@@ -1,4 +1,7 @@
-add_executable(wof main.cpp)
+add_executable(wof
+  bindings.cpp
+  ground_view.cpp
+  main.cpp)
 set_target_properties(wof PROPERTIES OUTPUT_NAME "WingsOfFreedom")
 target_compile_definitions(wof PRIVATE WOF_VERSION="${PROJECT_VERSION}")
 target_link_libraries(wof PRIVATE wof_core SDL3::SDL3-static wof_warnings)
