@@ -298,7 +298,7 @@ TEST_CASE(
     World w = one_plane(r, 120.0f);
     run(w, fire(false, true), 1, r);
     // The bomb left this tick, with the plane as it is now.
-    const GroundSpot spot = bomb_impact(w.bodies[0], r.weapon, r.flight.gravity);
+    const GroundSpot spot = bomb_impact(w.bodies[0], r.weapon, r.flight);
     w.targets.push_back(ground_at(spot.x + 15.0f, spot.y));
     w.targets.push_back(drone_at(spot.x, spot.y, 12.0f));
     w.targets.push_back(ground_at(spot.x + 60.0f, spot.y)); // too far
@@ -348,4 +348,22 @@ TEST_CASE("Height rules have names for the option and the command line") {
     CHECK(h == HeightRule::AutoAim);
     CHECK_FALSE(parse_height_rule("sometimes", h));
     CHECK(std::string(height_rule_name(HeightRule::Forgiving)) == "forgiving");
+}
+
+TEST_CASE("A bomb leaves with the plane's real up or down speed; a round keeps the nose angle") {
+    const Rules r;
+    World w = one_plane(r, 300.0f);
+    w.bodies[0].pitch_deg = -30.0f;
+    run(w, fire(true, true, -127), 1, r); // diving, guns and a bomb
+    REQUIRE(w.bombs.size() == 1u);
+    REQUIRE_FALSE(w.rounds.empty());
+    const Body& b = w.bodies[0];
+    const float nose_z = std::sin(b.pitch_deg * 3.14159265f / 180.0f);
+    // The plane loses height at a third of speed x sin(pitch), and so does the bomb (give or take
+    // the tick's gravity).
+    CHECK(w.bombs[0].vz ==
+          doctest::Approx(nose_z * b.speed_u_s * r.flight.height_share).epsilon(0.1));
+    const Round& round = w.rounds[0];
+    const float speed = std::sqrt(round.vx * round.vx + round.vy * round.vy + round.vz * round.vz);
+    CHECK(round.vz / speed == doctest::Approx(nose_z).epsilon(0.02));
 }

@@ -140,7 +140,8 @@ struct GroundSpot {
     float x = 0.0f;
     float y = 0.0f;
 };
-[[nodiscard]] GroundSpot bomb_impact(const Body& b, const WeaponParams& p, float gravity) noexcept;
+[[nodiscard]] GroundSpot bomb_impact(const Body& b, const WeaponParams& p,
+                                     const FlightParams& flight) noexcept;
 
 // One tick of a body's weapons: guns while held, bombs while held (one every bomb_interval_s), and
 // switching the heavy weapon. New rounds and bombs go into the world.

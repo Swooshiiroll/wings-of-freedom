@@ -122,12 +122,13 @@ void fly(Body& b, const InputCommand& in, const FlightParams& p, const Aero& a, 
     const float accel = push - drag(a, p, b.speed_u_s) - p.gravity * std::sin(pitch);
     b.speed_u_s = std::clamp(b.speed_u_s + accel * dt, 0.0f, p.dive_limit_u_s);
 
-    // Position: along the heading at v·cos(pitch), up or down at v·sin(pitch).
+    // Position: along the heading at v·cos(pitch), up or down at v·sin(pitch) times the height
+    // share (design/planes.md, Height). Speeds and energy are as they are; only height is slower.
     const float heading = b.heading_deg * kDegToRad;
     const float across = b.speed_u_s * std::cos(pitch) * dt;
     b.x += std::sin(heading) * across;
     b.y += std::cos(heading) * across;
-    b.z = std::min(b.z + b.speed_u_s * std::sin(pitch) * dt, p.ceiling_u);
+    b.z = std::min(b.z + b.speed_u_s * std::sin(pitch) * p.height_share * dt, p.ceiling_u);
 }
 
 } // namespace wof

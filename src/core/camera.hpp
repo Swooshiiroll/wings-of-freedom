@@ -6,6 +6,9 @@
 
 namespace wof {
 
+// How far up the gap from the shadow to the plane the view centres (0 the ground, 1 the plane).
+inline constexpr float kCameraAim = 0.6f;
+
 // The camera's numbers (tuning.txt, `camera.*`).
 struct CameraParams {
     float lead_u = 40.0f;   // how far ahead of the plane, along its heading, the view looks
@@ -14,9 +17,11 @@ struct CameraParams {
     friend constexpr bool operator==(const CameraParams&, const CameraParams&) = default;
 };
 
-// Follows one plane (design/flight.md, World and view): the view centres halfway between the
-// plane and its shadow, and leads a little in the direction of flight. It steps with the
-// simulation's ticks and remembers the last two, so drawing can interpolate between them.
+// Follows one plane (design/flight.md, World and view): the view aims a little above halfway up
+// the gap from the shadow to the plane, so as you climb the plane rides higher on screen and the
+// gap keeps growing even though the ground shrinks. It leads a little in the direction of
+// flight. It steps with the simulation's ticks and remembers the last two, so drawing can
+// interpolate between them.
 class Camera {
   public:
     // Starts following `b` with the lead already settled, as at the start of a run.

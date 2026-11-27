@@ -26,8 +26,9 @@ from it: all art, sound and code are original.
 - **Planes are drawn at 32 headings** (one every 11.25°). Flight itself is smooth; only the
   sprite steps.
 - **Height** shows as the gap between a plane and its shadow on the ground. Every plane can climb
-  to **30,000 ft**, and **the ground zooms out as you climb** (to half size at the top), so the
-  plane and its shadow stay in view (owner, 2026-11-26).
+  to **30,000 ft** (about 2 minutes of climbing for a fighter). Everything is sized by how far
+  below or above you it is, down to a **quarter size** for the ground from the top (owner,
+  2026-11-27).
 
 ## Flying
 

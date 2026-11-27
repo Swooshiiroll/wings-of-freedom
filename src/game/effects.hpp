@@ -6,8 +6,8 @@
 #include <vector>
 
 #include "core/camera.hpp"
+#include "core/view_xf.hpp"
 #include "core/weapons.hpp"
-#include "game/view_xf.hpp"
 
 namespace wof::game {
 

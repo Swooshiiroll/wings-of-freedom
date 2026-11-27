@@ -13,29 +13,30 @@
 namespace wof::game {
 namespace {
 
-constexpr int kAtlasW = PlaneSprites::kCell * PlaneSprites::kColumns;
-constexpr int kAtlasH = PlaneSprites::kCell * PlaneSprites::kRows;
 constexpr float kBakedBankDeg = 30.0f;
 
-// Copies a cell's pixels into an atlas.
-void blit(const Sprite& s, std::vector<std::uint32_t>& atlas, int column, int row) {
+[[nodiscard]] constexpr int cell_px(int step) noexcept {
+    return PlaneSprites::kCellPerStep * step;
+}
+
+// Copies a cell's pixels into an atlas `atlas_w` wide.
+void blit(const Sprite& s, std::vector<std::uint32_t>& atlas, int atlas_w, int column, int row) {
     for (int y = 0; y < s.h; ++y) {
         for (int x = 0; x < s.w; ++x) {
-            const auto ax = static_cast<std::size_t>(column * PlaneSprites::kCell + x);
-            const auto ay = static_cast<std::size_t>(row * PlaneSprites::kCell + y);
-            atlas[ay * static_cast<std::size_t>(kAtlasW) + ax] = s.at(x, y);
+            const auto ax = static_cast<std::size_t>(column * s.w + x);
+            const auto ay = static_cast<std::size_t>(row * s.h + y);
+            atlas[ay * static_cast<std::size_t>(atlas_w) + ax] = s.at(x, y);
         }
     }
 }
 
-SDL_Texture* upload(SDL_Renderer* r, const std::vector<std::uint32_t>& pixels) {
-    SDL_Texture* t =
-        SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, kAtlasW, kAtlasH);
+SDL_Texture* upload(SDL_Renderer* r, const std::vector<std::uint32_t>& pixels, int w, int h) {
+    SDL_Texture* t = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, w, h);
     if (t == nullptr) {
-        SDL_Log("plane atlas %dx%d failed: %s", kAtlasW, kAtlasH, SDL_GetError());
+        SDL_Log("plane atlas %dx%d failed: %s", w, h, SDL_GetError());
         return nullptr;
     }
-    SDL_UpdateTexture(t, nullptr, pixels.data(), kAtlasW * 4);
+    SDL_UpdateTexture(t, nullptr, pixels.data(), w * 4);
     SDL_SetTextureScaleMode(t, SDL_SCALEMODE_NEAREST);
     SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
     return t;
@@ -44,20 +45,46 @@ SDL_Texture* upload(SDL_Renderer* r, const std::vector<std::uint32_t>& pixels) {
 } // namespace
 
 PlaneSprites::~PlaneSprites() {
-    for (auto& entry : atlases_) {
-        SDL_DestroyTexture(entry.second.plane);
-        SDL_DestroyTexture(entry.second.shadow);
-    }
+    shutdown();
 }
 
-PlaneSprites::Atlas PlaneSprites::bake_atlas(ModelId id, std::uint32_t parts,
-                                             std::vector<std::uint32_t>* keep) const {
+void PlaneSprites::shutdown() {
+    {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        quit_ = true;
+        jobs_.clear();
+    }
+    wake_.notify_all();
+    if (worker_.joinable()) {
+        worker_.join();
+    }
+    for (auto& entry : atlases_) {
+        if (entry.second.plane != nullptr) {
+            SDL_DestroyTexture(entry.second.plane);
+        }
+        if (entry.second.shadow != nullptr) {
+            SDL_DestroyTexture(entry.second.shadow);
+        }
+    }
+    atlases_.clear();
+    queued_.clear();
+    done_.clear();
+}
+
+PlaneSprites::Pixels PlaneSprites::bake_pixels(ModelId id, std::uint32_t parts, int step) {
     const Uint64 start = SDL_GetTicksNS();
-    const std::vector<Block> model = plane_model(id);
-    const auto n = static_cast<std::size_t>(kAtlasW) * static_cast<std::size_t>(kAtlasH);
-    std::vector<std::uint32_t> plane_pixels(n, 0u);
-    std::vector<std::uint32_t> shadow_pixels(n, 0u);
-    constexpr float kMid = static_cast<float>(kCell) * 0.5f;
+    const int cell = cell_px(step);
+    const int atlas_w = cell * kColumns;
+    const std::vector<Block> model =
+        scaled_model(plane_model(id), static_cast<float>(step) / kFullSizeStep);
+    const auto n = static_cast<std::size_t>(atlas_w) * static_cast<std::size_t>(cell * kRows);
+    const bool with_shadow = step <= kFullSizeStep; // shadows lie below you: never bigger
+    Pixels out;
+    out.plane.assign(n, 0u);
+    if (with_shadow) {
+        out.shadow.assign(n, 0u);
+    }
+    const float mid = static_cast<float>(cell) * 0.5f;
     for (int h = 0; h < kColumns; ++h) {
         for (int p = 0; p < kPitches; ++p) {
             for (int b = 0; b < kBanks; ++b) {
@@ -65,36 +92,158 @@ PlaneSprites::Atlas PlaneSprites::bake_atlas(ModelId id, std::uint32_t parts,
                                 static_cast<float>(p - kPitches / 2) * 10.0f,
                                 static_cast<float>(b - 1) * kBakedBankDeg};
                 const int row = p * kBanks + b;
-                blit(render_model(model, pose, kCell, kCell, kMid, kMid, parts), plane_pixels, h,
+                blit(render_model(model, pose, cell, cell, mid, mid, parts), out.plane, atlas_w, h,
                      row);
-                blit(render_shadow(model, pose, kCell, kCell, kMid, kMid, parts), shadow_pixels, h,
-                     row);
+                if (with_shadow) {
+                    blit(render_shadow(model, pose, cell, cell, mid, mid, parts), out.shadow,
+                         atlas_w, h, row);
+                }
             }
         }
     }
-    Atlas a{upload(renderer_, plane_pixels), upload(renderer_, shadow_pixels)};
-    const double ms = static_cast<double>(SDL_GetTicksNS() - start) / 1e6;
-    SDL_Log("plane sprites (parts 0x%02x): %d poses baked in %.1f ms", parts, kColumns * kRows, ms);
-    if (keep != nullptr) {
-        *keep = std::move(plane_pixels);
-        bake_ms_ = ms;
+    out.ms = static_cast<double>(SDL_GetTicksNS() - start) / 1e6;
+    return out;
+}
+
+PlaneSprites::Atlas PlaneSprites::upload_atlas(const Pixels& pixels, int step) const {
+    const int w = cell_px(step) * kColumns;
+    const int h = cell_px(step) * kRows;
+    Atlas a;
+    a.plane = upload(renderer_, pixels.plane, w, h);
+    if (!pixels.shadow.empty()) {
+        a.shadow = upload(renderer_, pixels.shadow, w, h);
+    }
+    return a;
+}
+
+PlaneSprites::Atlas PlaneSprites::bake_now(const Job& job) {
+    const Pixels pixels = bake_pixels(job.id, job.parts, job.step);
+    const Atlas a = upload_atlas(pixels, job.step);
+    atlases_[job.key] = a;
+    queued_.erase(job.key);
+    SDL_Log("plane sprites (model %d, parts 0x%02x, %d/8): baked in %.1f ms",
+            static_cast<int>(job.id), job.parts, job.step, pixels.ms);
+    if (job.step == kFullSizeStep && job.parts == kAllParts) {
+        bake_ms_ = pixels.ms;
     }
     return a;
 }
 
 bool PlaneSprites::bake(ModelId id) {
-    const Atlas a = bake_atlas(id, kAllParts, &plane_pixels_);
-    atlases_[key_of(id, kAllParts)] = a;
+    const Job full{key_of(id, kAllParts, kFullSizeStep), id, kAllParts, kFullSizeStep};
+    const auto found = atlases_.find(full.key);
+    const Atlas a = found != atlases_.end() ? found->second : bake_now(full);
+    if (!in_line_) {
+        for (int step = kMinSizeStep; step <= kMaxSizeStep; ++step) {
+            request(Job{key_of(id, kAllParts, step), id, kAllParts, step}, false);
+        }
+    }
     return a.plane != nullptr && a.shadow != nullptr;
 }
 
-const PlaneSprites::Atlas& PlaneSprites::atlas_for(ModelId id, std::uint32_t parts) const {
-    const auto found = atlases_.find(key_of(id, parts));
-    if (found != atlases_.end()) {
-        return found->second;
+void PlaneSprites::request(const Job& job, bool urgent) {
+    if (atlases_.count(job.key) != 0) {
+        return;
     }
-    // A plane missing a wing or its tail: baked the first time one is seen.
-    return atlases_[key_of(id, parts)] = bake_atlas(id, parts, nullptr);
+    const bool already = !queued_.insert(job.key).second;
+    {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        const auto waiting = std::find_if(jobs_.begin(), jobs_.end(),
+                                          [&](const Job& j) { return j.key == job.key; });
+        if (already) {
+            // Needed on screen: move it up. (Not found means it's being baked right now.)
+            if (urgent && waiting != jobs_.end()) {
+                const Job j = *waiting;
+                jobs_.erase(waiting);
+                jobs_.push_front(j);
+            }
+        } else if (urgent) {
+            jobs_.push_front(job);
+        } else {
+            jobs_.push_back(job);
+        }
+    }
+    wake_.notify_one();
+    if (!worker_.joinable()) {
+        worker_ = std::thread([this] { work(); });
+    }
+}
+
+void PlaneSprites::work() {
+    for (;;) {
+        Job job;
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+            wake_.wait(lock, [this] { return quit_ || !jobs_.empty(); });
+            if (quit_) {
+                return;
+            }
+            job = jobs_.front();
+            jobs_.pop_front();
+        }
+        Done done{job, bake_pixels(job.id, job.parts, job.step)};
+        const std::lock_guard<std::mutex> lock(mutex_);
+        done_.push_back(std::move(done));
+    }
+}
+
+void PlaneSprites::pump() {
+    Done done;
+    {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        if (done_.empty()) {
+            return;
+        }
+        done = std::move(done_.front());
+        done_.pop_front();
+    }
+    queued_.erase(done.job.key);
+    if (atlases_.count(done.job.key) != 0) {
+        return; // baked on this thread meanwhile
+    }
+    atlases_[done.job.key] = upload_atlas(done.pixels, done.job.step);
+    SDL_Log("plane sprites (model %d, parts 0x%02x, %d/8): baked in %.1f ms in the background",
+            static_cast<int>(done.job.id), done.job.parts, done.job.step, done.pixels.ms);
+}
+
+PlaneSprites::Found PlaneSprites::nearest(ModelId id, std::uint32_t parts, int step,
+                                          bool shadow) const {
+    for (const std::uint32_t p : {parts, static_cast<std::uint32_t>(kAllParts)}) {
+        for (int d = 0; d <= kMaxSizeStep; ++d) {
+            for (const int s : {step - d, step + d}) {
+                if (s < kMinSizeStep || s > kMaxSizeStep) {
+                    continue;
+                }
+                const auto it = atlases_.find(key_of(id, p, s));
+                if (it == atlases_.end()) {
+                    continue;
+                }
+                SDL_Texture* t = shadow ? it->second.shadow : it->second.plane;
+                if (t != nullptr) {
+                    return {t, s};
+                }
+            }
+        }
+    }
+    return {};
+}
+
+PlaneSprites::Found PlaneSprites::find(ModelId id, std::uint32_t parts, int step, bool shadow) {
+    const Job job{key_of(id, parts, step), id, parts, step};
+    if (atlases_.count(job.key) == 0) {
+        if (in_line_) {
+            bake_now(job);
+        } else {
+            request(job, true);
+        }
+    }
+    Found f = nearest(id, parts, step, shadow);
+    if (f.texture == nullptr && !in_line_) {
+        // Nothing of this model yet: bake its full size now (once).
+        bake_now(Job{key_of(id, kAllParts, kFullSizeStep), id, kAllParts, kFullSizeStep});
+        f = nearest(id, parts, step, shadow);
+    }
+    return f;
 }
 
 PlaneSprites::Cell PlaneSprites::cell_of(const Body& b) noexcept {
@@ -103,49 +252,55 @@ PlaneSprites::Cell PlaneSprites::cell_of(const Body& b) noexcept {
     return {heading_index(b.heading_deg), std::clamp(pitch, 0, kPitches - 1) * kBanks + bank};
 }
 
-void PlaneSprites::draw(const Body& b, const ViewXf& xf, bool shadow, SDL_Color tint,
-                        bool flash) const {
-    const Atlas& set = atlas_for(plane_type(b.type).model, kAllParts & ~missing_parts(b));
-    SDL_Texture* atlas = shadow ? set.shadow : set.plane;
-    if (atlas == nullptr) {
+void PlaneSprites::draw(const Body& b, const ViewXf& xf, bool shadow, SDL_Color tint, bool flash) {
+    // The plane is sized by its depth; its shadow lies on the ground, so it's sized with that.
+    const float z = shadow ? 0.0f : b.z;
+    int step = size_step(xf.scale_at(z));
+    if (shadow) {
+        step = std::min(step, kFullSizeStep);
+    }
+    const std::uint32_t parts = kAllParts & ~missing_parts(b);
+    const Found f = find(plane_type(b.type).model, parts, step, shadow);
+    if (f.texture == nullptr) {
         return;
     }
     const Cell c = cell_of(b);
-    // The plane is drawn full size at its point; its shadow lies on the ground, so it shrinks with
-    // the ground zoom.
-    const SDL_FPoint at = xf.at(b.x, b.y, shadow ? 0.0f : b.z);
-    const float size = static_cast<float>(kCell) * (shadow ? xf.zoom : 1.0f);
-    const SDL_FRect src{static_cast<float>(c.column * kCell), static_cast<float>(c.row * kCell),
-                        static_cast<float>(kCell), static_cast<float>(kCell)};
+    const auto src_cell = static_cast<float>(cell_px(f.step));
+    const auto size = static_cast<float>(cell_px(step));
+    const ScreenPt at = xf.at(b.x, b.y, z);
+    const SDL_FRect src{static_cast<float>(c.column) * src_cell,
+                        static_cast<float>(c.row) * src_cell, src_cell, src_cell};
     const SDL_FRect dst{std::round(at.x - size * 0.5f), std::round(at.y - size * 0.5f), size, size};
-    SDL_SetTextureColorMod(atlas, tint.r, tint.g, tint.b);
-    SDL_RenderTexture(renderer_, atlas, &src, &dst);
+    SDL_SetTextureColorMod(f.texture, tint.r, tint.g, tint.b);
+    SDL_RenderTexture(renderer_, f.texture, &src, &dst);
     if (flash && !shadow) {
         // A hit: the same sprite again, added on top, so it glows.
-        SDL_SetTextureBlendMode(atlas, SDL_BLENDMODE_ADD);
-        SDL_SetTextureColorMod(atlas, 255, 255, 255);
-        SDL_RenderTexture(renderer_, atlas, &src, &dst);
-        SDL_SetTextureBlendMode(atlas, SDL_BLENDMODE_BLEND);
+        SDL_SetTextureBlendMode(f.texture, SDL_BLENDMODE_ADD);
+        SDL_SetTextureColorMod(f.texture, 255, 255, 255);
+        SDL_RenderTexture(renderer_, f.texture, &src, &dst);
+        SDL_SetTextureBlendMode(f.texture, SDL_BLENDMODE_BLEND);
     }
-    SDL_SetTextureColorMod(atlas, 255, 255, 255);
+    SDL_SetTextureColorMod(f.texture, 255, 255, 255);
 }
 
-bool PlaneSprites::save_sheet(const char* path) const {
-    std::vector<std::uint32_t> sheet = plane_pixels_;
+bool PlaneSprites::save_sheet(const char* path, ModelId id, int step) {
+    const int s_step = std::clamp(step, kMinSizeStep, kMaxSizeStep);
+    std::vector<std::uint32_t> sheet = bake_pixels(id, kAllParts, s_step).plane;
     for (std::uint32_t& px : sheet) {
         if ((px >> 24u) == 0u) {
             px = 0xff628c46u; // pasture green, to judge how the plane reads on the ground
         }
     }
-    SDL_Surface* s = SDL_CreateSurfaceFrom(kAtlasW, kAtlasH, SDL_PIXELFORMAT_ARGB8888, sheet.data(),
-                                           kAtlasW * 4);
+    const int w = cell_px(s_step) * kColumns;
+    const int h = cell_px(s_step) * kRows;
+    SDL_Surface* s = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_ARGB8888, sheet.data(), w * 4);
     if (s == nullptr) {
         SDL_Log("sprite sheet surface failed: %s", SDL_GetError());
         return false;
     }
     const bool ok = SDL_SavePNG(s, path);
     if (ok) {
-        SDL_Log("saved %s (%dx%d)", path, kAtlasW, kAtlasH);
+        SDL_Log("saved %s (%dx%d)", path, w, h);
     } else {
         SDL_Log("saving %s failed: %s", path, SDL_GetError());
     }

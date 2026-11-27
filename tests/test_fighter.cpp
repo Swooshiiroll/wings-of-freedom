@@ -252,3 +252,37 @@ TEST_CASE("The He 51 fits its 48 px cell at every pose") {
         }
     }
 }
+
+TEST_CASE("A scaled model fits its cell at the smallest and largest sprite sizes") {
+    for (const ModelId id : {ModelId::P26, ModelId::He51}) {
+        for (const int step : {2, 4, 8, 12}) {
+            const int cell = 6 * step;
+            const std::vector<Block> m =
+                scaled_model(plane_model(id), static_cast<float>(step) / 8.0f);
+            const int canvas = cell * 3; // drawn on a bigger canvas, nothing may fall outside
+            const int lo = cell;
+            const int hi = cell * 2;
+            for (int h = 0; h < 32; h += 3) {
+                for (int p = -40; p <= 40; p += 40) {
+                    for (const float bank : {-30.0f, 0.0f, 30.0f}) {
+                        const Sprite s = render_model(
+                            m, Pose{static_cast<float>(h) * 11.25f, static_cast<float>(p), bank},
+                            canvas, canvas, static_cast<float>(canvas) * 0.5f,
+                            static_cast<float>(canvas) * 0.5f);
+                        int outside = 0;
+                        for (int y = 0; y < canvas; ++y) {
+                            for (int x = 0; x < canvas; ++x) {
+                                const bool in = x >= lo && x < hi && y >= lo && y < hi;
+                                outside += !in && s.block_at(x, y) != -1 ? 1 : 0;
+                            }
+                        }
+                        CAPTURE(static_cast<int>(id));
+                        CAPTURE(step);
+                        CAPTURE(h);
+                        REQUIRE(outside == 0);
+                    }
+                }
+            }
+        }
+    }
+}

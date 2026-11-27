@@ -1,5 +1,6 @@
 #include "core/planes.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -141,4 +142,58 @@ TEST_CASE("Changing the scale in the tuning file re-derives every plane") {
     CHECK(t.rules.planes[0].flight.max_level_u_s == doctest::Approx(117.0f)); // 234 x 0.5
     CHECK(from_tuning("damage.wound_damage = 7\n", t, errors));
     CHECK(t.rules.planes[1].damage.wound_damage == doctest::Approx(7.0f));
+}
+
+namespace {
+// Seconds to climb from the deck to the ceiling at the plane's best climbing speed.
+float climb_seconds(const PlaneRules& pr) {
+    const FlightParams& f = pr.flight;
+    float best_v = f.stall_u_s;
+    float best = 0.0f;
+    for (float v = f.stall_u_s; v <= f.max_level_u_s; v += 0.5f) {
+        const float climb = v * (thrust(pr.aero, v, 1.0f) - drag(pr.aero, f, v)) / f.gravity;
+        if (climb > best) {
+            best = climb;
+            best_v = v;
+        }
+    }
+    FlightParams long_tank = f;
+    long_tank.tank_s = 1e6f; // so the fuel lasts the test
+    Body b = start_body(long_tank, 0.0f, 0.0f, 0.0f);
+    b.z = 0.0f;
+    b.speed_u_s = best_v;
+    b.throttle = 1.0f;
+    InputCommand nudge;
+    nudge.pitch = 1; // the smallest hold, so the nose doesn't ease back
+    int ticks = 0;
+    while (b.z < f.ceiling_u - 0.5f && ticks < 1000 * kTicksPerSecond) {
+        // Hold the steady climb angle for the current speed.
+        const float excess = thrust(pr.aero, b.speed_u_s, 1.0f) - drag(pr.aero, f, b.speed_u_s);
+        const float held = std::asin(std::clamp(excess / f.gravity, 0.0f, 0.9f));
+        b.pitch_deg = held * 180.0f / 3.14159265f;
+        fly(b, nudge, long_tank, pr.aero, kTickSeconds);
+        ++ticks;
+    }
+    return static_cast<float>(ticks) / static_cast<float>(kTicksPerSecond);
+}
+} // namespace
+
+TEST_CASE("Climbing to 30,000 ft takes about two minutes in a fighter, longer in a bomber") {
+    const Rules rules;
+    const float p26 = climb_seconds(rules.planes[0]);
+    const float he51 = climb_seconds(rules.planes[1]);
+    const float b10 = climb_seconds(rules.planes[2]);
+    const float he111 = climb_seconds(rules.planes[3]);
+    CAPTURE(p26);
+    CAPTURE(he51);
+    CAPTURE(b10);
+    CAPTURE(he111);
+    CHECK(p26 > 110.0f);
+    CHECK(p26 < 130.0f);
+    CHECK(he51 > 110.0f);
+    CHECK(he51 < 130.0f);
+    CHECK(b10 > 190.0f);
+    CHECK(b10 < 225.0f);
+    CHECK(he111 > 260.0f);
+    CHECK(he111 < 300.0f);
 }

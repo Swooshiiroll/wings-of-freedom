@@ -6,7 +6,7 @@
 //   WingsOfFreedom [--seed N] [--window WxH] [--shot FILE.png] [--ticks N] [--heading DEG]
 //                  [--height U] [--pitch DEG] [--throttle PCT] [--at X,Y] [--overlay]
 //                  [--height-rule forgiving|strict|auto] [--no-targets] [--fire] [--bomb]
-//                  [--sprite-sheet FILE.png] [--version]
+//                  [--nation us|de] [--sprite-sheet FILE.png] [--sprite-scale PCT] [--version]
 //     --seed N        developer tool: the ground from seed N (decimal, or 0x hex)
 //     --window WxH    developer tool: open the window at W x H
 //     --shot FILE     developer tool: fly N ticks with no input (--ticks, default 120), save the
@@ -21,7 +21,11 @@
 //     --height-rule R the gunnery height rule: forgiving (default), strict or auto
 //     --no-targets    developer tool: start without the practice targets
 //     --fire, --bomb  developer tool: with --shot, hold the guns or the bomb release throughout
-//     --sprite-sheet F  developer tool: save every baked plane pose to F (PNG) and exit
+//     --sprite-sheet F  developer tool: save every baked plane pose of your nation's fighter to F
+//     (PNG)
+//                     and exit
+//     --sprite-scale PCT  developer tool: the sprite sheet's size, 25-150 (in steps of 1/8)
+//     --nation us|de  fly that nation's fighter, skipping the nation screen
 //     --version       print the version and exit
 //
 // Keys (design/flight.md, Controls): A/D turn, W dive, S climb, Shift/Ctrl throttle up/down, F
@@ -61,6 +65,7 @@
 #include "core/tuning.hpp"
 #include "core/units.hpp"
 #include "core/view.hpp"
+#include "core/view_xf.hpp"
 #include "core/weapons.hpp"
 #include "core/world.hpp"
 #include "game/bindings.hpp"
@@ -103,6 +108,7 @@ struct Options {
     bool has_nation = false;      // --nation us|de: skip the nation screen
     Nation nation = Nation::US;
     const char* sprite_sheet = nullptr;
+    int sheet_step = kFullSizeStep; // --sprite-scale
 };
 
 // Parses "A<sep>B" into two whole numbers. False on anything else.
@@ -158,6 +164,13 @@ int parse_options(int argc, char** argv, Options& out) {
             out.shot = argv[++i];
         } else if (std::strcmp(argv[i], "--sprite-sheet") == 0 && has_value) {
             out.sprite_sheet = argv[++i];
+        } else if (std::strcmp(argv[i], "--sprite-scale") == 0 && has_value) {
+            float pct = 0.0f;
+            if (!parse_number(argv[++i], pct) || pct < 25.0f || pct > 150.0f) {
+                std::fprintf(stderr, "--sprite-scale takes a percentage, 25-150\n");
+                return 2;
+            }
+            out.sheet_step = size_step(pct / 100.0f);
         } else if (std::strcmp(argv[i], "--ticks") == 0 && has_value) {
             out.ticks = std::strtol(argv[++i], nullptr, 10);
             if (out.ticks < 1) {
@@ -224,6 +237,7 @@ int parse_options(int argc, char** argv, Options& out) {
                 "[--ticks N] [--heading DEG] [--height U] [--pitch DEG] [--throttle PCT] "
                 "[--at X,Y] [--overlay] [--height-rule forgiving|strict|auto] "
                 "[--no-targets] [--fire] [--bomb] [--nation us|de] [--sprite-sheet FILE.png] "
+                "[--sprite-scale PCT] "
                 "[--version]\n");
             return 2;
         }
@@ -243,9 +257,10 @@ struct Screen {
     int out_h = 0;
     ViewFit fit{};
     SDL_Texture* target = nullptr;
-    // The zoomed-out ground is drawn here at full size first (twice the view, for the zoom at the
-    // ceiling), then shrunk smoothly into the view.
+    // The zoomed-out ground is drawn here at full size first (4 times the view, for a quarter size
+    // from the ceiling), then shrunk smoothly into the view, by halves below half size.
     SDL_Texture* ground = nullptr;
+    SDL_Texture* ground_half = nullptr;
     int ground_w = 0;
     int ground_h = 0;
 };
@@ -275,43 +290,64 @@ bool refresh_screen(SDL_Renderer* r, Screen& s) {
     if (s.ground != nullptr) {
         SDL_DestroyTexture(s.ground);
     }
-    s.ground_w = fit.w * 2 + 4;
-    s.ground_h = fit.h * 2 + 4;
+    if (s.ground_half != nullptr) {
+        SDL_DestroyTexture(s.ground_half);
+    }
+    // Wide enough for the view at a quarter size, with a margin so smoothing never reaches past
+    // what was drawn.
+    s.ground_w = fit.w * 4 + 12;
+    s.ground_h = fit.h * 4 + 12;
     s.ground = SDL_CreateTexture(r, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, s.ground_w,
                                  s.ground_h);
-    if (s.ground == nullptr) {
+    s.ground_half = SDL_CreateTexture(r, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET,
+                                      s.ground_w / 2, s.ground_h / 2);
+    if (s.ground == nullptr || s.ground_half == nullptr) {
         SDL_Log("ground target %dx%d failed: %s", s.ground_w, s.ground_h, SDL_GetError());
         return false;
     }
     SDL_SetTextureScaleMode(s.ground, SDL_SCALEMODE_LINEAR);
+    SDL_SetTextureScaleMode(s.ground_half, SDL_SCALEMODE_LINEAR);
     return true;
 }
 
 // The ground for a view. At full size it's drawn straight in, pixel for pixel. Zoomed out (up
-// high), it's drawn at full size into the ground target, then shrunk smoothly into the view.
-void draw_ground(SDL_Renderer* r, const Screen& s, game::GroundView& ground,
-                 const game::ViewXf& xf) {
+// high), it's drawn at full size into the ground target, then shrunk smoothly into the view. Below
+// half size it's halved first (each pixel of the half the average of four), so it doesn't shimmer.
+void draw_ground(SDL_Renderer* r, const Screen& s, game::GroundView& ground, const ViewXf& xf) {
     const ViewFit& fit = s.fit;
-    if (xf.zoom >= 0.999f) {
+    const float k = xf.scale_at(0.0f);
+    if (k >= 0.999f) {
         const PixelPt origin{static_cast<int>(std::lround(xf.focus.x - xf.cx)),
                              static_cast<int>(std::lround(xf.focus.y - xf.cy))};
         ground.draw(origin, fit.w, fit.h);
         return;
     }
-    const int w =
-        std::min(s.ground_w, static_cast<int>(std::ceil(static_cast<float>(fit.w) / xf.zoom)) + 2);
-    const int h =
-        std::min(s.ground_h, static_cast<int>(std::ceil(static_cast<float>(fit.h) / xf.zoom)) + 2);
+    // Even sizes, so the halving averages exactly 2x2.
+    const auto span = [k](int view, int limit) {
+        const int n = static_cast<int>(std::ceil(static_cast<float>(view) / k)) + 8;
+        return std::min(limit, n + n % 2);
+    };
+    const int w = span(fit.w, s.ground_w);
+    const int h = span(fit.h, s.ground_h);
     const PixelPt origin{static_cast<int>(std::floor(xf.focus.x - static_cast<float>(w) * 0.5f)),
                          static_cast<int>(std::floor(xf.focus.y - static_cast<float>(h) * 0.5f))};
     SDL_SetRenderTarget(r, s.ground);
     ground.draw(origin, w, h);
+    SDL_Texture* source = s.ground;
+    SDL_FRect src{0.0f, 0.0f, static_cast<float>(w), static_cast<float>(h)};
+    if (k < 0.5f) {
+        const SDL_FRect half{0.0f, 0.0f, static_cast<float>(w) * 0.5f,
+                             static_cast<float>(h) * 0.5f};
+        SDL_SetRenderTarget(r, s.ground_half);
+        SDL_RenderTexture(r, s.ground, &src, &half);
+        source = s.ground_half;
+        src = half;
+    }
     SDL_SetRenderTarget(r, s.target);
-    const SDL_FRect src{0.0f, 0.0f, static_cast<float>(w), static_cast<float>(h)};
-    const SDL_FRect dst{(static_cast<float>(origin.x) - xf.focus.x) * xf.zoom + xf.cx,
-                        (static_cast<float>(origin.y) - xf.focus.y) * xf.zoom + xf.cy,
-                        static_cast<float>(w) * xf.zoom, static_cast<float>(h) * xf.zoom};
-    SDL_RenderTexture(r, s.ground, &src, &dst);
+    const SDL_FRect dst{(static_cast<float>(origin.x) - xf.focus.x) * k + xf.cx,
+                        (static_cast<float>(origin.y) - xf.focus.y) * k + xf.cy,
+                        static_cast<float>(w) * k, static_cast<float>(h) * k};
+    SDL_RenderTexture(r, source, &src, &dst);
 }
 
 // Saves the current render target as a PNG.
@@ -364,8 +400,8 @@ void open_tuning(Tuning& tuning, TuningFile& tf) {
     SDL_PathInfo info;
     bool have_file = SDL_GetPathInfo(tf.path.c_str(), &info);
     if (have_file) {
-        // A file from before real planes (alpha.4 and earlier) holds the old ceiling and the old
-        // per-plane flight keys: keep it as tuning-old.txt and start from the new defaults.
+        // A file of an older format holds old numbers that would quietly win over the new defaults:
+        // keep it as tuning-format<N>.txt (N its format) and start from the new defaults.
         std::size_t size = 0;
         void* data = SDL_LoadFile(tf.path.c_str(), &size);
         const int format =
@@ -373,7 +409,8 @@ void open_tuning(Tuning& tuning, TuningFile& tf) {
                             : kTuningFormat;
         SDL_free(data);
         if (format < kTuningFormat) {
-            const std::string old = tf.path.substr(0, tf.path.size() - 4) + "-old.txt";
+            const std::string old =
+                tf.path.substr(0, tf.path.size() - 4) + "-format" + std::to_string(format) + ".txt";
             SDL_RemovePath(old.c_str());
             if (SDL_RenamePath(tf.path.c_str(), old.c_str())) {
                 SDL_Log("tuning.txt was from an older version: kept as %s, defaults written",
@@ -480,12 +517,20 @@ void draw_text_centred(SDL_Renderer* r, int view_w, float y, const std::vector<s
     draw_text_block(r, std::floor((static_cast<float>(view_w) - w) * 0.5f), y, lines, colour);
 }
 
-[[nodiscard]] SDL_FPoint on_view(const game::ViewXf& xf, float x, float y, float z) {
-    return xf.at(x, y, z);
+[[nodiscard]] SDL_FPoint on_view(const ViewXf& xf, float x, float y, float z) {
+    const ScreenPt p = xf.at(x, y, z);
+    return {p.x, p.y};
+}
+
+// A small mark sized for full size, `w` x `h` px, at a depth scale (never under 1 px).
+[[nodiscard]] SDL_FRect scaled_mark(SDL_FPoint at, float w, float h, float k) {
+    const float sw = std::max(1.0f, std::round(w * k));
+    const float sh = std::max(1.0f, std::round(h * k));
+    return {std::round(at.x - sw * 0.5f), std::round(at.y - sh * 0.5f), sw, sh};
 }
 
 // A practice ground target: a white and red bullseye, glowing yellow just after a hit.
-void draw_bullseye(SDL_Renderer* r, const game::ViewXf& xf, const Target& t, float radius) {
+void draw_bullseye(SDL_Renderer* r, const ViewXf& xf, const Target& t, float radius) {
     const SDL_FColor white{0.94f, 0.93f, 0.88f, 1.0f};
     const SDL_FColor red{0.78f, 0.16f, 0.12f, 1.0f};
     game::fill_ground_disc(r, xf, t.x, t.y, 0.0f, radius, white);
@@ -499,10 +544,11 @@ void draw_bullseye(SDL_Renderer* r, const game::ViewXf& xf, const Target& t, flo
 }
 
 // Everything above the ground, in order: scorch marks, ground targets, shadows, dust and blasts,
-// bombs, tracers, then the drones and planes from the back of the view to the front.
-void draw_scene(SDL_Renderer* r, const game::ViewXf& xf, const World& world, const Body& plane,
-                const game::PlaneSprites& sprites, const game::Effects& effects,
-                const Tuning& tuning, bool marker) {
+// bombs, tracers, then the drones and planes from the lowest (the farthest) up. Everything is sized
+// by its depth (core/view_xf.hpp).
+void draw_scene(SDL_Renderer* r, const ViewXf& xf, const World& world, const Body& plane,
+                game::PlaneSprites& sprites, const game::Effects& effects, const Tuning& tuning,
+                bool marker) {
     effects.draw_ground(r, xf, tuning.look.scorch_fade_s);
     for (const Target& t : world.targets) {
         if (t.kind == TargetKind::Ground) {
@@ -534,16 +580,16 @@ void draw_scene(SDL_Renderer* r, const game::ViewXf& xf, const World& world, con
         sprites.draw(f.body, xf, true);
     }
     for (const Bomb& m : world.bombs) {
-        const SDL_FPoint s = on_view(xf, m.x, m.y, 0.0f);
+        const SDL_FRect shadow =
+            scaled_mark(on_view(xf, m.x, m.y, 0.0f), 2.0f, 1.0f, xf.scale_at(0.0f));
         SDL_SetRenderDrawColor(r, 0, 0, 0, 90);
-        const SDL_FRect shadow{std::round(s.x) - 1.0f, std::round(s.y), 2.0f, 1.0f};
         SDL_RenderFillRect(r, &shadow);
     }
     effects.draw_air(r, xf);
     for (const Bomb& m : world.bombs) {
-        const SDL_FPoint s = on_view(xf, m.x, m.y, m.z);
+        const SDL_FRect bomb =
+            scaled_mark(on_view(xf, m.x, m.y, m.z), 3.0f, 2.0f, xf.scale_at(m.z));
         SDL_SetRenderDrawColor(r, 36, 38, 30, 255);
-        const SDL_FRect bomb{std::round(s.x) - 1.0f, std::round(s.y) - 1.0f, 3.0f, 2.0f};
         SDL_RenderFillRect(r, &bomb);
     }
     // Tracers: a short streak behind each one, along its flight.
@@ -561,14 +607,16 @@ void draw_scene(SDL_Renderer* r, const game::ViewXf& xf, const World& world, con
         SDL_RenderLine(r, std::round(a.x), std::round(a.y), std::round(b.x), std::round(b.y));
     }
     if (marker && plane.outcome == Outcome::Flying) {
-        const GroundSpot spot =
-            bomb_impact(plane, tuning.rules.weapon, tuning.rules.flight.gravity);
+        const GroundSpot spot = bomb_impact(plane, tuning.rules.weapon, tuning.rules.flight);
         const SDL_FPoint s = on_view(xf, spot.x, spot.y, 0.0f);
         SDL_SetRenderDrawColor(r, 255, 80, 60, 255);
         SDL_RenderLine(r, s.x - 4.0f, s.y, s.x + 4.0f, s.y);
         SDL_RenderLine(r, s.x, s.y - 2.0f, s.x, s.y + 2.0f);
     }
     std::sort(fliers.begin(), fliers.end(), [](const Flier& a, const Flier& b) {
+        if (a.body.z != b.body.z) {
+            return a.body.z < b.body.z;
+        }
         return to_screen(a.body.x, a.body.y).y < to_screen(b.body.x, b.body.y).y;
     });
     for (const Flier& f : fliers) {
@@ -586,7 +634,7 @@ void draw_scene(SDL_Renderer* r, const game::ViewXf& xf, const World& world, con
             const SDL_FPoint s = on_view(xf, t.x, t.y, t.z);
             const std::string n = std::to_string(t.hits);
             SDL_RenderDebugText(r, std::round(s.x) - static_cast<float>(n.size()) * 4.0f,
-                                std::round(s.y) - 22.0f, n.c_str());
+                                std::round(s.y - 22.0f * xf.scale_at(t.z)), n.c_str());
         }
     }
 }
@@ -904,16 +952,19 @@ int main(int argc, char** argv) {
             nation = *chosen;
         }
         const ModelId player_model = plane_type(fighter_of(nation)).model;
-        game::PlaneSprites sprites(renderer);
-        if (!sprites.bake(player_model)) {
-            exit_code = 1;
-        }
         if (opts.sprite_sheet != nullptr) {
-            const bool ok = exit_code == 0 && sprites.save_sheet(opts.sprite_sheet);
+            const bool ok =
+                game::PlaneSprites::save_sheet(opts.sprite_sheet, player_model, opts.sheet_step);
             SDL_DestroyRenderer(renderer);
             SDL_DestroyWindow(window);
             SDL_Quit();
             return ok ? 0 : 1;
+        }
+        // The player's plane and the practice drones' (the P-26's model): full size now, the other
+        // sizes in the background (in line for a screenshot, so it's exact).
+        game::PlaneSprites sprites(renderer, shot_mode);
+        if (!sprites.bake(player_model) || !sprites.bake(ModelId::P26)) {
+            exit_code = 1;
         }
 
         Tuning tuning;
@@ -1081,13 +1132,13 @@ int main(int argc, char** argv) {
                 fps_since = now;
             }
 
-            // The world into the view target: 1:1 in art pixels on the deck, the ground zooming out
-            // as the player climbs (design/planes.md).
+            // The world into the view target: 1:1 in art pixels at your height, the ground
+            // shrinking as you climb and everything else by its depth (design/planes.md).
             const ViewFit& fit = screen.fit;
             const Body plane = between(previous[0], world.bodies[0], alpha);
-            const float zoom =
-                ground_zoom(plane.z, tuning.rules.flight.ceiling_u, tuning.look.zoom_at_ceiling);
-            const game::ViewXf xf = game::make_view(camera.focus(alpha), zoom, fit.w, fit.h);
+            const ViewXf xf = make_view(camera.focus(alpha), plane.z, tuning.rules.flight.ceiling_u,
+                                        tuning.look.zoom_at_ceiling, fit.w, fit.h);
+            sprites.pump();
             SDL_SetRenderTarget(renderer, screen.target);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
             SDL_RenderClear(renderer);
@@ -1159,9 +1210,10 @@ int main(int argc, char** argv) {
                     {format("Wings of Freedom %s  %d fps  %s", WOF_VERSION, fps, backend),
                      format("window %dx%d  scale %dx  view %dx%d", screen.out_w, screen.out_h,
                             fit.scale, fit.w, fit.h),
-                     format("camera %.0f,%.0f  zoom %.2f  lead %.0f,%.0f u",
+                     format("camera %.0f,%.0f  ground %.2f  lead %.0f,%.0f u",
                             static_cast<double>(xf.focus.x), static_cast<double>(xf.focus.y),
-                            static_cast<double>(xf.zoom), static_cast<double>(camera.lead().x),
+                            static_cast<double>(xf.scale_at(0.0f)),
+                            static_cast<double>(camera.lead().x),
                             static_cast<double>(camera.lead().y)),
                      format("%.*s  %.0f,%.0f  %.0f u  %.1f u/s",
                             static_cast<int>(plane_type(plane.type).name.size()),
@@ -1176,9 +1228,10 @@ int main(int argc, char** argv) {
                             static_cast<double>(plane.throttle * 100.0f),
                             static_cast<double>(plane.fuel * 100.0f),
                             plane.stalled ? "stalled " : "", plane.engine_on ? "" : "engine off"),
-                     format("ground %s  tiles %d  tick %lld  sprites %.0f ms",
-                            ground_name(under.kind), ground.cached(),
-                            static_cast<long long>(world.tick), sprites.bake_ms()),
+                     format("ground %s  tiles %d  tick %lld", ground_name(under.kind),
+                            ground.cached(), static_cast<long long>(world.tick)),
+                     format("sprites %.0f ms  ready %d  queued %d", sprites.bake_ms(),
+                            sprites.ready(), sprites.queued()),
                      format("rounds in flight %zu  bombs falling %zu  targets %zu%s",
                             world.rounds.size(), world.bombs.size(), world.targets.size(),
                             marker ? "  marker on" : "")},
@@ -1207,6 +1260,10 @@ int main(int argc, char** argv) {
         if (screen.ground != nullptr) {
             SDL_DestroyTexture(screen.ground);
         }
+        if (screen.ground_half != nullptr) {
+            SDL_DestroyTexture(screen.ground_half);
+        }
+        sprites.shutdown();
     }
 
     SDL_DestroyRenderer(renderer);

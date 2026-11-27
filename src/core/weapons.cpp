@@ -185,15 +185,16 @@ int rounds_left(const Body& b, const PlaneRules& plane, Calibre c) noexcept {
 
 namespace {
 
-// A bomb as it leaves the plane: just below it, with the plane's velocity.
-Bomb release(const Body& b, const WeaponParams& p, int owner) noexcept {
+// A bomb as it leaves the plane: just below it, with the plane's velocity (its real up or down
+// speed, so the climb's height share too).
+Bomb release(const Body& b, const WeaponParams& p, float height_share, int owner) noexcept {
     const Vec nose = nose_of(b);
     return Bomb{b.x,
                 b.y,
                 b.z - p.bomb_drop_u,
                 nose.x * b.speed_u_s,
                 nose.y * b.speed_u_s,
-                nose.z * b.speed_u_s,
+                nose.z * b.speed_u_s * height_share,
                 owner};
 }
 
@@ -217,11 +218,11 @@ bool fall(Bomb& m, float gravity, float& gx, float& gy) noexcept {
 
 } // namespace
 
-GroundSpot bomb_impact(const Body& b, const WeaponParams& p, float gravity) noexcept {
-    Bomb m = release(b, p, -1);
+GroundSpot bomb_impact(const Body& b, const WeaponParams& p, const FlightParams& flight) noexcept {
+    Bomb m = release(b, p, flight.height_share, -1);
     GroundSpot spot{m.x, m.y};
     for (int i = 0; i < kMaxBombSteps; ++i) {
-        if (fall(m, gravity, spot.x, spot.y)) {
+        if (fall(m, flight.gravity, spot.x, spot.y)) {
             return spot;
         }
     }
@@ -284,7 +285,7 @@ void fire_weapons(World& w, std::size_t body, const InputCommand& cmd, const Rul
         --l.bomb_cooldown;
     }
     if (cmd.heavy && l.heavy == Heavy::Bombs && l.bombs > 0 && l.bomb_cooldown == 0) {
-        Bomb m = release(b, p, static_cast<int>(body));
+        Bomb m = release(b, p, plane.flight.height_share, static_cast<int>(body));
         const Blast blast = blast_of(plane.bomb_lb, p);
         m.radius_u = blast.radius_u;
         m.damage = blast.damage;

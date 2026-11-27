@@ -22,10 +22,10 @@ them. Every game value is a **(start)** value in `tuning.txt`.
 |---|---|---|
 | Speed | **0.641 u/s per mph** (the readout is 1.56 mph per u/s) | the P-26A's real 234 mph is today's 150 u/s |
 | Turning | the real sustained turn rate **× 4.44** | the P-26A's (est.) 16 s full circle takes today's 3.6 s |
-| Climb | **0.00636 u/s per ft/min** | the P-26A's real 2,360 ft/min is 15 u/s; deck to 30,000 ft in about 40 s |
+| Climb | **0.00636 u/s per ft/min**, then a **third** of every climb and dive becomes height | the P-26A's real 2,360 ft/min is 15 u/s of climbing, 5 u/s of height: deck to 30,000 ft in about 2 minutes (owner, 2026-11-27) |
 | Stall | the real stall speed, scaled like speed | |
 | Dive limit | **1.6 ×** the plane's top speed | |
-| Endurance | the P-26A's tank lasts today's 240 s at full throttle; others in proportion to their real endurance | |
+| Endurance | the P-26A's tank lasts **8 minutes** (480 s) at full throttle; others in proportion to their real endurance | doubled (owner, 2026-11-27), as climbing takes longer |
 | Guns | the **real rounds per minute and ammunition**, in real time | |
 
 - Gravity (90 u/s²) and the pitch rate stay game values. The pitch rate is 60°/s for fighters
@@ -153,16 +153,28 @@ Blast radius and damage scale with the cube root of the bomb's weight. A 100 lb 
 - **Light flak** fires aimed streams like guns: deadly low, and useless above its reach.
 - **Heavy flak** fires timed bursts that scatter more the higher you are (`flight.md`'s rule).
 
-## Height: 30,000 ft for every plane, and the ground zooms out
+## Height: 30,000 ft for every plane
 
 - **Ceiling 30,000 ft** for every plane (the owner chose one fixed ceiling). That's 600 u at
   50 ft per u.
-- **The ground zooms out as you climb** (owner): its scale is **1 − 0.5 × height / ceiling**, so
-  half size at 30,000 ft. You see more of the map up high, and your plane stays in view.
-- **Plane sprites stay full size and crisp.** The zoomed ground is drawn smooth, the one exception
-  to pixel-perfect (as Pixel TD's zoomed-out views).
-- **The shadow gap** is 0.4 px per u × the zoom, 120 px at the ceiling. The camera still centres
-  between plane and shadow.
+- **The sky is tall to climb** (owner, 2026-11-27: "too quick to climb to that altitude"): a third
+  of every climb and dive becomes height (`flight.height_share`). The P-26A and He 51 take about
+  2 minutes from the deck to the top, the bombers 3.5 to 4.5. A full-speed pull-up gains about
+  2,000 ft, and a full dive from the top takes about 12 s. Speeds, turning, aim bands and the
+  altimeter are unchanged; bombs leave with the plane's real up or down speed, and guns still fire
+  where the nose points.
+- **Depth** (owner, 2026-11-27): everything in the air is sized by how far below or above your
+  plane it is, like perspective. Your height is full size; below you things shrink, down to the
+  ground's size; above you they grow, up to **1.5×** at a full ceiling above.
+  - **From 30,000 ft the ground is drawn a quarter size** (`look.zoom_at_ceiling`), so you see
+    much more of the map.
+  - **Planes shrink and grow in crisp steps** of an eighth (a quarter to 1.5×), each baked as
+    pixel art. The zoomed ground is drawn smooth, the one exception to pixel-perfect.
+  - **Speed is the same at every height** (owner): the slower-looking ground up high is
+    perspective.
+- **The shadow gap** grows with height to about 130 px at 30,000 ft. The camera aims 0.6 of the way
+  up from the shadow to the plane, so the plane rides higher on screen as you climb. Up high the
+  shadow also sits a little toward the screen's centre (perspective, as the camera looks ahead).
 
 ## The later roster (names only; an open list)
 

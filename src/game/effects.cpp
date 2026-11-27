@@ -13,7 +13,8 @@ namespace {
 constexpr int kSides = 20;
 
 [[nodiscard]] SDL_FPoint at(const ViewXf& xf, float x, float y, float z) noexcept {
-    return xf.at(x, y, z);
+    const ScreenPt p = xf.at(x, y, z);
+    return {p.x, p.y};
 }
 
 [[nodiscard]] std::array<SDL_FPoint, kSides + 1> circle(const ViewXf& xf, float x, float y, float z,

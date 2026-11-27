@@ -199,3 +199,24 @@ TEST_CASE("A new run starts in the air with the start values") {
     CHECK(b.fuel == doctest::Approx(1.0f));
     CHECK(b.outcome == Outcome::Flying);
 }
+
+TEST_CASE(
+    "The height share slows only the up and down: same speed and ground, a third the height") {
+    const FlightParams third; // the default
+    FlightParams whole = third;
+    whole.height_share = 1.0f;
+    CHECK(third.height_share == doctest::Approx(1.0f / 3.0f));
+    Body slow = airborne(150.0f, 1.0f);
+    Body quick = slow;
+    fly_for(slow, cmd(0, 127), 1.0f, third);
+    fly_for(quick, cmd(0, 127), 1.0f, whole);
+    CHECK(slow.speed_u_s == doctest::Approx(quick.speed_u_s));
+    CHECK(slow.x == doctest::Approx(quick.x));
+    CHECK(slow.y == doctest::Approx(quick.y));
+    CHECK(slow.z - 200.0f == doctest::Approx((quick.z - 200.0f) / 3.0f).epsilon(0.001));
+    Body down = airborne(150.0f, 1.0f);
+    fly_for(down, cmd(0, -127), 1.0f, third);
+    Body fall = airborne(150.0f, 1.0f);
+    fly_for(fall, cmd(0, -127), 1.0f, whole);
+    CHECK(200.0f - down.z == doctest::Approx((200.0f - fall.z) / 3.0f).epsilon(0.001));
+}

@@ -26,6 +26,8 @@ struct FlightParams {
     float stall_nose_rate_deg_s = 40.0f; // at this rate
     float stall_control = 0.3f;          // share of turn and pitch control while stalled
     float ceiling_u = 600.0f;            // 30,000 ft for every plane (owner, 2026-11-26)
+    float height_share = 1.0f / 3.0f;    // share of a climb or dive that becomes height: the
+                                         // sky is tall to climb (owner, 2026-11-27)
     float tank_s = 240.0f;               // a full tank lasts this long at full throttle
     float idle_burn = 0.3f;              // fuel burn at idle, as a share of full-throttle burn
     float bank_deg = 30.0f;              // looks only: how far the plane banks into a turn

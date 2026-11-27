@@ -51,6 +51,10 @@ struct Block {
 // A plane's model by its id (core/planes.hpp).
 [[nodiscard]] std::vector<Block> plane_model(ModelId id);
 
+// A model made `s` times as big, every corner scaled about its origin: the sprite baker draws the
+// plane sizes of design/planes.md (Height) from it.
+[[nodiscard]] std::vector<Block> scaled_model(std::vector<Block> model, float s);
+
 // The colour of the propeller spinner, the nose's very front (tests find the nose by it).
 inline constexpr Rgb8 kSpinnerColour{196, 60, 44};
 

@@ -179,4 +179,13 @@ std::vector<Block> plane_model(ModelId id) {
     return fighter_model();
 }
 
+std::vector<Block> scaled_model(std::vector<Block> model, float s) {
+    for (Block& b : model) {
+        for (Vec3& c : b.corners) {
+            c = {c.x * s, c.y * s, c.z * s};
+        }
+    }
+    return model;
+}
+
 } // namespace wof
