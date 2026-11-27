@@ -5,8 +5,10 @@
 #include <vector>
 
 #include "core/body.hpp"
+#include "core/damage.hpp"
 #include "core/flight.hpp"
 #include "core/input.hpp"
+#include "core/rng.hpp"
 #include "core/targets.hpp"
 #include "core/weapons.hpp"
 
@@ -29,6 +31,7 @@ struct Rules {
     EdgeParams edge;
     WeaponParams weapon;
     TargetParams targets;
+    DamageParams damage;
     HeightRule height_rule = HeightRule::Forgiving; // a game option, not in tuning.txt
 
     friend constexpr bool operator==(const Rules&, const Rules&) = default;
@@ -42,8 +45,23 @@ struct World {
     std::vector<Bomb> bombs;
     std::vector<Target> targets; // practice targets
     std::vector<Event> events;   // what happened in the last tick
+    Rng rng{0x5eedu};            // where hits land; seed it per run
     std::int64_t tick = 0;
 };
+
+// A plane ready for a run: in the air with the start values, armed and undamaged.
+[[nodiscard]] Body new_plane(const Rules& rules, float x, float y, float heading_deg) noexcept;
+
+// Plane-to-plane collisions (design/flight.md, Collisions): two flying planes within twice the
+// collision radius across and the collision height of each other touch. The one with less total
+// HP is destroyed (ShotDown); the other takes damage equal to what it had left, spread evenly over
+// its parts. Equal totals destroy both. Practice drones don't collide.
+void collide(World& w, const Rules& rules);
+
+// Developer tool (F5, F6): `count` hits of `damage` on a plane from `from`, placed by the hit
+// table as if they were real.
+void debug_hits(World& w, std::size_t body, HitFrom from, float damage, int count,
+                const Rules& rules);
 
 // The ground and the edges, after a plane has moved:
 // - touching the ground is a crash;

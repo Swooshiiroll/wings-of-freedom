@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "core/body.hpp"
+
 namespace wof {
 
 // A point in a plane's own frame, in u: x toward the right wingtip, y forward (the nose), z up.
@@ -20,15 +22,6 @@ struct Rgb8 {
 
     friend constexpr bool operator==(Rgb8, Rgb8) = default;
 };
-
-// The parts that take damage (design/flight.md, Damage). Each block of a model belongs to one, so
-// a damaged plane can be drawn with a part missing.
-enum class Part : std::uint8_t { Engine, LeftWing, RightWing, Fuselage, Tail, Cockpit };
-inline constexpr std::uint32_t kAllParts = 0x3fu;
-
-[[nodiscard]] constexpr std::uint32_t part_bit(Part p) noexcept {
-    return 1u << static_cast<std::uint32_t>(p);
-}
 
 // One solid block of a model: a six-sided shape given by its 8 corners. Corners 0-3 are one end
 // (x0y0, x1y0, x1y1, x0y1 going round), 4-7 the other end in the same order, so boxes, tapers and

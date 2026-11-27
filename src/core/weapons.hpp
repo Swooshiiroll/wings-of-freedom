@@ -29,7 +29,7 @@ struct WeaponParams {
     int rounds = 600;
     float round_speed_u_s = 360.0f; // on top of the plane's own speed
     float round_life_s = 0.8f;
-    int round_damage = 1;
+    int round_damage = 2;         // owner, 2026-11-26: "parts matter"
     int tracer_every = 3;         // one round in this many is a tracer
     float gun_spacing_u = 1.0f;   // two guns, this far either side of the nose
     float muzzle_u = 9.0f;        // rounds start this far ahead of the plane's centre
@@ -84,6 +84,7 @@ enum class EventKind : std::uint8_t {
     Blast,          // a bomb burst at (x, y)
     BlastHitPlane,  // who: the body caught; damage: how much
     BlastHitTarget, // who: the target caught
+    Collision,      // who: the plane destroyed (-1: both); by: the other
 };
 
 struct Event {
@@ -94,6 +95,7 @@ struct Event {
     float y = 0.0f;
     float z = 0.0f;
     float damage = 0.0f;
+    std::int8_t part = -1; // a hit on a plane: the Part it landed on
 
     friend constexpr bool operator==(const Event&, const Event&) = default;
 };

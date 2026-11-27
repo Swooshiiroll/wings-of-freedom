@@ -193,7 +193,7 @@ TEST_CASE("A plane's own rounds never hit it, but they hit other planes") {
     REQUIRE(run_until(w, fire(true), 20, r, EventKind::RoundHitPlane, hit));
     CHECK(hit.who == 1);
     CHECK(hit.by == 0);
-    CHECK(hit.damage == doctest::Approx(1.0f));
+    CHECK(hit.damage == doctest::Approx(2.0f));
 }
 
 TEST_CASE("Rounds that reach the ground make impacts, and strafe ground targets near them") {

@@ -51,21 +51,40 @@ void fill_ground_disc(SDL_Renderer* r, PixelPt origin, float x, float y, float z
     SDL_RenderGeometry(r, nullptr, v.data(), static_cast<int>(v.size()), nullptr, 0);
 }
 
-void ground_ring(SDL_Renderer* r, PixelPt origin, float x, float y, float radius,
+void ground_ring(SDL_Renderer* r, PixelPt origin, float x, float y, float z, float radius,
                  SDL_FColor colour) {
-    const auto pts = circle(origin, x, y, 0.0f, radius);
+    const auto pts = circle(origin, x, y, z, radius);
     SDL_SetRenderDrawColorFloat(r, colour.r, colour.g, colour.b, colour.a);
     SDL_RenderLines(r, pts.data(), static_cast<int>(pts.size()));
 }
 
 void Effects::add(const std::vector<Event>& events, float blast_radius_u) {
     for (const Event& e : events) {
-        if (e.kind == EventKind::RoundGround) {
+        switch (e.kind) {
+        case EventKind::RoundGround:
             puffs_.push_back(Mark{e.x, e.y, 0.0f, 1.5f});
-        } else if (e.kind == EventKind::Blast) {
+            break;
+        case EventKind::Blast:
             booms_.push_back(Mark{e.x, e.y, 0.0f, blast_radius_u});
             scorches_.push_back(Mark{e.x, e.y, 0.0f, std::max(4.0f, blast_radius_u * 0.4f)});
+            break;
+        case EventKind::RoundHitPlane:
+            sparks_.push_back(Mark{e.x, e.y, 0.0f, 1.5f, e.z});
+            break;
+        default:
+            break;
         }
+    }
+}
+
+void Effects::trail(float x, float y, float z, Trail kind) {
+    smoke_.push_back(Mark{x, y, 0.0f, kind == Trail::Spray ? 0.8f : 1.6f, z, kind});
+}
+
+void Effects::explode(float x, float y, float z, float size) {
+    booms_.push_back(Mark{x, y, 0.0f, size, z});
+    if (z <= 1.0f) {
+        scorches_.push_back(Mark{x, y, 0.0f, size * 0.5f});
     }
 }
 
@@ -73,12 +92,21 @@ void Effects::tick(float dt, float scorch_fade_s) {
     age(puffs_, dt, kPuffS);
     age(booms_, dt, kBoomS);
     age(scorches_, dt, scorch_fade_s);
+    age(sparks_, dt, kSparkS);
+    for (Mark& m : smoke_) {
+        m.age += dt;
+    }
+    std::erase_if(smoke_, [](const Mark& m) {
+        return m.age >= (m.kind == Trail::Spray ? kSprayS : kSmokeS);
+    });
 }
 
 void Effects::clear() {
     puffs_.clear();
     booms_.clear();
     scorches_.clear();
+    smoke_.clear();
+    sparks_.clear();
 }
 
 void Effects::draw_ground(SDL_Renderer* r, PixelPt origin, float scorch_fade_s) const {
@@ -97,17 +125,33 @@ void Effects::draw_air(SDL_Renderer* r, PixelPt origin) const {
         fill_ground_disc(r, origin, m.x, m.y, m.age * 6.0f, m.size + m.age * 4.0f,
                          SDL_FColor{0.80f, 0.70f, 0.52f, 0.85f * left});
     }
+    // Smoke and fuel spray trailing damaged planes: they swell, rise a little and fade.
+    for (const Mark& m : smoke_) {
+        const float life = m.kind == Trail::Spray ? kSprayS : kSmokeS;
+        const float t = m.age / life;
+        SDL_FColor c{0.58f, 0.58f, 0.56f, 0.55f * (1.0f - t)};
+        if (m.kind == Trail::Black) {
+            c = SDL_FColor{0.12f, 0.11f, 0.10f, 0.7f * (1.0f - t)};
+        } else if (m.kind == Trail::Spray) {
+            c = SDL_FColor{0.86f, 0.89f, 0.93f, 0.45f * (1.0f - t)};
+        }
+        fill_ground_disc(r, origin, m.x, m.y, m.z + t * 6.0f, m.size * (1.0f + 1.5f * t), c);
+    }
     for (const Mark& m : booms_) {
         const float t = m.age / kBoomS; // 0..1
         if (t < 0.25f) {
             // The flash.
-            fill_ground_disc(r, origin, m.x, m.y, 2.0f, m.size * (0.35f + t * 1.4f),
+            fill_ground_disc(r, origin, m.x, m.y, m.z + 2.0f, m.size * (0.35f + t * 1.4f),
                              SDL_FColor{1.0f, 0.93f, 0.62f, 0.95f});
         }
         // Smoke rising, and the blast's edge running out to its full radius.
-        fill_ground_disc(r, origin, m.x, m.y, t * 14.0f, m.size * (0.25f + 0.35f * t),
+        fill_ground_disc(r, origin, m.x, m.y, m.z + t * 14.0f, m.size * (0.25f + 0.35f * t),
                          SDL_FColor{0.20f, 0.18f, 0.16f, 0.7f * (1.0f - t)});
-        ground_ring(r, origin, m.x, m.y, m.size * t, SDL_FColor{1.0f, 0.62f, 0.25f, 1.0f - t});
+        ground_ring(r, origin, m.x, m.y, m.z, m.size * t, SDL_FColor{1.0f, 0.62f, 0.25f, 1.0f - t});
+    }
+    // Sparks where rounds strike a plane.
+    for (const Mark& m : sparks_) {
+        fill_ground_disc(r, origin, m.x, m.y, m.z, m.size, SDL_FColor{1.0f, 0.95f, 0.6f, 1.0f});
     }
 }
 
