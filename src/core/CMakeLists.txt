@@ -6,8 +6,10 @@ add_library(wof_core STATIC
   flight.cpp
   ground.cpp
   raster.cpp
+  targets.cpp
   tuning.cpp
   view.cpp
+  weapons.cpp
   world.cpp)
 target_include_directories(wof_core PUBLIC ${PROJECT_SOURCE_DIR}/src)
 target_compile_features(wof_core PUBLIC cxx_std_20)

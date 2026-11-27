@@ -7,6 +7,8 @@
 #include "core/body.hpp"
 #include "core/flight.hpp"
 #include "core/input.hpp"
+#include "core/targets.hpp"
+#include "core/weapons.hpp"
 
 namespace wof {
 
@@ -25,13 +27,21 @@ struct EdgeParams {
 struct Rules {
     FlightParams flight;
     EdgeParams edge;
+    WeaponParams weapon;
+    TargetParams targets;
+    HeightRule height_rule = HeightRule::Forgiving; // a game option, not in tuning.txt
 
     friend constexpr bool operator==(const Rules&, const Rules&) = default;
 };
 
-// Everything that flies. Any number of planes; nothing here assumes there is only one player.
+// Everything that flies, and what it fires. Any number of planes; nothing here assumes there is
+// only one player.
 struct World {
     std::vector<Body> bodies;
+    std::vector<Round> rounds;
+    std::vector<Bomb> bombs;
+    std::vector<Target> targets; // practice targets
+    std::vector<Event> events;   // what happened in the last tick
     std::int64_t tick = 0;
 };
 
@@ -42,8 +52,9 @@ struct World {
 //   back in stops it (it starts from the top next time), and at 0 the plane self-destructs.
 void apply_edges(Body& b, const EdgeParams& e, float dt) noexcept;
 
-// Advances the world one tick (1/60 s). commands[i] drives bodies[i]; a body without a command gets
-// no input. Bodies whose flight has ended stay where they are.
+// Advances the world one tick (1/60 s): the targets move, each plane flies and fires, then the
+// rounds and bombs move and hit. commands[i] drives bodies[i]; a body without a command gets no
+// input. Bodies whose flight has ended stay where they are. `events` holds this tick's events.
 void step(World& world, std::span<const InputCommand> commands, const Rules& rules);
 
 } // namespace wof

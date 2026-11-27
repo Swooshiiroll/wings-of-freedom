@@ -9,12 +9,20 @@
 
 namespace wof {
 
+// Numbers for how things look rather than how they play (tuning.txt, `look.*`).
+struct LookParams {
+    float scorch_fade_s = 30.0f; // a bomb's scorch mark fades out over this long
+
+    friend constexpr bool operator==(const LookParams&, const LookParams&) = default;
+};
+
 // Every gameplay number that playtesting tunes, as (start) values (design/flight.md). The game
 // keeps them in tuning.txt next to the executable and reloads that file whenever it changes.
 struct Tuning {
     CameraParams camera;
-    Rules rules; // flight and edges
+    Rules rules; // flight, edges, weapons, practice targets (the height rule isn't in the file)
     GroundParams ground;
+    LookParams look;
 
     friend bool operator==(const Tuning&, const Tuning&) = default;
 };
