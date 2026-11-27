@@ -5,6 +5,10 @@ them under its version (see CLAUDE.md, "Releasing").
 
 ## [Unreleased]
 
+### Design
+- `design/game.md`: the game overview, rules agreed so far, and open questions.
+- `design/flight.md`: the v0.1 Fly and fight spec.
+
 ### Added
 - Project set up: CI (check, unit tests, test build), tag releases, issue and pull request templates.
 - Board and workflow page links.
