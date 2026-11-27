@@ -7,9 +7,11 @@ add_library(wof_core STATIC
   fixed_step.cpp
   flight.cpp
   ground.cpp
+  menu.cpp
   plane_rules.cpp
   planes.cpp
   raster.cpp
+  settings.cpp
   targets.cpp
   tuning.cpp
   view.cpp

@@ -43,7 +43,10 @@ struct Rules {
     PlaneScale scale;
     AiParams ai;
     WaveParams wave;
-    HeightRule height_rule = HeightRule::Forgiving; // a game option, not in tuning.txt
+    // Game options (settings.txt), not tuning: how the players' and the AI pilots' rounds judge
+    // height.
+    HeightRule height_rule = HeightRule::Forgiving;
+    HeightRule enemy_height_rule = HeightRule::Forgiving;
     std::vector<PlaneRules> planes = derive_roster(flight, damage, scale);
 
     void rederive() { planes = derive_roster(flight, damage, scale); }

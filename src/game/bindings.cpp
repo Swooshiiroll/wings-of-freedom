@@ -1,16 +1,22 @@
 #include "game/bindings.hpp"
 
+#include <cstddef>
+
 namespace wof::game {
+
+// core/settings.hpp keeps scancodes as numbers; they must be SDL's.
+static_assert(SDL_SCANCODE_ESCAPE == kScanEscape && SDL_SCANCODE_DELETE == kScanDelete);
+static_assert(SDL_SCANCODE_F1 == kScanF1 && SDL_SCANCODE_F12 == kScanF12);
+static_assert(SDL_SCANCODE_A == 4 && SDL_SCANCODE_D == 7 && SDL_SCANCODE_W == 26 &&
+              SDL_SCANCODE_S == 22 && SDL_SCANCODE_F == 9 && SDL_SCANCODE_SPACE == 44 &&
+              SDL_SCANCODE_TAB == 43 && SDL_SCANCODE_LSHIFT == 225 && SDL_SCANCODE_RSHIFT == 229 &&
+              SDL_SCANCODE_LCTRL == 224 && SDL_SCANCODE_RCTRL == 228);
+
 namespace {
 
-[[nodiscard]] const Binding& binding(const Bindings& b, Action a) noexcept {
-    return b[static_cast<std::size_t>(a)];
-}
-
-[[nodiscard]] bool held(const Bindings& b, Action a, const bool* keys) noexcept {
-    const Binding& k = binding(b, a);
-    return (k.main != SDL_SCANCODE_UNKNOWN && keys[k.main]) ||
-           (k.alt != SDL_SCANCODE_UNKNOWN && keys[k.alt]);
+[[nodiscard]] bool held(const KeyBindings& b, Action a, const bool* keys) noexcept {
+    const KeyPair& k = b[static_cast<std::size_t>(a)];
+    return (k.main != kNoKey && keys[k.main]) || (k.alt != kNoKey && keys[k.alt]);
 }
 
 // -127, 0 or 127 from a pair of opposing keys.
@@ -20,26 +26,14 @@ namespace {
 
 } // namespace
 
-Bindings default_bindings() noexcept {
-    Bindings b{};
-    b[static_cast<std::size_t>(Action::TurnLeft)] = {SDL_SCANCODE_A, SDL_SCANCODE_UNKNOWN};
-    b[static_cast<std::size_t>(Action::TurnRight)] = {SDL_SCANCODE_D, SDL_SCANCODE_UNKNOWN};
-    b[static_cast<std::size_t>(Action::Dive)] = {SDL_SCANCODE_W, SDL_SCANCODE_UNKNOWN};
-    b[static_cast<std::size_t>(Action::Climb)] = {SDL_SCANCODE_S, SDL_SCANCODE_UNKNOWN};
-    b[static_cast<std::size_t>(Action::ThrottleUp)] = {SDL_SCANCODE_LSHIFT, SDL_SCANCODE_RSHIFT};
-    b[static_cast<std::size_t>(Action::ThrottleDown)] = {SDL_SCANCODE_LCTRL, SDL_SCANCODE_RCTRL};
-    b[static_cast<std::size_t>(Action::Guns)] = {SDL_SCANCODE_F, SDL_SCANCODE_UNKNOWN};
-    b[static_cast<std::size_t>(Action::Heavy)] = {SDL_SCANCODE_SPACE, SDL_SCANCODE_UNKNOWN};
-    b[static_cast<std::size_t>(Action::SwitchHeavy)] = {SDL_SCANCODE_TAB, SDL_SCANCODE_UNKNOWN};
-    return b;
+bool is_key(const KeyBindings& b, Action action, SDL_Scancode key) noexcept {
+    const KeyPair& k = b[static_cast<std::size_t>(action)];
+    const int code = static_cast<int>(key);
+    return code != kNoKey && (k.main == code || k.alt == code);
 }
 
-bool is_key(const Bindings& b, Action action, SDL_Scancode key) noexcept {
-    const Binding& k = binding(b, action);
-    return key != SDL_SCANCODE_UNKNOWN && (k.main == key || k.alt == key);
-}
-
-InputCommand read_command(const Bindings& b, const bool* keys, bool switch_pressed) noexcept {
+InputCommand read_command(const Settings& s, const bool* keys, bool switch_pressed) noexcept {
+    const KeyBindings& b = s.keys;
     InputCommand c;
     c.turn = axis_of(held(b, Action::TurnLeft, keys), held(b, Action::TurnRight, keys));
     c.pitch = axis_of(held(b, Action::Dive, keys), held(b, Action::Climb, keys));
@@ -47,6 +41,7 @@ InputCommand read_command(const Bindings& b, const bool* keys, bool switch_press
     c.guns = held(b, Action::Guns, keys);
     c.heavy = held(b, Action::Heavy, keys);
     c.switch_heavy = switch_pressed;
+    c.level = s.auto_level;
     return c;
 }
 

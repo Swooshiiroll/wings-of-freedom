@@ -5,6 +5,15 @@
 
 namespace wof {
 
+// When the nose eases back to level by itself, once the pitch keys are let go (design/flight.md,
+// Flight). Each player's own choice, so it travels with their commands.
+enum class AutoLevel : std::uint8_t {
+    On,       // always
+    Assisted, // only when let go within flight.assist_zone_deg of level
+    Off,      // never: the nose stays where it was left
+};
+inline constexpr int kAutoLevels = 3;
+
 // What one player (or one AI pilot) asks of their plane for one tick. Every plane is driven only
 // through these, never by the front end changing state directly, so a host or headless server
 // can run the same simulation for co-op later, with clients sending their commands.
@@ -18,6 +27,7 @@ struct InputCommand {
     bool guns = false;         // held: fire the guns
     bool heavy = false;        // held: release the selected heavy weapon
     bool switch_heavy = false; // pressed this tick: select the next heavy weapon
+    AutoLevel level = AutoLevel::On;
 
     friend constexpr bool operator==(const InputCommand&, const InputCommand&) = default;
 };

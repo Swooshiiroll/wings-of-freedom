@@ -17,6 +17,7 @@ struct FlightParams {
     float best_glide_u_s = 90.0f;         // at this speed
     float pitch_rate_deg_s = 60.0f;       // W/S; the nose also eases back to level at this rate
     float pitch_limit_deg = 40.0f;
+    float assist_zone_deg = 5.0f;   // Assisted auto-leveling levels within this of level
     float turn_rate_deg_s = 100.0f; // at the best turn speed; slower above and below it
     float best_turn_u_s = 110.0f;
     float throttle_per_s = 0.5f;         // Shift/Ctrl: share of full throttle per second

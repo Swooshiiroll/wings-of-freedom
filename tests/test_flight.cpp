@@ -220,3 +220,47 @@ TEST_CASE(
     fly_for(fall, cmd(0, -127), 1.0f, whole);
     CHECK(200.0f - down.z == doctest::Approx((200.0f - fall.z) / 3.0f).epsilon(0.001));
 }
+
+namespace {
+// A level plane pitched to `pitch`, then flown hands off for a second with this auto-leveling.
+float pitch_after_letting_go(float pitch, AutoLevel level) {
+    const FlightParams p;
+    Body b = airborne(150.0f, 1.0f);
+    b.pitch_deg = pitch;
+    InputCommand hands_off;
+    hands_off.level = level;
+    fly_for(b, hands_off, 1.0f, p);
+    return b.pitch_deg;
+}
+} // namespace
+
+TEST_CASE("Auto-leveling: On levels, Off holds, Assisted levels only near level") {
+    CHECK(pitch_after_letting_go(12.0f, AutoLevel::On) == doctest::Approx(0.0f));
+    CHECK(pitch_after_letting_go(12.0f, AutoLevel::Off) == doctest::Approx(12.0f));
+    CHECK(pitch_after_letting_go(-30.0f, AutoLevel::Off) == doctest::Approx(-30.0f));
+    CHECK(pitch_after_letting_go(12.0f, AutoLevel::Assisted) == doctest::Approx(12.0f));
+    CHECK(pitch_after_letting_go(4.0f, AutoLevel::Assisted) == doctest::Approx(0.0f));
+    CHECK(pitch_after_letting_go(-5.0f, AutoLevel::Assisted) == doctest::Approx(0.0f));
+    CHECK(pitch_after_letting_go(-6.0f, AutoLevel::Assisted) == doctest::Approx(-6.0f));
+}
+
+TEST_CASE("Assisted lets a held key pass straight through level") {
+    const FlightParams p;
+    Body b = airborne(150.0f, 1.0f);
+    b.pitch_deg = 20.0f;
+    InputCommand down = cmd(0, -127);
+    down.level = AutoLevel::Assisted;
+    fly_for(b, down, 0.5f, p); // 30 degrees of movement
+    CHECK(b.pitch_deg == doctest::Approx(-10.0f).epsilon(0.02));
+}
+
+TEST_CASE("With auto-leveling off, a stall still drops the nose") {
+    const FlightParams p;
+    Body b = airborne(40.0f, 0.0f);
+    b.pitch_deg = 30.0f;
+    InputCommand hands_off;
+    hands_off.level = AutoLevel::Off;
+    fly_for(b, hands_off, 0.5f, p);
+    CHECK(b.stalled);
+    CHECK(b.pitch_deg < 20.0f);
+}
