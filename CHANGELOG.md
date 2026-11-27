@@ -5,12 +5,34 @@ them under its version (see CLAUDE.md, "Releasing").
 
 ## [Unreleased]
 
+### Fly and fight (v0.1)
+
+The first playable build. Choose the US or Germany and fly a pre-war fighter over a 12.5-mile
+square of farmland, north straight up.
+
+- **Your aircraft tree:** P-12E, P-26A and P-36A (US) or Ar 65E, He 51B and Bf 109B (Germany),
+  with their real stats. You start in the first and earn the others, and six upgrades for each.
+- **Points** from kills and destroyed flak count only if you get home off the south edge, with
+  bonuses for your plane's condition and the waves you flew.
+- **Enemy fighters** in waves, growing up their own tree.
+- **Enemy bombers** every 3rd wave, heading for your base, with gunners and later escorts.
+- **Flak** along a front line halfway up the map, and at sites beyond it.
+- **Flying:** throttle, climb and dive, stalls, fuel, a 30,000 ft ceiling, damage part by part.
+- **A cockpit dashboard**, and a pause menu with key rebinding and aim options.
+
+**Keys:** A/D turn, W dive, S climb, Shift/Ctrl throttle, F guns, Space bombs, Tab switch heavy
+weapon, Esc menu. **Updating:** run `update-game.cmd` (Windows) or `update-game.sh` (Linux, Steam
+Deck) in the game's folder.
+
+The lines below are in the order built; later ones replace earlier ones.
+
 ### Design
 - `design/game.md`: the game overview, rules agreed so far, and open questions.
 - `design/flight.md`: the v0.1 Fly and fight spec.
 - `design/planes.md`: real planes, nations and eras; the v0.1 roster (P-26A, He 51B, B-10B, He 111B-2) with sources and the scale; `game.md` and `flight.md` reworked to match (30,000 ft ceiling with the ground zooming out, guns by calibre, twin engines, choosing your nation).
 
 ### Added
+- Releases no longer attach their own notes file as a download.
 - Enemy flak: a front line of gun groups with trenches and shell holes halfway up the map and sites beyond; machine guns, then light cannon from wave 5 and heavy guns from wave 9, with reinforcements; destroyed by strafing or bombs for 50 or 150 points.
 - Enemy bombers: the Keystone B-6A and Dornier Do 23G in the first raids, the B-10B and He 111B-2 from wave 9; formations every 3rd wave flying to your base, warned as they enter; nose, dorsal and ventral gunners in bursts that can be knocked out; escorts from wave 6; a counter for bombers that reach your base; larger bomber arrows.
 - The aircraft tree: points from kills with chains, banked only when you get home (with condition and wave bonuses); a run summary; a hangar after the nation screen to buy the next fighter and six upgrades per plane; the bomb sight as an upgrade; progress saved in `progress.txt`; points and chain on the dashboard.
