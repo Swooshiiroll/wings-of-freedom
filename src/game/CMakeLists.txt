@@ -1,5 +1,6 @@
 add_executable(wof
   bindings.cpp
+  dashboard_view.cpp
   effects.cpp
   ground_view.cpp
   plane_sprites.cpp

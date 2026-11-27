@@ -117,7 +117,8 @@ Logs go to `out/`.
   arrives at 10 s, so `--ticks 600` or more shows enemies). `--sprite-sheet out/sheet.png` saves every
   baked pose of the `--nation`'s fighter, at `--sprite-scale PCT`. Shots and sheets skip the
   nation screen. `--menu pause|options|controls` shows a menu page over the shot; shots use the
-  default settings, not `settings.txt`.
+  default settings, not `settings.txt`. `--panel 96|80|64` and `--units nation|imperial|metric`
+  set the dashboard up; the cockpit clock reads 10:10 in a shot.
 - **Depth and pixel-perfect:** everything is sized by its depth from the player's plane
   (`core/view_xf.hpp`). The ground below is drawn at full size into its own target and shrunk
   smoothly (the one exception to pixel-perfect). Planes are never stretched: each size step is

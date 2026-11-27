@@ -122,11 +122,25 @@ bool parse_auto_level(std::string_view text, AutoLevel& out) noexcept {
     return false;
 }
 
+const char* units_name(Units u) noexcept {
+    switch (u) {
+    case Units::Nation:
+        return "nation";
+    case Units::Imperial:
+        return "imperial";
+    case Units::Metric:
+        return "metric";
+    }
+    return "?";
+}
+
 std::string to_settings(const Settings& s) {
     std::string out = "# Wings of Freedom settings: written by the options menu.\n";
     out += std::string("auto_level = ") + auto_level_name(s.auto_level) + "\n";
     out += std::string("your_aim = ") + height_rule_name(s.your_aim) + "\n";
     out += std::string("enemy_aim = ") + height_rule_name(s.enemy_aim) + "\n";
+    out += "panel_size = " + std::to_string(panel_height(s.panel)) + "\n";
+    out += std::string("units = ") + units_name(s.units) + "\n";
     out += "# Keys: SDL scancode numbers, main and second (0 = none)\n";
     for (std::size_t i = 0; i < kActions; ++i) {
         out += std::string("key.") + kFileNames[i] + " = " + std::to_string(s.keys[i].main) + " " +
@@ -152,6 +166,22 @@ bool from_settings(std::string_view text, Settings& s, std::string& errors) {
             ok = parse_height_rule(value, s.your_aim);
         } else if (key == "enemy_aim") {
             ok = parse_height_rule(value, s.enemy_aim);
+        } else if (key == "panel_size") {
+            for (int i = 0; i < kPanelSizes; ++i) {
+                const auto size = static_cast<PanelSize>(i);
+                if (value == std::to_string(panel_height(size))) {
+                    s.panel = size;
+                    ok = true;
+                }
+            }
+        } else if (key == "units") {
+            for (int i = 0; i < kUnits; ++i) {
+                const auto u = static_cast<Units>(i);
+                if (value == units_name(u)) {
+                    s.units = u;
+                    ok = true;
+                }
+            }
         } else if (key.substr(0, 4) == "key.") {
             std::size_t i = 0;
             while (i < kActions && key.substr(4) != kFileNames[i]) {

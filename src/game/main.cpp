@@ -20,6 +20,8 @@
 //     --overlay       developer tool: start with the F1 overlay shown
 //     --height-rule R your gun aim: forgiving, strict or auto (else settings.txt's)
 //     --menu PAGE     developer tool: start with a menu page open (pause, options, controls)
+//     --panel N       the dashboard 96, 80 or 64 px tall (else settings.txt)
+//     --units U       arrows and banners in nation, imperial or metric units (else settings.txt)
 //     --targets       developer tool: start with the practice targets (also F2)
 //     --wave N        developer tool: the first wave is wave N
 //     --fire, --bomb  developer tool: with --shot, hold the guns or the bomb release throughout
@@ -56,6 +58,7 @@
 #include "core/body.hpp"
 #include "core/camera.hpp"
 #include "core/damage.hpp"
+#include "core/dashboard.hpp"
 #include "core/fixed_step.hpp"
 #include "core/flight.hpp"
 #include "core/ground.hpp"
@@ -73,6 +76,7 @@
 #include "core/weapons.hpp"
 #include "core/world.hpp"
 #include "game/bindings.hpp"
+#include "game/dashboard_view.hpp"
 #include "game/effects.hpp"
 #include "game/ground_view.hpp"
 #include "game/menu_view.hpp"
@@ -117,6 +121,10 @@ struct Options {
     Nation nation = Nation::US;
     const char* sprite_sheet = nullptr;
     int sheet_step = kFullSizeStep; // --sprite-scale
+    bool has_panel = false;         // --panel 96|80|64: the dashboard's height
+    PanelSize panel = PanelSize::Large;
+    bool has_units = false; // --units: for arrows and banners
+    Units units = Units::Nation;
 };
 
 // Parses "A<sep>B" into two whole numbers. False on anything else.
@@ -258,13 +266,33 @@ int parse_options(int argc, char** argv, Options& out) {
                 std::fprintf(stderr, "--nation takes us or de\n");
                 return 2;
             }
+        } else if (std::strcmp(argv[i], "--panel") == 0 && has_value) {
+            const std::string v = argv[++i];
+            out.has_panel = v == "96" || v == "80" || v == "64";
+            out.panel = v == "80"   ? PanelSize::Medium
+                        : v == "64" ? PanelSize::Small
+                                    : PanelSize::Large;
+            if (!out.has_panel) {
+                std::fprintf(stderr, "--panel takes 96, 80 or 64\n");
+                return 2;
+            }
+        } else if (std::strcmp(argv[i], "--units") == 0 && has_value) {
+            const std::string v = argv[++i];
+            out.has_units = v == "nation" || v == "imperial" || v == "metric";
+            out.units = v == "imperial" ? Units::Imperial
+                        : v == "metric" ? Units::Metric
+                                        : Units::Nation;
+            if (!out.has_units) {
+                std::fprintf(stderr, "--units takes nation, imperial or metric\n");
+                return 2;
+            }
         } else {
             std::fprintf(stderr,
                          "usage: WingsOfFreedom [--seed N] [--window WxH] [--shot FILE.png] "
                          "[--ticks N] [--heading DEG] [--height U] [--pitch DEG] [--throttle PCT] "
                          "[--at X,Y] [--overlay] [--height-rule forgiving|strict|auto] "
                          "[--targets] [--wave N] [--menu pause|options|controls] [--fire] [--bomb] "
-                         "[--nation us|de] "
+                         "[--nation us|de] [--panel 96|80|64] [--units nation|imperial|metric] "
                          "[--sprite-sheet FILE.png] "
                          "[--sprite-scale PCT] "
                          "[--version]\n");
@@ -342,13 +370,13 @@ bool refresh_screen(SDL_Renderer* r, Screen& s) {
 // The ground for a view. At full size it's drawn straight in, pixel for pixel. Zoomed out (up
 // high), it's drawn at full size into the ground target, then shrunk smoothly into the view. Below
 // half size it's halved first (each pixel of the half the average of four), so it doesn't shimmer.
-void draw_ground(SDL_Renderer* r, const Screen& s, game::GroundView& ground, const ViewXf& xf) {
-    const ViewFit& fit = s.fit;
+void draw_ground(SDL_Renderer* r, const Screen& s, game::GroundView& ground, const ViewXf& xf,
+                 int view_w, int view_h) {
     const float k = xf.scale_at(0.0f);
     if (k >= 0.999f) {
         const PixelPt origin{static_cast<int>(std::lround(xf.focus.x - xf.cx)),
                              static_cast<int>(std::lround(xf.focus.y - xf.cy))};
-        ground.draw(origin, fit.w, fit.h);
+        ground.draw(origin, view_w, view_h);
         return;
     }
     // Even sizes, so the halving averages exactly 2x2.
@@ -356,8 +384,8 @@ void draw_ground(SDL_Renderer* r, const Screen& s, game::GroundView& ground, con
         const int n = static_cast<int>(std::ceil(static_cast<float>(view) / k)) + 8;
         return std::min(limit, n + n % 2);
     };
-    const int w = span(fit.w, s.ground_w);
-    const int h = span(fit.h, s.ground_h);
+    const int w = span(view_w, s.ground_w);
+    const int h = span(view_h, s.ground_h);
     const PixelPt origin{static_cast<int>(std::floor(xf.focus.x - static_cast<float>(w) * 0.5f)),
                          static_cast<int>(std::floor(xf.focus.y - static_cast<float>(h) * 0.5f))};
     SDL_SetRenderTarget(r, s.ground);
@@ -532,51 +560,6 @@ std::optional<MenuInput> menu_input_of(SDL_Scancode key) {
     }
 }
 
-// The pitch ladder at the right edge (design/flight.md, HUD): -40 to +40 degrees, the nose marked
-// with its angle, and Assisted auto-leveling's zone shaded.
-inline constexpr float kLadderW = 62.0f;
-void draw_pitch_ladder(SDL_Renderer* r, float pitch_deg, float assist_deg, bool assisted,
-                       int view_w, int view_h) {
-    constexpr float kLimit = 40.0f;
-    constexpr float kPxPerDeg = 1.25f;
-    const float left = static_cast<float>(view_w) - kLadderW;
-    const float cy = std::floor(static_cast<float>(view_h) * 0.5f) - 20.0f;
-    const float line_x = left + 29.0f;
-    const auto y_of = [&](float deg) {
-        return std::round(cy - std::clamp(deg, -kLimit, kLimit) * kPxPerDeg);
-    };
-    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    const SDL_FRect back{left, y_of(kLimit) - 7.0f, kLadderW, 2.0f * kLimit * kPxPerDeg + 14.0f};
-    SDL_SetRenderDrawColor(r, 0, 0, 0, 120);
-    SDL_RenderFillRect(r, &back);
-    if (assisted) {
-        const SDL_FRect zone{left, y_of(assist_deg), kLadderW,
-                             y_of(-assist_deg) - y_of(assist_deg) + 1.0f};
-        SDL_SetRenderDrawColor(r, 120, 200, 255, 70);
-        SDL_RenderFillRect(r, &zone);
-    }
-    SDL_SetRenderDrawColor(r, 236, 232, 200, 255);
-    SDL_RenderLine(r, line_x, y_of(kLimit), line_x, y_of(-kLimit));
-    for (int deg = -40; deg <= 40; deg += 10) {
-        const float y = y_of(static_cast<float>(deg));
-        SDL_RenderLine(r, line_x - (deg == 0 ? 6.0f : 3.0f), y, line_x, y);
-        const std::string label = deg > 0 ? "+" + std::to_string(deg) : std::to_string(deg);
-        SDL_RenderDebugText(r, left + 25.0f - static_cast<float>(label.size()) * kGlyph, y - 4.0f,
-                            label.c_str());
-    }
-    // The nose: a pointer at the line and the angle beside it.
-    const float y = y_of(pitch_deg);
-    const SDL_FColor mark{1.0f, 0.85f, 0.35f, 1.0f};
-    const std::array<SDL_Vertex, 3> v{{{{line_x + 1.0f, y}, mark, {0.0f, 0.0f}},
-                                       {{line_x + 7.0f, y - 4.0f}, mark, {0.0f, 0.0f}},
-                                       {{line_x + 7.0f, y + 4.0f}, mark, {0.0f, 0.0f}}}};
-    SDL_RenderGeometry(r, nullptr, v.data(), 3, nullptr, 0);
-    const int shown = static_cast<int>(std::lround(pitch_deg));
-    const std::string text = (shown > 0 ? "+" : "") + std::to_string(shown);
-    SDL_SetRenderDrawColor(r, 255, 220, 120, 255);
-    SDL_RenderDebugText(r, line_x + 9.0f, y - 4.0f, text.c_str());
-}
-
 // The shorter way round from angle a to angle b, in degrees.
 float angle_between(float a, float b) {
     float d = b - a;
@@ -608,14 +591,6 @@ std::string format(const char* fmt, ...) {
     std::vsnprintf(buf, sizeof buf, fmt, args);
     va_end(args);
     return buf;
-}
-
-// A height in feet to the nearest 100, with a thousands comma: "7,000".
-std::string feet_text(float ft) {
-    const int v = static_cast<int>(std::lround(ft / 100.0f)) * 100;
-    const int a = std::abs(v);
-    const char* sign = v < 0 ? "-" : "";
-    return a >= 1000 ? format("%s%d,%03d", sign, a / 1000, a % 1000) : format("%s%d", sign, a);
 }
 
 // Lines of debug-font text on a dark backing, with the block's top-left at (x, y).
@@ -661,10 +636,10 @@ void draw_text_centred(SDL_Renderer* r, int view_w, float y, const std::vector<s
 }
 
 // Arrows at the view's edge toward the enemies off screen, each with its height compared with
-// yours (design/flight.md, Enemies). `view_h` leaves out the readout at the bottom. Labels that
-// would cover one another are moved apart.
+// yours, in the setting's units (design/flight.md, Enemies). `view_h` is the world's rows, above
+// the dashboard. Labels that would cover one another are moved apart.
 void draw_enemy_arrows(SDL_Renderer* r, const ViewXf& xf, const Body& plane,
-                       const std::vector<Body>& enemies, int view_w, int view_h) {
+                       const std::vector<Body>& enemies, UnitSystem units, int view_w, int view_h) {
     std::vector<SDL_FRect> labels;
     for (const Body& b : enemies) {
         if (b.outcome != Outcome::Flying) {
@@ -684,9 +659,7 @@ void draw_enemy_arrows(SDL_Renderer* r, const ViewXf& xf, const Body& plane,
              {{a.x - c * 3.0f + s * 5.0f, a.y - s * 3.0f - c * 5.0f}, red, {0.0f, 0.0f}}}};
         SDL_RenderGeometry(r, nullptr, v.data(), 3, nullptr, 0);
         // Its height against yours, just inside the arrow.
-        const float diff = (b.z - plane.z) * kFeetPerU;
-        const std::string text =
-            std::abs(diff) < 50.0f ? "LEVEL" : (diff > 0.0f ? "+" : "") + feet_text(diff);
+        const std::string text = height_diff_text(b.z - plane.z, units);
         const float w = static_cast<float>(text.size()) * kGlyph + 4.0f;
         const float tx =
             std::clamp(a.x - c * 24.0f - w * 0.5f, 0.0f, static_cast<float>(view_w) - w);
@@ -1049,100 +1022,73 @@ void emit_trails(const World& w, const std::vector<Body>& before, game::Effects&
     }
 }
 
-// Rounds left per gun type, for the readout: ".30 500  .50 200".
-std::string guns_text(const Body& b, const PlaneRules& plane) {
-    std::string out;
-    for (int c = 0; c < kCalibres; ++c) {
+// The computer's time of day, for the cockpit clock.
+struct ClockTime {
+    int hour = 0;
+    int minute = 0;
+};
+ClockTime local_time() {
+    SDL_Time now = 0;
+    SDL_DateTime date{};
+    if (!SDL_GetCurrentTime(&now) || !SDL_TimeToDateTime(now, &date, true)) {
+        return {};
+    }
+    return {date.hour, date.minute};
+}
+
+// The dashboard's readings for the player's plane (`plane` is it as drawn, between `before` and
+// now). The lamps and message the game adds itself.
+PanelState panel_state(const World& w, const Body& before, const Body& plane, const Rules& rules,
+                       Nation nation) {
+    PanelState s;
+    const Body& now = w.bodies.front();
+    const PlaneRules& pr = plane_of(rules, now);
+    s.nation = nation;
+    s.speed_mph = mph_of(plane.speed_u_s, rules.scale);
+    s.height_u = plane.z;
+    s.heading_deg = plane.heading_deg;
+    s.turn_deg_s = angle_between(before.heading_deg, now.heading_deg) * kTicksPerSecond;
+    s.vz_u_s = (now.z - before.z) * kTicksPerSecond;
+    s.pitch_deg = plane.pitch_deg;
+    s.assist_deg = rules.flight.assist_zone_deg;
+    s.throttle = plane.throttle;
+    s.engines = std::clamp(now.damage.engines, 1, 2);
+    for (int e = 0; e < s.engines; ++e) {
+        const auto i = static_cast<std::size_t>(e);
+        const float hp = e == 0 ? now.damage.engine : now.damage.engine2;
+        s.engine_share[i] =
+            pr.damage.engine_hp > 0.0f ? std::clamp(hp / pr.damage.engine_hp, 0.0f, 1.0f) : 0.0f;
+        s.engine_running[i] = now.engine_on && s.engine_share[i] > 0.0f;
+    }
+    s.fuel = now.fuel;
+    s.run_s = static_cast<float>(w.tick) / static_cast<float>(kTicksPerSecond);
+    // Rounds per gun calibre the pilot fires.
+    for (int c = 0; c < kCalibres && s.ammo_count < static_cast<int>(s.ammo.size()); ++c) {
         const auto cal = static_cast<Calibre>(c);
         bool carried = false;
-        for (int g = 0; g < plane.gun_count; ++g) {
-            const GunSpec& s = plane.guns[static_cast<std::size_t>(g)];
-            carried = carried || (s.mount == Mount::Fixed && s.calibre == cal);
+        for (int g = 0; g < pr.gun_count; ++g) {
+            const GunSpec& gun = pr.guns[static_cast<std::size_t>(g)];
+            carried = carried || (gun.mount == Mount::Fixed && gun.calibre == cal);
         }
         if (carried) {
-            out += format("%s%s %d", out.empty() ? "" : "  ", calibre_name(cal),
-                          rounds_left(b, plane, cal));
+            // German panels name the rifle calibre in millimetres.
+            const bool mm = cal == Calibre::Rifle && nation_units(nation) == UnitSystem::Metric;
+            s.ammo[static_cast<std::size_t>(s.ammo_count++)] = {mm ? "7.9" : calibre_name(cal),
+                                                                rounds_left(now, pr, cal)};
         }
     }
-    return out.empty() ? std::string("NO GUNS") : out;
-}
-
-// The colour a part's stage is shown in.
-SDL_Color stage_colour(Stage s) {
-    switch (s) {
-    case Stage::Ok:
-        return {120, 220, 120, 255};
-    case Stage::Warning:
-        return {240, 220, 90, 255};
-    case Stage::Danger:
-        return {255, 160, 60, 255};
-    case Stage::Critical:
-        return {255, 80, 60, 255};
-    case Stage::Destroyed:
-        return {150, 150, 150, 255};
+    s.bombs = now.loadout.bombs;
+    s.bombs_full = pr.bombs;
+    s.stall = now.stalled;
+    s.low_fuel = now.fuel < 0.15f;
+    s.edge = now.edge_warning || now.edge_countdown_s >= 0.0f;
+    s.going_down = now.damage.going_down;
+    for (int p = 0; p < kParts; ++p) {
+        s.stages[static_cast<std::size_t>(p)] = part_stage(now, static_cast<Part>(p), pr.damage);
     }
-    return {255, 255, 255, 255};
-}
-
-// A line of text in coloured pieces.
-struct Piece {
-    std::string text;
-    SDL_Color colour;
-};
-using RichLine = std::vector<Piece>;
-
-// Lines of coloured pieces on a dark backing, with the block's bottom-left at (x, bottom).
-// Returns the block's top.
-float draw_rich_block(SDL_Renderer* r, float x, float bottom, const std::vector<RichLine>& lines) {
-    std::size_t widest = 0;
-    for (const RichLine& l : lines) {
-        std::size_t n = 0;
-        for (const Piece& p : l) {
-            n += p.text.size();
-        }
-        widest = std::max(widest, n);
-    }
-    const float h = static_cast<float>(lines.size()) * 10.0f + 2.0f;
-    const SDL_FRect back{x, bottom - h, static_cast<float>(widest) * kGlyph + 4.0f, h};
-    SDL_SetRenderDrawColor(r, 0, 0, 0, 160);
-    SDL_RenderFillRect(r, &back);
-    float y = bottom - h + 2.0f;
-    for (const RichLine& l : lines) {
-        float cx = x + 2.0f;
-        for (const Piece& p : l) {
-            SDL_SetRenderDrawColor(r, p.colour.r, p.colour.g, p.colour.b, p.colour.a);
-            SDL_RenderDebugText(r, cx, y, p.text.c_str());
-            cx += static_cast<float>(p.text.size()) * kGlyph;
-        }
-        y += 10.0f;
-    }
-    return bottom - h;
-}
-
-// The damage line: each part's stage in its colour.
-RichLine damage_line(const Body& b, const DamageParams& d) {
-    const SDL_Color label{236, 232, 200, 255};
-    RichLine line;
-    const auto add = [&](const char* name, Part p) {
-        const Stage s = part_stage(b, p, d);
-        line.push_back(Piece{name, label});
-        line.push_back(Piece{stage_name(s), stage_colour(s)});
-        line.push_back(Piece{"  ", label});
-    };
-    if (b.damage.engines > 1) {
-        add("ENG L ", Part::Engine);
-        add("R ", Part::Engine2);
-    } else {
-        add("ENG ", Part::Engine);
-    }
-    add("LW ", Part::LeftWing);
-    add("RW ", Part::RightWing);
-    add("FUS ", Part::Fuselage);
-    add("TAIL ", Part::Tail);
-    line.push_back(Piece{"PILOT ", label});
-    line.push_back(Piece{std::to_string(b.damage.wounds) + "/" + std::to_string(d.pilot_wounds),
-                         stage_colour(part_stage(b, Part::Cockpit, d))});
-    return line;
+    s.model = plane_type(now.type).model;
+    s.tick = static_cast<std::uint32_t>(w.tick);
+    return s;
 }
 
 } // namespace
@@ -1254,6 +1200,17 @@ int main(int argc, char** argv) {
             open_menu(menu);
             menu.page = opts.menu;
         }
+        if (opts.has_panel) {
+            settings.panel = opts.panel;
+        }
+        if (opts.has_units) {
+            settings.units = opts.units;
+        }
+        Screen screen;
+        // The rows of the view the world has, above the dashboard.
+        const auto world_height = [&]() {
+            return std::max(60, screen.fit.h - panel_height(settings.panel));
+        };
         int closed_by = 0; // the key that closed the menu: not a flight key until let go
         bool targets_on = opts.targets;
         const Nation enemy_nation = nation == Nation::US ? Nation::Germany : Nation::US;
@@ -1292,18 +1249,18 @@ int main(int argc, char** argv) {
                 world.targets = practice_targets(tuning.rules.targets);
             }
             previous = world.bodies;
-            camera.snap_to(world.bodies[0], tuning.camera);
+            camera.snap_to(world.bodies[0], tuning.camera, static_cast<float>(world_height()));
             effects.clear();
             own_blast_s = 0.0f;
         };
+        if (exit_code == 0 && !refresh_screen(renderer, screen)) {
+            exit_code = 1;
+        }
         new_run();
 
         bool switch_pressed = false;
         bool overlay = opts.overlay;
-        Screen screen;
-        if (exit_code == 0 && !refresh_screen(renderer, screen)) {
-            exit_code = 1;
-        }
+        game::DashboardView dashboard(renderer);
 
         FixedStep step(kTickNs, kMaxTicksPerFrame);
         Uint64 last = SDL_GetTicksNS();
@@ -1442,7 +1399,7 @@ int main(int argc, char** argv) {
                               : game::read_command(settings, keys.data(), switch_pressed)};
                 switch_pressed = false;
                 wof::step(world, commands, tuning.rules);
-                camera.follow(world.bodies[0], tuning.camera);
+                camera.follow(world.bodies[0], tuning.camera, static_cast<float>(world_height()));
                 effects.add(world.events, tuning.rules.weapon.blast_radius_u);
                 effects.tick(kTickSeconds, tuning.look.scorch_fade_s);
                 own_blast_s = std::max(0.0f, own_blast_s - kTickSeconds);
@@ -1457,8 +1414,10 @@ int main(int argc, char** argv) {
                 for (const Event& ev : world.events) {
                     if (ev.kind == EventKind::WaveArrived) {
                         const int count = static_cast<int>(ev.damage);
-                        banner = format("WAVE %d: %d ENEMY FIGHTER%s AT %s FT", ev.who, count,
-                                        count == 1 ? "" : "S", feet_text(ev.z * kFeetPerU).c_str());
+                        banner =
+                            format("WAVE %d: %d ENEMY FIGHTER%s AT %s", ev.who, count,
+                                   count == 1 ? "" : "S",
+                                   height_text(ev.z, units_of(settings.units, nation)).c_str());
                         banner_s = 4.0f;
                     } else if (ev.kind == EventKind::EnemyDown) {
                         banner = "ENEMY DOWN";
@@ -1481,15 +1440,17 @@ int main(int argc, char** argv) {
 
             // The world into the view target: 1:1 in art pixels at your height, the ground
             // shrinking as you climb and everything else by its depth (design/planes.md).
+            // The world fills the view above the dashboard.
             const ViewFit& fit = screen.fit;
+            const int world_h = world_height();
             const Body plane = between(previous[0], world.bodies[0], alpha);
             const ViewXf xf = make_view(camera.focus(alpha), plane.z, tuning.rules.flight.ceiling_u,
-                                        tuning.look.zoom_at_ceiling, fit.w, fit.h);
+                                        tuning.look.zoom_at_ceiling, fit.w, world_h);
             sprites.pump();
             SDL_SetRenderTarget(renderer, screen.target);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
             SDL_RenderClear(renderer);
-            draw_ground(renderer, screen, ground, xf);
+            draw_ground(renderer, screen, ground, xf, fit.w, world_h);
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
             // The enemies (bodies 1 on), partway between ticks like the player.
             std::vector<Body> enemies;
@@ -1502,67 +1463,42 @@ int main(int argc, char** argv) {
                 draw_pilot_labels(renderer, xf, world, enemies);
             }
 
-            // A temporary readout until PR 7's HUD: throttle, speed, height, fuel, warnings.
-            std::string flags_line;
-            if (plane.stalled) {
-                flags_line += "STALL  ";
-            }
-            if (!plane.engine_on) {
-                flags_line += "ENGINE OFF  ";
-            }
-            if (plane.damage.going_down) {
-                flags_line += "GOING DOWN  ";
-            }
-            if (own_blast_s > 0.0f) {
-                flags_line += format("OWN BLAST -%.0f", static_cast<double>(own_blast_damage));
-            }
+            draw_enemy_arrows(renderer, xf, plane, enemies, units_of(settings.units, nation), fit.w,
+                              world_h);
+
+            // The dashboard: every gauge and warning (design/dashboard.md).
+            PanelState gauges = panel_state(world, previous[0], plane, tuning.rules, nation);
+            gauges.assisted = settings.auto_level == AutoLevel::Assisted;
+            gauges.own_blast = own_blast_s > 0.0f;
+            // Screenshots always read ten past ten, so they come out the same.
+            const ClockTime clock = shot_mode ? ClockTime{10, 10} : local_time();
+            gauges.clock_h = clock.hour;
+            gauges.clock_m = clock.minute;
             int hits = 0;
             for (const Target& t : world.targets) {
                 hits += t.hits;
             }
-            const SDL_Color text{236, 232, 200, 255};
-            std::vector<RichLine> readout = {
-                {Piece{format("THR %3.0f%%  %3.0f MPH  %5.0f FT  FUEL %3.0f%%",
-                              static_cast<double>(plane.throttle * 100.0f),
-                              static_cast<double>(mph_of(plane.speed_u_s, tuning.rules.scale)),
-                              static_cast<double>(plane.z * kFeetPerU),
-                              static_cast<double>(plane.fuel * 100.0f)),
-                       text}},
-                {Piece{format("%s  BOMBS %d  [%s]",
-                              guns_text(plane, plane_of(tuning.rules, plane)).c_str(),
-                              plane.loadout.bombs, heavy_name(plane.loadout.heavy)),
-                       text}},
-                {Piece{format("WAVE %d  KILLS %d  AIM %s  LEVEL %s", world.waves.current,
-                              world.waves.kills, height_rule_name(settings.your_aim),
-                              auto_level_name(settings.auto_level)) +
-                           (world.targets.empty() ? std::string{} : format("  HITS %d", hits)),
-                       text}},
-                damage_line(plane, plane_of(tuning.rules, plane).damage)};
-            if (!flags_line.empty()) {
-                readout.push_back({Piece{flags_line, SDL_Color{255, 150, 110, 255}}});
-            }
-            const float readout_top =
-                draw_rich_block(renderer, 2.0f, static_cast<float>(fit.h) - 2.0f, readout);
-            // The arrows keep clear of the readout below and the pitch ladder at the right.
-            draw_enemy_arrows(renderer, xf, plane, enemies, fit.w - static_cast<int>(kLadderW),
-                              static_cast<int>(readout_top));
-            draw_pitch_ladder(renderer, plane.pitch_deg, tuning.rules.flight.assist_zone_deg,
-                              settings.auto_level == AutoLevel::Assisted, fit.w, fit.h);
-            if (banner_s > 0.0f) {
-                draw_text_centred(renderer, fit.w, 56.0f, {banner}, SDL_Color{255, 200, 120, 255});
-            }
-            if (plane.edge_countdown_s >= 0.0f && plane.outcome == Outcome::Flying) {
-                draw_text_centred(renderer, fit.w, 40.0f,
-                                  {format("RETURN TO THE BATTLE AREA  %d",
-                                          static_cast<int>(std::ceil(plane.edge_countdown_s)))},
-                                  SDL_Color{255, 120, 90, 255});
-            } else if (plane.edge_warning) {
-                draw_text_centred(renderer, fit.w, 40.0f, {"EDGE OF THE BATTLE AREA"},
-                                  SDL_Color{255, 220, 120, 255});
-            }
+            MessageInput said;
+            said.edge_countdown_s =
+                plane.outcome == Outcome::Flying ? plane.edge_countdown_s : -1.0f;
+            said.own_blast_s = own_blast_s;
+            said.own_blast_damage = own_blast_damage;
+            said.going_down = plane.damage.going_down && plane.outcome == Outcome::Flying;
+            said.edge_warning = plane.edge_warning;
+            said.notice = banner;
+            said.notice_s = banner_s;
+            said.status = format("WAVE %d   KILLS %d   AIM %s   LEVEL %s", world.waves.current,
+                                 world.waves.kills, height_rule_name(settings.your_aim),
+                                 auto_level_name(settings.auto_level)) +
+                          (world.targets.empty() ? std::string{} : format("   HITS %d", hits));
+            const Message message = panel_message(said);
+            gauges.message = message.text;
+            gauges.tone = message.tone;
+            dashboard.draw(gauges, settings.panel, fit.w, fit.h);
+
             if (plane.outcome != Outcome::Flying) {
                 const long secs = static_cast<long>(world.tick / kTicksPerSecond);
-                draw_text_centred(renderer, fit.w, static_cast<float>(fit.h) * 0.5f - 20.0f,
+                draw_text_centred(renderer, fit.w, static_cast<float>(world_h) * 0.5f - 20.0f,
                                   {banner_of(plane.outcome),
                                    format("time flown %ld:%02ld", secs / 60, secs % 60),
                                    format("wave %d, enemies shot down %d", world.waves.current,
