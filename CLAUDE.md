@@ -112,5 +112,9 @@ Logs go to `out/`.
   `tests/test_ground.cpp` pins it on both. If you change the generator on purpose, update the hash
   in the same pull request and say why.
 - **Smoke run:** `WingsOfFreedom --shot out/shot.png` flies 120 ticks with no input, saves the view
-  as a PNG and exits. `--window`, `--heading`, `--height`, `--pitch`, `--throttle`, `--at` and
-  `--overlay` set up the shot. `--sprite-sheet out/sheet.png` saves every baked plane pose.
+  as a PNG and exits. `--window`, `--nation us|de`, `--heading`, `--height`, `--pitch`,
+  `--throttle`, `--at` and `--overlay` set up the shot. `--sprite-sheet out/sheet.png` saves every
+  baked pose of the `--nation`'s fighter. Shots and sheets skip the nation screen.
+- **The ground zoom is the one exception to pixel-perfect:** above the deck the ground is drawn at
+  full size into its own target and shrunk smoothly into the view (design/planes.md). Plane
+  sprites always stay at 1x.

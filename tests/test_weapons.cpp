@@ -150,8 +150,9 @@ TEST_CASE("Rounds fly along the nose at their calibre's speed plus the plane's, 
         const float speed =
             std::sqrt(round.vx * round.vx + round.vy * round.vy + round.vz * round.vz);
         CHECK(speed == doctest::Approx(cal.speed_u_s + w.bodies[0].speed_u_s).epsilon(0.01));
-        CHECK(round.vz / speed ==
-              doctest::Approx(std::sin(w.bodies[0].pitch_deg * 3.14159265f / 180.0f)).epsilon(0.01));
+        CHECK(
+            round.vz / speed ==
+            doctest::Approx(std::sin(w.bodies[0].pitch_deg * 3.14159265f / 180.0f)).epsilon(0.01));
     }
     run(w, fire(false), 44, r);
     CHECK(w.rounds.size() == 2u);

@@ -58,7 +58,8 @@ struct PixelPt {
 // steadily to `at_ceiling` at the ceiling, so up high you see more and plane and shadow stay in
 // view. Everything in the world is drawn at this scale except the planes' sprites.
 [[nodiscard]] constexpr float ground_zoom(float z, float ceiling, float at_ceiling) noexcept {
-    const float t = ceiling > 0.0f ? (z <= 0.0f ? 0.0f : (z >= ceiling ? 1.0f : z / ceiling)) : 0.0f;
+    const float t =
+        ceiling > 0.0f ? (z <= 0.0f ? 0.0f : (z >= ceiling ? 1.0f : z / ceiling)) : 0.0f;
     return 1.0f - (1.0f - at_ceiling) * t;
 }
 

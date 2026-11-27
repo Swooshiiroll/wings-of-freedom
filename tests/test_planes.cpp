@@ -70,7 +70,8 @@ TEST_CASE("Each plane flies by its real stats, scaled: top speed, climb, stall, 
     CHECK(rules.planes[0].flight.max_level_u_s == doctest::Approx(150.0f).epsilon(0.01));
     CHECK(rules.planes[0].flight.turn_rate_deg_s == doctest::Approx(100.0f).epsilon(0.01));
     CHECK(rules.planes[1].flight.turn_rate_deg_s == doctest::Approx(123.0f).epsilon(0.01));
-    CHECK(mph_of(rules.planes[0].flight.max_level_u_s, s) == doctest::Approx(234.0f).epsilon(0.001));
+    CHECK(mph_of(rules.planes[0].flight.max_level_u_s, s) ==
+          doctest::Approx(234.0f).epsilon(0.001));
 }
 
 TEST_CASE("Each plane carries its real guns and bombs, and its own HP") {
@@ -118,7 +119,8 @@ TEST_CASE("A twin's engine hits go to the engine on the hit's side, or either") 
     const auto at = [](const std::array<int, kParts>& c, Part p) {
         return static_cast<float>(c[static_cast<std::size_t>(p)]) / 200.0f; // percent
     };
-    CHECK(at(ahead, Part::Engine) + at(ahead, Part::Engine2) == doctest::Approx(45.0f).epsilon(0.04));
+    CHECK(at(ahead, Part::Engine) + at(ahead, Part::Engine2) ==
+          doctest::Approx(45.0f).epsilon(0.04));
     CHECK(std::abs(at(ahead, Part::Engine) - at(ahead, Part::Engine2)) < 1.5f);
     CHECK(left[static_cast<std::size_t>(Part::Engine2)] == 0);
     CHECK(at(left, Part::Engine) == doctest::Approx(10.0f).epsilon(0.15));

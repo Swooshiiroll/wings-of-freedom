@@ -44,8 +44,8 @@ void apply_edges(Body& b, const EdgeParams& e, float dt) noexcept {
 }
 
 const PlaneRules& plane_of(const Rules& rules, const Body& b) noexcept {
-    static const PlaneRules kFallback = derive_plane(plane_type(PlaneId::P26A), FlightParams{},
-                                                     DamageParams{}, PlaneScale{});
+    static const PlaneRules kFallback =
+        derive_plane(plane_type(PlaneId::P26A), FlightParams{}, DamageParams{}, PlaneScale{});
     if (rules.planes.empty()) {
         return kFallback;
     }

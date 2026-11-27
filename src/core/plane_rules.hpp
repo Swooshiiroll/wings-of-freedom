@@ -45,8 +45,7 @@ struct PlaneRules {
                                       const DamageParams& damage, const PlaneScale& s);
 
 // The whole roster's rules, by PlaneId.
-[[nodiscard]] std::vector<PlaneRules> derive_roster(const FlightParams& base,
-                                                    const DamageParams& damage,
-                                                    const PlaneScale& s);
+[[nodiscard]] std::vector<PlaneRules>
+derive_roster(const FlightParams& base, const DamageParams& damage, const PlaneScale& s);
 
 } // namespace wof

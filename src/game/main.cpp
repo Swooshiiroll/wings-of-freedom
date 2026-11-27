@@ -218,12 +218,13 @@ int parse_options(int argc, char** argv, Options& out) {
                 return 2;
             }
         } else {
-            std::fprintf(stderr,
-                         "usage: WingsOfFreedom [--seed N] [--window WxH] [--shot FILE.png] "
-                         "[--ticks N] [--heading DEG] [--height U] [--pitch DEG] [--throttle PCT] "
-                         "[--at X,Y] [--overlay] [--height-rule forgiving|strict|auto] "
-                         "[--no-targets] [--fire] [--bomb] [--nation us|de] [--sprite-sheet FILE.png] "
-                         "[--version]\n");
+            std::fprintf(
+                stderr,
+                "usage: WingsOfFreedom [--seed N] [--window WxH] [--shot FILE.png] "
+                "[--ticks N] [--heading DEG] [--height U] [--pitch DEG] [--throttle PCT] "
+                "[--at X,Y] [--overlay] [--height-rule forgiving|strict|auto] "
+                "[--no-targets] [--fire] [--bomb] [--nation us|de] [--sprite-sheet FILE.png] "
+                "[--version]\n");
             return 2;
         }
     }
@@ -297,8 +298,10 @@ void draw_ground(SDL_Renderer* r, const Screen& s, game::GroundView& ground,
         ground.draw(origin, fit.w, fit.h);
         return;
     }
-    const int w = std::min(s.ground_w, static_cast<int>(std::ceil(static_cast<float>(fit.w) / xf.zoom)) + 2);
-    const int h = std::min(s.ground_h, static_cast<int>(std::ceil(static_cast<float>(fit.h) / xf.zoom)) + 2);
+    const int w =
+        std::min(s.ground_w, static_cast<int>(std::ceil(static_cast<float>(fit.w) / xf.zoom)) + 2);
+    const int h =
+        std::min(s.ground_h, static_cast<int>(std::ceil(static_cast<float>(fit.h) / xf.zoom)) + 2);
     const PixelPt origin{static_cast<int>(std::floor(xf.focus.x - static_cast<float>(w) * 0.5f)),
                          static_cast<int>(std::floor(xf.focus.y - static_cast<float>(h) * 0.5f))};
     SDL_SetRenderTarget(r, s.ground);
@@ -366,9 +369,8 @@ void open_tuning(Tuning& tuning, TuningFile& tf) {
         std::size_t size = 0;
         void* data = SDL_LoadFile(tf.path.c_str(), &size);
         const int format =
-            data != nullptr
-                ? tuning_format(std::string_view(static_cast<const char*>(data), size))
-                : kTuningFormat;
+            data != nullptr ? tuning_format(std::string_view(static_cast<const char*>(data), size))
+                            : kTuningFormat;
         SDL_free(data);
         if (format < kTuningFormat) {
             const std::string old = tf.path.substr(0, tf.path.size() - 4) + "-old.txt";
@@ -625,13 +627,12 @@ std::optional<Nation> choose_nation(SDL_Renderer* r) {
                           SDL_Color{255, 236, 170, 255});
         const PlaneType& us = plane_type(fighter_of(Nation::US));
         const PlaneType& de = plane_type(fighter_of(Nation::Germany));
-        draw_text_centred(r, fit.w, static_cast<float>(fit.h) * 0.5f,
-                          {format("1  UNITED STATES  %.*s", static_cast<int>(us.name.size()),
-                                  us.name.data()),
-                           format("2  GERMANY        %.*s", static_cast<int>(de.name.size()),
-                                  de.name.data()),
-                           "", "The other nation is the enemy."},
-                          SDL_Color{236, 232, 200, 255});
+        draw_text_centred(
+            r, fit.w, static_cast<float>(fit.h) * 0.5f,
+            {format("1  UNITED STATES  %.*s", static_cast<int>(us.name.size()), us.name.data()),
+             format("2  GERMANY        %.*s", static_cast<int>(de.name.size()), de.name.data()), "",
+             "The other nation is the enemy."},
+            SDL_Color{236, 232, 200, 255});
         SDL_SetRenderScale(r, 1.0f, 1.0f);
         SDL_RenderPresent(r);
     }
@@ -1014,8 +1015,7 @@ int main(int argc, char** argv) {
                         constexpr std::array<HitFrom, 4> kSides = {HitFrom::Ahead, HitFrom::Behind,
                                                                    HitFrom::Left, HitFrom::Right};
                         const HitFrom from = kSides[world.rng.next_below(4)];
-                        debug_hits(world, 0, from,
-                                   tuning.rules.weapon.calibres[0].damage, 5,
+                        debug_hits(world, 0, from, tuning.rules.weapon.calibres[0].damage, 5,
                                    tuning.rules);
                         effects.add(world.events, tuning.rules.weapon.blast_radius_u);
                     } else if (!run_over && e.key.key == SDLK_F6) {
@@ -1081,12 +1081,12 @@ int main(int argc, char** argv) {
                 fps_since = now;
             }
 
-            // The world into the view target: 1:1 in art pixels on the deck, the ground zooming out as
-            // the player climbs (design/planes.md).
+            // The world into the view target: 1:1 in art pixels on the deck, the ground zooming out
+            // as the player climbs (design/planes.md).
             const ViewFit& fit = screen.fit;
             const Body plane = between(previous[0], world.bodies[0], alpha);
-            const float zoom = ground_zoom(plane.z, tuning.rules.flight.ceiling_u,
-                                           tuning.look.zoom_at_ceiling);
+            const float zoom =
+                ground_zoom(plane.z, tuning.rules.flight.ceiling_u, tuning.look.zoom_at_ceiling);
             const game::ViewXf xf = game::make_view(camera.focus(alpha), zoom, fit.w, fit.h);
             SDL_SetRenderTarget(renderer, screen.target);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -1159,9 +1159,9 @@ int main(int argc, char** argv) {
                     {format("Wings of Freedom %s  %d fps  %s", WOF_VERSION, fps, backend),
                      format("window %dx%d  scale %dx  view %dx%d", screen.out_w, screen.out_h,
                             fit.scale, fit.w, fit.h),
-                     format("camera %.0f,%.0f  zoom %.2f  lead %.0f,%.0f u", static_cast<double>(xf.focus.x),
-                            static_cast<double>(xf.focus.y), static_cast<double>(xf.zoom),
-                            static_cast<double>(camera.lead().x),
+                     format("camera %.0f,%.0f  zoom %.2f  lead %.0f,%.0f u",
+                            static_cast<double>(xf.focus.x), static_cast<double>(xf.focus.y),
+                            static_cast<double>(xf.zoom), static_cast<double>(camera.lead().x),
                             static_cast<double>(camera.lead().y)),
                      format("%.*s  %.0f,%.0f  %.0f u  %.1f u/s",
                             static_cast<int>(plane_type(plane.type).name.size()),

@@ -129,8 +129,7 @@ constexpr std::array<FloatKey, 57> kFloats = {{
     {nullptr, "targets.ground_radius_u",
      [](Tuning& t) -> float& { return t.rules.targets.ground_radius_u; }, 1.0f, 200.0f},
     {"Looks: how long a bomb's scorch mark takes to fade (s); the ground's zoom at the ceiling",
-     "look.scorch_fade_s", [](Tuning& t) -> float& { return t.look.scorch_fade_s; }, 0.1f,
-     3600.0f},
+     "look.scorch_fade_s", [](Tuning& t) -> float& { return t.look.scorch_fade_s; }, 0.1f, 3600.0f},
     {nullptr, "look.zoom_at_ceiling", [](Tuning& t) -> float& { return t.look.zoom_at_ceiling; },
      0.1f, 1.0f},
     {"Damage (each plane's HP is its own, design/planes.md): the pilot's wound size, what's left "

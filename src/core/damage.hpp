@@ -23,7 +23,7 @@ enum class Stage : std::uint8_t { Ok, Warning, Danger, Critical, Destroyed };
 struct DamageParams {
     int engines = 1;         // 2 for twin-engined planes (design/planes.md)
     float engine_hp = 40.0f; // each
-    float wing_hp = 40.0f; // each
+    float wing_hp = 40.0f;   // each
     float fuselage_hp = 60.0f;
     float tail_hp = 20.0f; // takes the hits once the fuselage is gone
     int pilot_wounds = 3;  // the last one kills

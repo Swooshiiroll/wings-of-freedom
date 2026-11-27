@@ -12,9 +12,9 @@ namespace wof::game {
 // focus, scaled by the ground zoom, about the view's centre. Everything in the world is drawn
 // through this except the planes' sprites, which stay full size at the point it gives.
 struct ViewXf {
-    ScreenPt focus;     // the iso pixel at the view's centre
-    float zoom = 1.0f;  // 1 on the deck, smaller up high
-    float cx = 0.0f;    // the view's centre, in view pixels
+    ScreenPt focus;    // the iso pixel at the view's centre
+    float zoom = 1.0f; // 1 on the deck, smaller up high
+    float cx = 0.0f;   // the view's centre, in view pixels
     float cy = 0.0f;
 
     // A world point (x east, y north, z up, in u) in view pixels.

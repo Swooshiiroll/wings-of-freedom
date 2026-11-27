@@ -76,13 +76,13 @@ bool find_plane(std::string_view id, PlaneId& out) noexcept;
 
 // The scale from real stats to game values (tuning.txt `scale.*`), all (start) values.
 struct PlaneScale {
-    float u_per_mph = 0.641f;         // the P-26A's real 234 mph is today's 150 u/s
-    float turn_factor = 4.44f;        // the P-26A's (est.) 16 s full circle takes 3.6 s
-    float u_per_fpm = 0.00636f;       // the P-26A's 2,360 ft/min is 15 u/s
-    float dive_factor = 1.6f;         // dive limit, as a multiple of top speed
-    float tank_s_per_hour = 133.33f;  // the P-26A's 1.8 h is today's 240 s tank
-    float best_turn_share = 0.73f;    // best turn speed, as a share of top speed
-    float stall_margin_u_s = 8.0f;    // a stall ends this far above the stall speed
+    float u_per_mph = 0.641f;        // the P-26A's real 234 mph is today's 150 u/s
+    float turn_factor = 4.44f;       // the P-26A's (est.) 16 s full circle takes 3.6 s
+    float u_per_fpm = 0.00636f;      // the P-26A's 2,360 ft/min is 15 u/s
+    float dive_factor = 1.6f;        // dive limit, as a multiple of top speed
+    float tank_s_per_hour = 133.33f; // the P-26A's 1.8 h is today's 240 s tank
+    float best_turn_share = 0.73f;   // best turn speed, as a share of top speed
+    float stall_margin_u_s = 8.0f;   // a stall ends this far above the stall speed
 
     friend constexpr bool operator==(const PlaneScale&, const PlaneScale&) = default;
 };

@@ -114,8 +114,8 @@ Block strut(float x, float y, float z0, float z1, Part part) {
 
 // A straight biplane wing from the root at x = root to the tip at x = tip, its chord from y_back
 // to y_front, its underside at z at the root, `thick` deep, the tip raised by `dihedral`.
-Block slab(float root, float tip, float y_back, float y_front, float z, float thick,
-           float dihedral, Part part) {
+Block slab(float root, float tip, float y_back, float y_front, float z, float thick, float dihedral,
+           Part part) {
     Block k;
     k.corners = {{{root, y_back, z},
                   {tip, y_back, z + dihedral},
@@ -135,12 +135,14 @@ Block slab(float root, float tip, float y_back, float y_front, float z, float th
 std::vector<Block> he51_model() {
     std::vector<Block> m;
     // The inline engine's long, pointed nose, a radiator underneath, and the spinner.
-    m.push_back(taper_y(5.5f, 1.2f, -1.0f, 1.3f, 10.0f, 0.6f, -0.35f, 0.7f, kGreyMetal, Part::Engine));
+    m.push_back(
+        taper_y(5.5f, 1.2f, -1.0f, 1.3f, 10.0f, 0.6f, -0.35f, 0.7f, kGreyMetal, Part::Engine));
     m.push_back(box(-0.7f, 0.7f, 5.0f, 7.0f, -2.0f, -1.0f, kDark, Part::Engine));
     m.push_back(box(-0.35f, 0.35f, 10.0f, 11.0f, -0.15f, 0.55f, kSpinnerColour, Part::Engine));
     // Fuselage and tail cone.
     m.push_back(box(-1.1f, 1.1f, -2.0f, 5.5f, -1.0f, 1.3f, kRlmGrey, Part::Fuselage));
-    m.push_back(taper_y(-2.0f, 1.1f, -1.0f, 1.3f, -11.0f, 0.35f, -0.1f, 0.6f, kRlmGrey, Part::Tail));
+    m.push_back(
+        taper_y(-2.0f, 1.1f, -1.0f, 1.3f, -11.0f, 0.35f, -0.1f, 0.6f, kRlmGrey, Part::Tail));
     // Biplane wings: the lower ones from the fuselage, the upper ones above on struts, staggered
     // forward. Each side's upper and lower wing (and its struts) are one part.
     // The slabs are 0.8 u thick (thinner ones break up edge-on), and the lower wings have a

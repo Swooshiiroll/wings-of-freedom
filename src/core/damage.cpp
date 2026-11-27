@@ -261,8 +261,9 @@ Handling handling_of(const Body& b, const DamageParams& d) noexcept {
     Handling h;
     const Damage& m = b.damage;
     const auto engine_share = [&](float hp) {
-        return hp <= 0.0f ? 0.0f
-                          : d.engine_min_share + (1.0f - d.engine_min_share) * share(hp, d.engine_hp);
+        return hp <= 0.0f
+                   ? 0.0f
+                   : d.engine_min_share + (1.0f - d.engine_min_share) * share(hp, d.engine_hp);
     };
     if (m.engines < 2) {
         h.top_speed_share = engine_share(m.engine);

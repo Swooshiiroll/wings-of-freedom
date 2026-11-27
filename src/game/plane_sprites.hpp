@@ -14,9 +14,9 @@
 namespace wof::game {
 
 // The planes' sprites (design/flight.md, Look): each plane's model (core/fighter.hpp) baked by
-// core/raster.hpp, the first time it's needed, into two atlases, the plane and its shadow, at 32 headings x 9 pitches
-// (every 10° from -40 to 40) x 3 banks (left, level, right). 864 poses in 48x48 cells: each atlas
-// is 32 cells across (one per heading) and 27 down (pitch, then bank).
+// core/raster.hpp, the first time it's needed, into two atlases, the plane and its shadow, at 32
+// headings x 9 pitches (every 10° from -40 to 40) x 3 banks (left, level, right). 864 poses in
+// 48x48 cells: each atlas is 32 cells across (one per heading) and 27 down (pitch, then bank).
 class PlaneSprites {
   public:
     static constexpr int kCell = 48;
@@ -35,8 +35,8 @@ class PlaneSprites {
     bool bake(ModelId id);
 
     // Draws a body's plane (its type's model) at its height, full size, or its shadow on the
-    // ground below it, shrunk with the ground zoom. Anchored to whole art pixels. `tint` multiplies the
-    // colours (the practice drones are orange-red); `flash` makes it glow (a hit).
+    // ground below it, shrunk with the ground zoom. Anchored to whole art pixels. `tint` multiplies
+    // the colours (the practice drones are orange-red); `flash` makes it glow (a hit).
     void draw(const Body& b, const ViewXf& xf, bool shadow, SDL_Color tint = {255, 255, 255, 255},
               bool flash = false) const;
 

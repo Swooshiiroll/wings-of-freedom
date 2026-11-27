@@ -396,7 +396,13 @@ The enemy is the **other nation** (`planes.md`): fly the US and you fight German
     plane starts.
   - `--overlay` starts with the F1 overlay shown.
   - `--fire` and `--bomb` hold the guns or the bomb release throughout.
-- `--sprite-sheet FILE`: saves every baked plane pose to a PNG and exits.
+- `--sprite-sheet FILE`: saves every baked plane pose to a PNG and exits (the `--nation`'s
+  fighter).
+- `--nation us|de`: fly that nation's fighter and skip the nation screen (design/planes.md).
+- **`tuning.txt` format:** the file starts with `format = 2`. A file from before real planes (no
+  format line) is renamed `tuning-old.txt` and the defaults are written, so its old ceiling and
+  flight numbers don't quietly win. Each plane's speeds, climb, stall, turn, pitch rate and tank
+  come from its real stats through the `scale.*` keys, so they're no longer in the file.
 - **F2** practice targets on/off (`--no-targets`), **F3** the height rule (`--height-rule`), **F4**
   the bomb marker.
 - **Damage testing until enemies arrive** (owner, 2026-11-26):
