@@ -9,6 +9,7 @@ add_library(wof_core STATIC
   fixed_step.cpp
   flight.cpp
   ground.cpp
+  gunners.cpp
   hangar.cpp
   menu.cpp
   pixel_font.cpp

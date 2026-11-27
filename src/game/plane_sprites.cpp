@@ -15,8 +15,8 @@ namespace {
 
 constexpr float kBakedBankDeg = 30.0f;
 
-[[nodiscard]] constexpr int cell_px(int step) noexcept {
-    return PlaneSprites::kCellPerStep * step;
+[[nodiscard]] constexpr int cell_px(ModelId id, int step) noexcept {
+    return PlaneSprites::kCellPerStep * step * model_cells(id);
 }
 
 // Copies a cell's pixels into an atlas `atlas_w` wide.
@@ -73,7 +73,7 @@ void PlaneSprites::shutdown() {
 
 PlaneSprites::Pixels PlaneSprites::bake_pixels(ModelId id, std::uint32_t parts, int step) {
     const Uint64 start = SDL_GetTicksNS();
-    const int cell = cell_px(step);
+    const int cell = cell_px(id, step);
     const int atlas_w = cell * kColumns;
     const std::vector<Block> model =
         scaled_model(plane_model(id), static_cast<float>(step) / kFullSizeStep);
@@ -105,9 +105,9 @@ PlaneSprites::Pixels PlaneSprites::bake_pixels(ModelId id, std::uint32_t parts, 
     return out;
 }
 
-PlaneSprites::Atlas PlaneSprites::upload_atlas(const Pixels& pixels, int step) const {
-    const int w = cell_px(step) * kColumns;
-    const int h = cell_px(step) * kRows;
+PlaneSprites::Atlas PlaneSprites::upload_atlas(const Pixels& pixels, ModelId id, int step) const {
+    const int w = cell_px(id, step) * kColumns;
+    const int h = cell_px(id, step) * kRows;
     Atlas a;
     a.plane = upload(renderer_, pixels.plane, w, h);
     if (!pixels.shadow.empty()) {
@@ -118,7 +118,7 @@ PlaneSprites::Atlas PlaneSprites::upload_atlas(const Pixels& pixels, int step) c
 
 PlaneSprites::Atlas PlaneSprites::bake_now(const Job& job) {
     const Pixels pixels = bake_pixels(job.id, job.parts, job.step);
-    const Atlas a = upload_atlas(pixels, job.step);
+    const Atlas a = upload_atlas(pixels, job.id, job.step);
     atlases_[job.key] = a;
     queued_.erase(job.key);
     SDL_Log("plane sprites (model %d, parts 0x%02x, %d/8): baked in %.1f ms",
@@ -207,7 +207,7 @@ void PlaneSprites::pump() {
     if (atlases_.count(done.job.key) != 0) {
         return; // baked on this thread meanwhile
     }
-    atlases_[done.job.key] = upload_atlas(done.pixels, done.job.step);
+    atlases_[done.job.key] = upload_atlas(done.pixels, done.job.id, done.job.step);
     SDL_Log("plane sprites (model %d, parts 0x%02x, %d/8): baked in %.1f ms in the background",
             static_cast<int>(done.job.id), done.job.parts, done.job.step, done.pixels.ms);
 }
@@ -266,13 +266,14 @@ void PlaneSprites::draw(const Body& b, const ViewXf& xf, bool shadow, SDL_Color 
         step = std::min(step, kFullSizeStep);
     }
     const std::uint32_t parts = kAllParts & ~missing_parts(b);
-    const Found f = find(plane_type(b.type).model, parts, step, shadow);
+    const ModelId model = plane_type(b.type).model;
+    const Found f = find(model, parts, step, shadow);
     if (f.texture == nullptr) {
         return;
     }
     const Cell c = cell_of(b);
-    const auto src_cell = static_cast<float>(cell_px(f.step));
-    const auto size = static_cast<float>(cell_px(step));
+    const auto src_cell = static_cast<float>(cell_px(model, f.step));
+    const auto size = static_cast<float>(cell_px(model, step));
     const ScreenPt at = xf.at(b.x, b.y, z);
     const SDL_FRect src{static_cast<float>(c.column) * src_cell,
                         static_cast<float>(c.row) * src_cell, src_cell, src_cell};
@@ -297,8 +298,8 @@ bool PlaneSprites::save_sheet(const char* path, ModelId id, int step) {
             px = 0xff628c46u; // pasture green, to judge how the plane reads on the ground
         }
     }
-    const int w = cell_px(s_step) * kColumns;
-    const int h = cell_px(s_step) * kRows;
+    const int w = cell_px(id, s_step) * kColumns;
+    const int h = cell_px(id, s_step) * kRows;
     SDL_Surface* s = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_ARGB8888, sheet.data(), w * 4);
     if (s == nullptr) {
         SDL_Log("sprite sheet surface failed: %s", SDL_GetError());

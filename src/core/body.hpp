@@ -36,10 +36,22 @@ enum class Outcome : std::uint8_t {
 // The parts of a plane (design/flight.md, Damage). Each takes hits, and each block of a plane's
 // model belongs to one, so a plane can be drawn with a lost part missing. The cockpit is the
 // pilot. Twin-engined planes (design/planes.md) have a second engine: Engine is the left one and
-// Engine2 the right.
-enum class Part : std::uint8_t { Engine, LeftWing, RightWing, Fuselage, Tail, Cockpit, Engine2 };
-inline constexpr int kParts = 7;
-inline constexpr std::uint32_t kAllParts = 0x7fu;
+// Engine2 the right. A bomber's gunners take hits too; they're not parts of its model.
+enum class Part : std::uint8_t {
+    Engine,
+    LeftWing,
+    RightWing,
+    Fuselage,
+    Tail,
+    Cockpit,
+    Engine2,
+    NoseGunner,
+    DorsalGunner,
+    VentralGunner
+};
+inline constexpr int kParts = 10;
+inline constexpr std::uint32_t kAllParts = 0x7fu; // every part of a model
+inline constexpr int kGunners = 3;                // nose, dorsal, ventral
 
 [[nodiscard]] constexpr std::uint32_t part_bit(Part p) noexcept {
     return 1u << static_cast<std::uint32_t>(p);
@@ -56,8 +68,9 @@ struct Damage {
     float right_wing = 40.0f;
     float fuselage = 60.0f;
     float tail = 20.0f;
-    float pilot = 0.0f; // damage taken by the pilot
-    int wounds = 0;     // every wound_damage of it is a wound
+    float pilot = 0.0f;                   // damage taken by the pilot
+    int wounds = 0;                       // every wound_damage of it is a wound
+    std::array<float, kGunners> gunner{}; // damage each of a bomber's gunners has taken
     bool going_down = false;
     float spin = 1.0f;                 // going down: 1 spins right, -1 left
     Outcome cause = Outcome::ShotDown; // going down: how the flight will end

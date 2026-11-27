@@ -24,7 +24,8 @@ namespace wof::game {
 //
 // Planes are drawn in steps of 1/8 of full size, from a quarter to 1.5x, by how far below or above
 // you they are (design/planes.md, Height), each step baked as crisp pixel art in cells of
-// 6 px x its eighths (12 to 72 px; the full size is 48). Atlases are baked by model, parts drawn
+// 6 px x its eighths (12 to 72 px; the full size is 48), bombers twice that (model_cells). Atlases
+// are baked by model, parts drawn
 // and step. A model's full size bakes when asked for; every other one bakes on a background thread,
 // and until it's ready the nearest ready step is stretched to the size.
 class PlaneSprites {
@@ -110,7 +111,7 @@ class PlaneSprites {
     }
     static Pixels bake_pixels(ModelId id, std::uint32_t parts, int step);
 
-    Atlas upload_atlas(const Pixels& pixels, int step) const;
+    Atlas upload_atlas(const Pixels& pixels, ModelId id, int step) const;
     // Bakes and uploads on this thread, now.
     Atlas bake_now(const Job& job);
     // Queues a bake for the background, unless it's ready or already queued. `urgent` puts it at

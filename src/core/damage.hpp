@@ -35,6 +35,9 @@ struct DamageParams {
     float collision_height_u = 6.0f;
     float spin_rate_deg_s = 180.0f; // going down
     float spin_pitch_deg = -35.0f;
+    int gunners = 0;          // a bomber's: 3 (set from its guns)
+    int nose_gunner_pct = 10; // of hits from ahead, out of the engines' share
+    int rear_gunner_pct = 8;  // of hits from behind, each (dorsal, ventral), out of the fuselage's
     // Where hits land, in percent: rows ahead, behind, side, burst; columns engine, pilot, wings,
     // fuselage.
     std::array<std::array<int, 4>, 4> table{{
@@ -54,6 +57,11 @@ struct DamageParams {
 // The pilot's: OK unhurt, WARNING after one wound, CRITICAL after more, destroyed (killed) at the
 // last.
 [[nodiscard]] Stage pilot_stage(int wounds, int max_wounds) noexcept;
+
+// A bomber's gunner (0 nose, 1 dorsal, 2 ventral): wounds from the damage taken, and out of action
+// at the pilot's count.
+[[nodiscard]] int gunner_wounds(const Body& b, int gunner, const DamageParams& d) noexcept;
+[[nodiscard]] bool gunner_out(const Body& b, int gunner, const DamageParams& d) noexcept;
 
 // A part's HP and its stage, for the readout and the HUD.
 [[nodiscard]] float part_hp(const Body& b, Part p) noexcept;

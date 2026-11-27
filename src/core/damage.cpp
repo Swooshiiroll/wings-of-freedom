@@ -1,6 +1,7 @@
 #include "core/damage.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <numbers>
@@ -67,6 +68,16 @@ Stage pilot_stage(int wounds, int max_wounds) noexcept {
     return wounds <= 0 ? Stage::Ok : wounds == 1 ? Stage::Warning : Stage::Critical;
 }
 
+int gunner_wounds(const Body& b, int gunner, const DamageParams& d) noexcept {
+    const float taken = b.damage.gunner[static_cast<std::size_t>(gunner)];
+    return std::min(d.pilot_wounds,
+                    static_cast<int>(std::floor(taken / std::max(0.1f, d.wound_damage))));
+}
+
+bool gunner_out(const Body& b, int gunner, const DamageParams& d) noexcept {
+    return gunner_wounds(b, gunner, d) >= d.pilot_wounds;
+}
+
 float part_hp(const Body& b, Part p) noexcept {
     switch (p) {
     case Part::Engine:
@@ -82,6 +93,9 @@ float part_hp(const Body& b, Part p) noexcept {
     case Part::Tail:
         return b.damage.tail;
     case Part::Cockpit:
+    case Part::NoseGunner:
+    case Part::DorsalGunner:
+    case Part::VentralGunner:
         return 0.0f;
     }
     return 0.0f;
@@ -103,6 +117,15 @@ Stage part_stage(const Body& b, Part p, const DamageParams& d) noexcept {
         return stage_of(b.damage.tail, d.tail_hp);
     case Part::Cockpit:
         return pilot_stage(b.damage.wounds, d.pilot_wounds);
+    case Part::NoseGunner:
+    case Part::DorsalGunner:
+    case Part::VentralGunner:
+        return d.gunners > 0
+                   ? pilot_stage(
+                         gunner_wounds(b, static_cast<int>(p) - static_cast<int>(Part::NoseGunner),
+                                       d),
+                         d.pilot_wounds)
+                   : Stage::Ok;
     }
     return Stage::Ok;
 }
@@ -158,12 +181,35 @@ Part pick_part(const Body& b, HitFrom from, const DamageParams& d, Rng& rng) noe
                             : from == HitFrom::Behind ? 1
                             : from == HitFrom::Burst  ? 3
                                                       : 2;
-    const auto& w = d.table[row];
-    int total = 0;
+    std::array<int, 4> w = d.table[row];
+    // A bomber's gunners still in action take their share first: the nose one out of the engines'
+    // hits from ahead, the dorsal and ventral out of the fuselage's from behind.
+    std::array<int, kGunners> share{};
+    if (d.gunners > 0) {
+        if (from == HitFrom::Ahead && !gunner_out(b, 0, d)) {
+            share[0] = std::min(d.nose_gunner_pct, std::max(0, w[0]));
+            w[0] -= share[0];
+        }
+        if (from == HitFrom::Behind) {
+            for (std::size_t g = 1; g < share.size(); ++g) {
+                if (!gunner_out(b, static_cast<int>(g), d)) {
+                    share[g] = std::min(d.rear_gunner_pct, std::max(0, w[3]));
+                    w[3] -= share[g];
+                }
+            }
+        }
+    }
+    int total = share[0] + share[1] + share[2];
     for (const int x : w) {
         total += std::max(0, x);
     }
     int r = static_cast<int>(rng.next_below(static_cast<std::uint32_t>(std::max(1, total))));
+    for (std::size_t g = 0; g < share.size(); ++g) {
+        r -= share[g];
+        if (r < 0) {
+            return static_cast<Part>(static_cast<std::size_t>(Part::NoseGunner) + g);
+        }
+    }
     std::size_t column = 3;
     for (std::size_t c = 0; c < 4; ++c) {
         r -= std::max(0, w[c]);
@@ -245,6 +291,12 @@ void apply_hit(Body& b, Part p, float damage, const DamageParams& d) noexcept {
         break;
     case Part::Tail:
         hit_tail(b, damage);
+        break;
+    case Part::NoseGunner:
+    case Part::DorsalGunner:
+    case Part::VentralGunner:
+        m.gunner[static_cast<std::size_t>(p) - static_cast<std::size_t>(Part::NoseGunner)] +=
+            damage;
         break;
     case Part::Cockpit:
         m.pilot += damage;

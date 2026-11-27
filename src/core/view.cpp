@@ -50,15 +50,17 @@ std::vector<ArrowGroup> group_arrows(const std::vector<Sighting>& seen, float sp
     std::vector<ArrowGroup> groups;
     for (const std::size_t i : order) {
         const Sighting& s = seen[i];
-        const bool joins = std::any_of(groups.begin(), groups.end(), [&](const ArrowGroup& g) {
+        const auto joined = std::find_if(groups.begin(), groups.end(), [&](const ArrowGroup& g) {
             constexpr float kTurn = 2.0f * std::numbers::pi_v<float>;
             return std::abs(std::remainder(s.angle_rad - g.angle_rad, kTurn)) <= spread_rad;
         });
-        if (!joins) {
+        if (joined != groups.end()) {
+            joined->bomber = joined->bomber || s.bomber;
+        } else {
             const HeightMark mark = s.dz > level_u    ? HeightMark::Higher
                                     : s.dz < -level_u ? HeightMark::Lower
                                                       : HeightMark::Level;
-            groups.push_back({s.angle_rad, mark, i});
+            groups.push_back({s.angle_rad, mark, i, s.bomber});
         }
     }
     return groups;

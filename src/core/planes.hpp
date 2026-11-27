@@ -35,11 +35,23 @@ struct GunSpec {
 inline constexpr int kMaxGuns = 4;
 
 // Which blocky model a plane is drawn with (core/fighter.hpp).
-enum class ModelId : std::uint8_t { P26, He51, P12, Ar65, P36, Bf109 };
+enum class ModelId : std::uint8_t { P26, He51, P12, Ar65, P36, Bf109, B6, Do23, B10, He111 };
+inline constexpr int kModels = 10;
 
 // The planes in the roster, in order (Body::type).
-enum class PlaneId : std::uint8_t { P26A, He51B, B10B, He111B2, P12E, Ar65E, P36A, Bf109B };
-inline constexpr int kPlaneTypes = 8;
+enum class PlaneId : std::uint8_t {
+    P26A,
+    He51B,
+    B10B,
+    He111B2,
+    P12E,
+    Ar65E,
+    P36A,
+    Bf109B,
+    B6A,
+    Do23G
+};
+inline constexpr int kPlaneTypes = 10;
 
 // One real aircraft: its real stats, and how it's armed, built and drawn.
 struct PlaneType {
@@ -64,6 +76,9 @@ struct PlaneType {
     float fuselage_hp = 60.0f;
     float tail_hp = 20.0f;
     ModelId model = ModelId::P26;
+    float cruise_mph = 0.0f;  // bombers: the speed they raid at
+    float size = 1.0f;        // how big a mark for rounds and rams, fighters 1
+    float raid_top_ft = 0.0f; // bombers: the most height they raid at
 };
 
 // The roster: every plane in the game, by PlaneId.
@@ -77,6 +92,16 @@ bool find_plane(std::string_view id, PlaneId& out) noexcept;
 inline constexpr int kTreeSteps = 3;
 using FighterTree = std::array<PlaneId, kTreeSteps>;
 [[nodiscard]] FighterTree fighter_tree(Nation n) noexcept;
+
+// A nation's bombers: the early one the first raids bring, and the later one that takes over
+// (design/flight.md, Bombers). US: B-6A, then B-10B. Germany: Do 23G, then He 111B-2.
+struct Bombers {
+    PlaneId early = PlaneId::Do23G;
+    PlaneId later = PlaneId::He111B2;
+
+    friend constexpr bool operator==(const Bombers&, const Bombers&) = default;
+};
+[[nodiscard]] Bombers bombers_of(Nation n) noexcept;
 
 // The scale from real stats to game values (tuning.txt `scale.*`), all (start) values.
 struct PlaneScale {

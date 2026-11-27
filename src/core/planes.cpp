@@ -56,7 +56,7 @@ constexpr std::array<PlaneType, kPlaneTypes> kRoster = {{
      60.0f,
      20.0f,
      ModelId::He51},
-    // Martin B-10B, US bomber, 1935: three .30s (nose, dorsal, ventral). Its model comes in PR 6.
+    // Martin B-10B, US bomber, 1935: three .30s (nose, dorsal, ventral).
     {"b10b",
      "Martin B-10B",
      Nation::US,
@@ -79,8 +79,11 @@ constexpr std::array<PlaneType, kPlaneTypes> kRoster = {{
      100.0f,
      160.0f,
      40.0f,
-     ModelId::P26},
-    // Heinkel He 111B-2, German bomber, 1937: three 7.92 mm MG 15s. Its model comes in PR 6.
+     ModelId::B10,
+     193.0f,
+     2.0f,
+     15000.0f},
+    // Heinkel He 111B-2, German bomber, 1937: three 7.92 mm MG 15s.
     {"he111b",
      "Heinkel He 111B-2",
      Nation::Germany,
@@ -103,7 +106,10 @@ constexpr std::array<PlaneType, kPlaneTypes> kRoster = {{
      100.0f,
      160.0f,
      40.0f,
-     ModelId::P26},
+     ModelId::He111,
+     229.0f,
+     2.0f,
+     15000.0f},
     // Boeing P-12E, US fighter, 1931 (biplane): two .30s. 244 lb of bombs.
     {"p12e",
      "Boeing P-12E",
@@ -196,6 +202,60 @@ constexpr std::array<PlaneType, kPlaneTypes> kRoster = {{
      60.0f,
      20.0f,
      ModelId::Bf109},
+    // Keystone B-6A, US bomber, 1931 (biplane): three .30s; the first raids' US bomber.
+    {"b6a",
+     "Keystone B-6A",
+     Nation::US,
+     Role::Bomber,
+     1931,
+     120.0f,
+     690.0f,
+     55.0f,
+     30.0f,
+     8.0f,
+     30.0f,
+     2,
+     {{{Calibre::Rifle, 1000.0f, 500, 0.0f, Mount::Nose},
+       {Calibre::Rifle, 1000.0f, 500, 0.0f, Mount::Dorsal},
+       {Calibre::Rifle, 1000.0f, 500, 0.0f, Mount::Ventral}}},
+     3,
+     500.0f,
+     4,
+     45.0f,
+     75.0f,
+     120.0f,
+     30.0f,
+     ModelId::B6,
+     103.0f,
+     2.0f,
+     12000.0f},
+    // Dornier Do 23G, German bomber, 1934: three MG 15s; the first raids' German bomber.
+    {"do23g",
+     "Dornier Do 23G",
+     Nation::Germany,
+     Role::Bomber,
+     1934,
+     160.0f,
+     890.0f,
+     65.0f,
+     32.0f,
+     7.5f,
+     30.0f,
+     2,
+     {{{Calibre::Rifle, 1000.0f, 750, 0.0f, Mount::Nose},
+       {Calibre::Rifle, 1000.0f, 750, 0.0f, Mount::Dorsal},
+       {Calibre::Rifle, 1000.0f, 750, 0.0f, Mount::Ventral}}},
+     3,
+     551.0f, // 250 kg
+     4,
+     45.0f,
+     75.0f,
+     120.0f,
+     30.0f,
+     ModelId::Do23,
+     130.0f,
+     2.0f,
+     12000.0f},
 }};
 
 } // namespace
@@ -246,6 +306,11 @@ bool find_plane(std::string_view id, PlaneId& out) noexcept {
         }
     }
     return false;
+}
+
+Bombers bombers_of(Nation n) noexcept {
+    return n == Nation::Germany ? Bombers{PlaneId::Do23G, PlaneId::He111B2}
+                                : Bombers{PlaneId::B6A, PlaneId::B10B};
 }
 
 FighterTree fighter_tree(Nation n) noexcept {

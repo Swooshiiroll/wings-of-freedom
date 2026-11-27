@@ -56,6 +56,20 @@ struct Block {
 [[nodiscard]] std::vector<Block> p36_model();
 [[nodiscard]] std::vector<Block> bf109_model();
 
+// The bombers (design/flight.md, Bombers), twin-engined and about twice a fighter across: the B-6A
+// biplane, the Do 23G with its spatted gear, the B-10B and the He 111B with its rounded wings.
+[[nodiscard]] std::vector<Block> b6_model();
+[[nodiscard]] std::vector<Block> do23_model();
+[[nodiscard]] std::vector<Block> b10_model();
+[[nodiscard]] std::vector<Block> he111_model();
+
+// A model's sprite cell, in fighter cells: bombers need twice the width.
+[[nodiscard]] constexpr int model_cells(ModelId id) noexcept {
+    return id == ModelId::B6 || id == ModelId::Do23 || id == ModelId::B10 || id == ModelId::He111
+               ? 2
+               : 1;
+}
+
 // A plane's model by its id (core/planes.hpp).
 [[nodiscard]] std::vector<Block> plane_model(ModelId id);
 

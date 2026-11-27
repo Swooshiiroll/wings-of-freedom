@@ -1,8 +1,10 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 
 #include "core/body.hpp"
+#include "core/gunners.hpp"
 #include "core/input.hpp"
 #include "core/rng.hpp"
 
@@ -34,6 +36,15 @@ enum class Phase : std::uint8_t {
     Break,   // turning away so as not to ram
     Recover, // pulling up from the ground
     Return,  // turning back inside the battle area
+    Course,  // a bomber holding its course
+    Guard,   // an escort with its bombers
+};
+
+// What a pilot is for.
+enum class Duty : std::uint8_t {
+    Hunt,   // a wave's fighter, after you
+    Bomb,   // a bomber making for your base
+    Escort, // a fighter guarding bombers
 };
 [[nodiscard]] const char* phase_name(Phase p) noexcept;
 
@@ -46,13 +57,15 @@ struct AiParams {
     float reaction_best_s = 0.15f;
     float reaction_step_s = 0.07f;
     float fire_range_u = 220.0f;
-    float fire_cone_deg = 5.0f;   // fires with its nose this close to where it's aiming
-    float break_range_u = 45.0f;  // breaks off closer than this, nose on
-    float floor_u = 40.0f;        // pulls up so as never to go below this
-    float edge_margin_u = 250.0f; // turns back this far inside the soft edges
-    float dive_height_u = 80.0f;  // dive-and-climb: gets this far above first
-    float head_on_run_u = 400.0f; // head-on: lines up from this far in front
-    float extend_s = 3.0f;        // flies clear this long after a pass
+    float fire_cone_deg = 5.0f;      // fires with its nose this close to where it's aiming
+    float break_range_u = 45.0f;     // breaks off closer than this, nose on
+    float floor_u = 40.0f;           // pulls up so as never to go below this
+    float edge_margin_u = 250.0f;    // turns back this far inside the soft edges
+    float dive_height_u = 80.0f;     // dive-and-climb: gets this far above first
+    float head_on_run_u = 400.0f;    // head-on: lines up from this far in front
+    float extend_s = 3.0f;           // flies clear this long after a pass
+    float escort_break_u = 600.0f;   // escorts fight you within this of their bombers
+    float escort_return_u = 1200.0f; // and go back to them beyond this
 
     friend constexpr bool operator==(const AiParams&, const AiParams&) = default;
 };
@@ -68,6 +81,16 @@ struct Skill {
 struct Pilot {
     int body = -1;  // the plane it flies (World::bodies)
     int target = 0; // the plane it hunts
+    Duty duty = Duty::Hunt;
+    int raid = 0;                 // a bomber's or escort's raid
+    float course_deg = 180.0f;    // a bomber's heading, held
+    float height_u = 0.0f;        // and height
+    float cruise_u_s = 0.0f;      // and speed (escorts keep station at it)
+    float station_right_u = 0.0f; // an escort's place, from the formation
+    float station_ahead_u = 0.0f;
+    bool engaged = false; // an escort that has broken off to fight
+    bool through = false; // a bomber counted as reaching your base
+    std::array<GunnerState, kGunners> gunners{};
     Style style = Style::Turn;
     Phase phase = Phase::Pursue; // its style's own step
     Phase doing = Phase::Pursue; // what it's doing this tick (the step, or pulling up and so on)

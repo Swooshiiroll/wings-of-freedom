@@ -321,10 +321,10 @@ void move_projectiles(World& w, const Rules& rules) {
         float best_t = 2.0f;
         int hit_body = -1;
         int hit_drone = -1;
-        const auto test = [&](float tx, float ty, float tz) {
+        const auto test = [&](float tx, float ty, float tz, float size = 1.0f) {
             const Approach a = closest(r.x, r.y, x1, y1, tx, ty);
             const float z_there = r.z + (z1 - r.z) * a.t;
-            return a.dist <= p.hit_radius_u && std::abs(z_there - tz) <= band && a.t < best_t
+            return a.dist <= p.hit_radius_u * size && std::abs(z_there - tz) <= band && a.t < best_t
                        ? a.t
                        : -1.0f;
         };
@@ -333,7 +333,7 @@ void move_projectiles(World& w, const Rules& rules) {
             if (static_cast<int>(j) == r.owner || o.outcome != Outcome::Flying) {
                 continue; // a plane's own rounds never hit it
             }
-            if (const float t = test(o.x, o.y, o.z); t >= 0.0f) {
+            if (const float t = test(o.x, o.y, o.z, plane_type(o.type).size); t >= 0.0f) {
                 best_t = t;
                 hit_body = static_cast<int>(j);
                 hit_drone = -1;

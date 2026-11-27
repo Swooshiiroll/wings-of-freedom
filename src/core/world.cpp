@@ -104,8 +104,9 @@ void collide(World& w, const Rules& rules) {
                 continue;
             }
             const float across = std::hypot(a.x - b.x, a.y - b.y);
-            if (across >= 2.0f * d.collision_radius_u ||
-                std::abs(a.z - b.z) > d.collision_height_u) {
+            const float reach =
+                d.collision_radius_u * (plane_type(a.type).size + plane_type(b.type).size);
+            if (across >= reach || std::abs(a.z - b.z) > d.collision_height_u) {
                 continue;
             }
             // The weaker plane is destroyed; the other takes what the weaker one had left.
@@ -200,6 +201,18 @@ void credit_kills(World& w) {
     }
 }
 
+// A bomber that leaves by the south edge has reached your base.
+void count_through(World& w) {
+    for (Pilot& p : w.pilots) {
+        const Body& b = w.bodies[static_cast<std::size_t>(p.body)];
+        if (p.duty == Duty::Bomb && !p.through && b.outcome == Outcome::ReturnedHome) {
+            p.through = true;
+            ++w.waves.through;
+            w.events.push_back(Event{EventKind::BomberThrough, p.body, -1, b.x, b.y, b.z, 0.0f});
+        }
+    }
+}
+
 } // namespace
 
 void step(World& world, std::span<const InputCommand> commands, const Rules& rules) {
@@ -228,6 +241,9 @@ void step(World& world, std::span<const InputCommand> commands, const Rules& rul
         }
         if (!b.damage.going_down) {
             fire_weapons(world, i, cmd, rules);
+            if (pilot != nullptr && plane.damage.gunners > 0) {
+                fire_gunners(world, i, *pilot, rules);
+            }
         }
         if (pilot != nullptr) {
             top_up(world.bodies[i], plane);
@@ -237,6 +253,7 @@ void step(World& world, std::span<const InputCommand> commands, const Rules& rul
     move_projectiles(world, rules);
     collide(world, rules);
     credit_kills(world);
+    count_through(world);
     ++world.tick;
 }
 
