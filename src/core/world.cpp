@@ -1,5 +1,6 @@
 #include "core/world.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 
@@ -42,10 +43,23 @@ void apply_edges(Body& b, const EdgeParams& e, float dt) noexcept {
     }
 }
 
-Body new_plane(const Rules& rules, float x, float y, float heading_deg) noexcept {
-    Body b = start_body(rules.flight, x, y, heading_deg);
-    arm(b, rules.weapon);
-    repair(b, rules.damage);
+const PlaneRules& plane_of(const Rules& rules, const Body& b) noexcept {
+    static const PlaneRules kFallback =
+        derive_plane(plane_type(PlaneId::P26A), FlightParams{}, DamageParams{}, PlaneScale{});
+    if (rules.planes.empty()) {
+        return kFallback;
+    }
+    return rules.planes[std::min<std::size_t>(b.type, rules.planes.size() - 1)];
+}
+
+Body new_plane(const Rules& rules, PlaneId type, float x, float y, float heading_deg) noexcept {
+    Body b;
+    b.type = static_cast<std::uint8_t>(type);
+    const PlaneRules& plane = plane_of(rules, b);
+    b = start_body(plane.flight, x, y, heading_deg);
+    b.type = static_cast<std::uint8_t>(type);
+    arm(b, plane);
+    repair(b, plane.damage);
     return b;
 }
 
@@ -53,11 +67,15 @@ namespace {
 
 // Spreads damage evenly over a plane's five HP parts (collisions).
 void spread(Body& b, float damage, const DamageParams& d) noexcept {
-    const float each = damage / 5.0f;
+    const bool twin = b.damage.engines > 1;
+    const float each = damage / (twin ? 6.0f : 5.0f);
     for (const Part p : {Part::Engine, Part::LeftWing, Part::RightWing, Part::Fuselage}) {
         apply_hit(b, p, each, d);
     }
     apply_hit(b, Part::Tail, each, d);
+    if (twin) {
+        apply_hit(b, Part::Engine2, each, d);
+    }
 }
 
 void destroy(Body& b) noexcept {
@@ -68,7 +86,7 @@ void destroy(Body& b) noexcept {
 } // namespace
 
 void collide(World& w, const Rules& rules) {
-    const DamageParams& d = rules.damage;
+    const DamageParams& d = rules.damage; // the shared collision numbers
     for (std::size_t i = 0; i < w.bodies.size(); ++i) {
         for (std::size_t j = i + 1; j < w.bodies.size(); ++j) {
             Body& a = w.bodies[i];
@@ -87,11 +105,11 @@ void collide(World& w, const Rules& rules) {
             int destroyed = -1;
             if (ta < tb) {
                 destroy(a);
-                spread(b, ta, d);
+                spread(b, ta, plane_of(rules, b).damage);
                 destroyed = static_cast<int>(i);
             } else if (tb < ta) {
                 destroy(b);
-                spread(a, tb, d);
+                spread(a, tb, plane_of(rules, a).damage);
                 destroyed = static_cast<int>(j);
             } else {
                 destroy(a);
@@ -109,8 +127,9 @@ void debug_hits(World& w, std::size_t body, HitFrom from, float damage, int coun
                 const Rules& rules) {
     Body& b = w.bodies[body];
     for (int i = 0; i < count && b.outcome == Outcome::Flying; ++i) {
-        const Part p = pick_part(b, from, rules.damage, w.rng);
-        apply_hit(b, p, damage, rules.damage);
+        const DamageParams& dp = plane_of(rules, b).damage;
+        const Part p = pick_part(b, from, dp, w.rng);
+        apply_hit(b, p, damage, dp);
         Event e{from == HitFrom::Burst ? EventKind::BlastHitPlane : EventKind::RoundHitPlane,
                 static_cast<int>(body),
                 -1,
@@ -126,21 +145,22 @@ void debug_hits(World& w, std::size_t body, HitFrom from, float damage, int coun
 void step(World& world, std::span<const InputCommand> commands, const Rules& rules) {
     world.events.clear();
     move_targets(world.targets, rules.targets, kTickSeconds);
-    const Aero aero = aero_of(rules.flight);
     for (std::size_t i = 0; i < world.bodies.size(); ++i) {
         Body& b = world.bodies[i];
         if (b.outcome != Outcome::Flying) {
             continue;
         }
+        // Each plane flies by its own type's rules.
+        const PlaneRules& plane = plane_of(rules, b);
         const InputCommand cmd = i < commands.size() ? commands[i] : InputCommand{};
-        const Handling h = handling_of(b, rules.damage);
+        const Handling h = handling_of(b, plane.damage);
         if (h.top_speed_share < 1.0f) {
             // A damaged engine: a lower top speed, and the thrust (so acceleration) to match.
-            FlightParams weaker = rules.flight;
+            FlightParams weaker = plane.flight;
             weaker.max_level_u_s *= h.top_speed_share;
-            fly(b, cmd, rules.flight, aero_of(weaker), kTickSeconds, h);
+            fly(b, cmd, plane.flight, aero_of(weaker), kTickSeconds, h);
         } else {
-            fly(b, cmd, rules.flight, aero, kTickSeconds, h);
+            fly(b, cmd, plane.flight, plane.aero, kTickSeconds, h);
         }
         if (!b.damage.going_down) {
             fire_weapons(world, i, cmd, rules);

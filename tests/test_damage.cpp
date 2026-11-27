@@ -15,7 +15,7 @@ using namespace wof;
 namespace {
 World with_plane(const Rules& r, float z = 150.0f) {
     World w;
-    Body b = new_plane(r, 1440.0f, 2400.0f, 0.0f);
+    Body b = new_plane(r, PlaneId::P26A, 1440.0f, 2400.0f, 0.0f);
     b.z = z;
     b.speed_u_s = 150.0f;
     b.throttle = 1.0f;
@@ -222,7 +222,7 @@ TEST_CASE("Hits land by the table: shares hold for each direction, and side hits
     }
 }
 
-TEST_CASE("Another plane's rounds do 2 damage to the parts they hit") {
+TEST_CASE("Another plane's rounds do their calibre's damage to the parts they hit") {
     const Rules r;
     World w = with_plane(r, 100.0f);
     Body target = w.bodies[0];
@@ -232,12 +232,20 @@ TEST_CASE("Another plane's rounds do 2 damage to the parts they hit") {
     const float before = everything(w.bodies[1]);
     InputCommand fire;
     fire.guns = true;
+    float dealt = 0.0f;
     for (int i = 0; i < 40; ++i) {
         step(w, std::vector<InputCommand>{fire, InputCommand{}}, r);
+        for (const Event& e : w.events) {
+            if (e.kind == EventKind::RoundHitPlane) {
+                // The P-26A's .30 does 1, its .50 2.5 (design/planes.md).
+                CHECK((e.damage == doctest::Approx(1.0f) || e.damage == doctest::Approx(2.5f)));
+                dealt += e.damage;
+            }
+        }
     }
     const float lost = before - everything(w.bodies[1]);
     CHECK(lost > 0.0f);
-    CHECK(std::fmod(lost, 2.0f) == doctest::Approx(0.0f));
+    CHECK(lost == doctest::Approx(dealt));
     CHECK(everything(w.bodies[0]) == doctest::Approx(before)); // the shooter is untouched
 }
 

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/camera.hpp"
+#include "core/view_xf.hpp"
 #include "core/weapons.hpp"
 
 namespace wof::game {
@@ -41,10 +42,10 @@ class Effects {
     void clear();
 
     // Scorch marks, drawn on the ground under everything else.
-    void draw_ground(SDL_Renderer* r, PixelPt origin, float scorch_fade_s) const;
+    void draw_ground(SDL_Renderer* r, const ViewXf& xf, float scorch_fade_s) const;
 
     // Dust puffs, smoke, sparks and explosions.
-    void draw_air(SDL_Renderer* r, PixelPt origin) const;
+    void draw_air(SDL_Renderer* r, const ViewXf& xf) const;
 
   private:
     struct Mark {
@@ -64,11 +65,11 @@ class Effects {
 
 // A filled circle of `radius` u on the ground (an ellipse on screen), centred on (x, y) at height
 // z.
-void fill_ground_disc(SDL_Renderer* r, PixelPt origin, float x, float y, float z, float radius,
+void fill_ground_disc(SDL_Renderer* r, const ViewXf& xf, float x, float y, float z, float radius,
                       SDL_FColor colour);
 
 // The outline of the same circle.
-void ground_ring(SDL_Renderer* r, PixelPt origin, float x, float y, float z, float radius,
+void ground_ring(SDL_Renderer* r, const ViewXf& xf, float x, float y, float z, float radius,
                  SDL_FColor colour);
 
 } // namespace wof::game

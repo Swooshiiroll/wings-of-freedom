@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 
 namespace wof {
@@ -34,10 +35,11 @@ enum class Outcome : std::uint8_t {
 
 // The parts of a plane (design/flight.md, Damage). Each takes hits, and each block of a plane's
 // model belongs to one, so a plane can be drawn with a lost part missing. The cockpit is the
-// pilot.
-enum class Part : std::uint8_t { Engine, LeftWing, RightWing, Fuselage, Tail, Cockpit };
-inline constexpr int kParts = 6;
-inline constexpr std::uint32_t kAllParts = 0x3fu;
+// pilot. Twin-engined planes (design/planes.md) have a second engine: Engine is the left one and
+// Engine2 the right.
+enum class Part : std::uint8_t { Engine, LeftWing, RightWing, Fuselage, Tail, Cockpit, Engine2 };
+inline constexpr int kParts = 7;
+inline constexpr std::uint32_t kAllParts = 0x7fu;
 
 [[nodiscard]] constexpr std::uint32_t part_bit(Part p) noexcept {
     return 1u << static_cast<std::uint32_t>(p);
@@ -48,6 +50,8 @@ inline constexpr std::uint32_t kAllParts = 0x3fu;
 // (core/damage.hpp's DamageParams; repair() sets them from the tuning).
 struct Damage {
     float engine = 40.0f;
+    float engine2 = 0.0f; // twin-engined planes' right engine
+    int engines = 1;
     float left_wing = 40.0f;
     float right_wing = 40.0f;
     float fuselage = 60.0f;
@@ -73,13 +77,23 @@ enum class Heavy : std::uint8_t { Bombs };
     return "?";
 }
 
-// What a plane has left to fire, and its weapons' timing (in ticks, so firing is exact).
-struct Loadout {
+// One gun's state: rounds left, time until it can fire again, and rounds fired (every few is a
+// tracer).
+struct GunState {
     int rounds = 0;
+    float wait_s = 0.0f;
+    int fired = 0;
+
+    friend constexpr bool operator==(const GunState&, const GunState&) = default;
+};
+inline constexpr int kGunSlots = 4; // core/planes.hpp's kMaxGuns
+
+// What a plane has left to fire, and its weapons' timing. Each gun fires at its own real rate
+// (core/planes.hpp).
+struct Loadout {
+    std::array<GunState, kGunSlots> guns{};
     int bombs = 0;
-    int gun_cooldown = 0;  // ticks until the guns can fire again
     int bomb_cooldown = 0; // ticks until the next bomb can drop
-    int rounds_fired = 0;  // the guns take turns, and every few rounds is a tracer
     Heavy heavy = Heavy::Bombs;
 
     friend constexpr bool operator==(const Loadout&, const Loadout&) = default;
@@ -87,6 +101,7 @@ struct Loadout {
 
 // One plane's state. x east, y north, z height, in u; angles in degrees.
 struct Body {
+    std::uint8_t type = 0; // which plane it is: core/planes.hpp's PlaneId
     float x = 0.0f;
     float y = 0.0f;
     float z = 0.0f;

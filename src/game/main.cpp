@@ -6,7 +6,7 @@
 //   WingsOfFreedom [--seed N] [--window WxH] [--shot FILE.png] [--ticks N] [--heading DEG]
 //                  [--height U] [--pitch DEG] [--throttle PCT] [--at X,Y] [--overlay]
 //                  [--height-rule forgiving|strict|auto] [--no-targets] [--fire] [--bomb]
-//                  [--sprite-sheet FILE.png] [--version]
+//                  [--nation us|de] [--sprite-sheet FILE.png] [--sprite-scale PCT] [--version]
 //     --seed N        developer tool: the ground from seed N (decimal, or 0x hex)
 //     --window WxH    developer tool: open the window at W x H
 //     --shot FILE     developer tool: fly N ticks with no input (--ticks, default 120), save the
@@ -21,7 +21,11 @@
 //     --height-rule R the gunnery height rule: forgiving (default), strict or auto
 //     --no-targets    developer tool: start without the practice targets
 //     --fire, --bomb  developer tool: with --shot, hold the guns or the bomb release throughout
-//     --sprite-sheet F  developer tool: save every baked plane pose to F (PNG) and exit
+//     --sprite-sheet F  developer tool: save every baked plane pose of your nation's fighter to F
+//     (PNG)
+//                     and exit
+//     --sprite-scale PCT  developer tool: the sprite sheet's size, 25-150 (in steps of 1/8)
+//     --nation us|de  fly that nation's fighter, skipping the nation screen
 //     --version       print the version and exit
 //
 // Keys (design/flight.md, Controls): A/D turn, W dive, S climb, Shift/Ctrl throttle up/down, F
@@ -43,6 +47,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -60,6 +65,7 @@
 #include "core/tuning.hpp"
 #include "core/units.hpp"
 #include "core/view.hpp"
+#include "core/view_xf.hpp"
 #include "core/weapons.hpp"
 #include "core/world.hpp"
 #include "game/bindings.hpp"
@@ -99,7 +105,10 @@ struct Options {
     bool hold_fire = false;       // --shot: hold the guns
     bool hold_bomb = false;       // --shot: hold the bomb release
     const char* damage = nullptr; // --damage engine=10,lwing=0,...
+    bool has_nation = false;      // --nation us|de: skip the nation screen
+    Nation nation = Nation::US;
     const char* sprite_sheet = nullptr;
+    int sheet_step = kFullSizeStep; // --sprite-scale
 };
 
 // Parses "A<sep>B" into two whole numbers. False on anything else.
@@ -155,6 +164,13 @@ int parse_options(int argc, char** argv, Options& out) {
             out.shot = argv[++i];
         } else if (std::strcmp(argv[i], "--sprite-sheet") == 0 && has_value) {
             out.sprite_sheet = argv[++i];
+        } else if (std::strcmp(argv[i], "--sprite-scale") == 0 && has_value) {
+            float pct = 0.0f;
+            if (!parse_number(argv[++i], pct) || pct < 25.0f || pct > 150.0f) {
+                std::fprintf(stderr, "--sprite-scale takes a percentage, 25-150\n");
+                return 2;
+            }
+            out.sheet_step = size_step(pct / 100.0f);
         } else if (std::strcmp(argv[i], "--ticks") == 0 && has_value) {
             out.ticks = std::strtol(argv[++i], nullptr, 10);
             if (out.ticks < 1) {
@@ -206,13 +222,23 @@ int parse_options(int argc, char** argv, Options& out) {
             out.hold_bomb = true;
         } else if (std::strcmp(argv[i], "--damage") == 0 && has_value) {
             out.damage = argv[++i];
+        } else if (std::strcmp(argv[i], "--nation") == 0 && has_value) {
+            const std::string n = argv[++i];
+            out.has_nation = n == "us" || n == "de";
+            out.nation = n == "de" ? Nation::Germany : Nation::US;
+            if (!out.has_nation) {
+                std::fprintf(stderr, "--nation takes us or de\n");
+                return 2;
+            }
         } else {
-            std::fprintf(stderr,
-                         "usage: WingsOfFreedom [--seed N] [--window WxH] [--shot FILE.png] "
-                         "[--ticks N] [--heading DEG] [--height U] [--pitch DEG] [--throttle PCT] "
-                         "[--at X,Y] [--overlay] [--height-rule forgiving|strict|auto] "
-                         "[--no-targets] [--fire] [--bomb] [--sprite-sheet FILE.png] "
-                         "[--version]\n");
+            std::fprintf(
+                stderr,
+                "usage: WingsOfFreedom [--seed N] [--window WxH] [--shot FILE.png] "
+                "[--ticks N] [--heading DEG] [--height U] [--pitch DEG] [--throttle PCT] "
+                "[--at X,Y] [--overlay] [--height-rule forgiving|strict|auto] "
+                "[--no-targets] [--fire] [--bomb] [--nation us|de] [--sprite-sheet FILE.png] "
+                "[--sprite-scale PCT] "
+                "[--version]\n");
             return 2;
         }
     }
@@ -231,6 +257,12 @@ struct Screen {
     int out_h = 0;
     ViewFit fit{};
     SDL_Texture* target = nullptr;
+    // The zoomed-out ground is drawn here at full size first (4 times the view, for a quarter size
+    // from the ceiling), then shrunk smoothly into the view, by halves below half size.
+    SDL_Texture* ground = nullptr;
+    SDL_Texture* ground_half = nullptr;
+    int ground_w = 0;
+    int ground_h = 0;
 };
 
 bool refresh_screen(SDL_Renderer* r, Screen& s) {
@@ -255,7 +287,67 @@ bool refresh_screen(SDL_Renderer* r, Screen& s) {
         return false;
     }
     SDL_SetTextureScaleMode(s.target, SDL_SCALEMODE_NEAREST);
+    if (s.ground != nullptr) {
+        SDL_DestroyTexture(s.ground);
+    }
+    if (s.ground_half != nullptr) {
+        SDL_DestroyTexture(s.ground_half);
+    }
+    // Wide enough for the view at a quarter size, with a margin so smoothing never reaches past
+    // what was drawn.
+    s.ground_w = fit.w * 4 + 12;
+    s.ground_h = fit.h * 4 + 12;
+    s.ground = SDL_CreateTexture(r, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, s.ground_w,
+                                 s.ground_h);
+    s.ground_half = SDL_CreateTexture(r, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET,
+                                      s.ground_w / 2, s.ground_h / 2);
+    if (s.ground == nullptr || s.ground_half == nullptr) {
+        SDL_Log("ground target %dx%d failed: %s", s.ground_w, s.ground_h, SDL_GetError());
+        return false;
+    }
+    SDL_SetTextureScaleMode(s.ground, SDL_SCALEMODE_LINEAR);
+    SDL_SetTextureScaleMode(s.ground_half, SDL_SCALEMODE_LINEAR);
     return true;
+}
+
+// The ground for a view. At full size it's drawn straight in, pixel for pixel. Zoomed out (up
+// high), it's drawn at full size into the ground target, then shrunk smoothly into the view. Below
+// half size it's halved first (each pixel of the half the average of four), so it doesn't shimmer.
+void draw_ground(SDL_Renderer* r, const Screen& s, game::GroundView& ground, const ViewXf& xf) {
+    const ViewFit& fit = s.fit;
+    const float k = xf.scale_at(0.0f);
+    if (k >= 0.999f) {
+        const PixelPt origin{static_cast<int>(std::lround(xf.focus.x - xf.cx)),
+                             static_cast<int>(std::lround(xf.focus.y - xf.cy))};
+        ground.draw(origin, fit.w, fit.h);
+        return;
+    }
+    // Even sizes, so the halving averages exactly 2x2.
+    const auto span = [k](int view, int limit) {
+        const int n = static_cast<int>(std::ceil(static_cast<float>(view) / k)) + 8;
+        return std::min(limit, n + n % 2);
+    };
+    const int w = span(fit.w, s.ground_w);
+    const int h = span(fit.h, s.ground_h);
+    const PixelPt origin{static_cast<int>(std::floor(xf.focus.x - static_cast<float>(w) * 0.5f)),
+                         static_cast<int>(std::floor(xf.focus.y - static_cast<float>(h) * 0.5f))};
+    SDL_SetRenderTarget(r, s.ground);
+    ground.draw(origin, w, h);
+    SDL_Texture* source = s.ground;
+    SDL_FRect src{0.0f, 0.0f, static_cast<float>(w), static_cast<float>(h)};
+    if (k < 0.5f) {
+        const SDL_FRect half{0.0f, 0.0f, static_cast<float>(w) * 0.5f,
+                             static_cast<float>(h) * 0.5f};
+        SDL_SetRenderTarget(r, s.ground_half);
+        SDL_RenderTexture(r, s.ground, &src, &half);
+        source = s.ground_half;
+        src = half;
+    }
+    SDL_SetRenderTarget(r, s.target);
+    const SDL_FRect dst{(static_cast<float>(origin.x) - xf.focus.x) * k + xf.cx,
+                        (static_cast<float>(origin.y) - xf.focus.y) * k + xf.cy,
+                        static_cast<float>(w) * k, static_cast<float>(h) * k};
+    SDL_RenderTexture(r, source, &src, &dst);
 }
 
 // Saves the current render target as a PNG.
@@ -306,7 +398,30 @@ void load_tuning(Tuning& tuning, const TuningFile& tf) {
 // Loads the tuning file if it's there, or writes the defaults to it if not.
 void open_tuning(Tuning& tuning, TuningFile& tf) {
     SDL_PathInfo info;
-    if (SDL_GetPathInfo(tf.path.c_str(), &info)) {
+    bool have_file = SDL_GetPathInfo(tf.path.c_str(), &info);
+    if (have_file) {
+        // A file of an older format holds old numbers that would quietly win over the new defaults:
+        // keep it as tuning-format<N>.txt (N its format) and start from the new defaults.
+        std::size_t size = 0;
+        void* data = SDL_LoadFile(tf.path.c_str(), &size);
+        const int format =
+            data != nullptr ? tuning_format(std::string_view(static_cast<const char*>(data), size))
+                            : kTuningFormat;
+        SDL_free(data);
+        if (format < kTuningFormat) {
+            const std::string old =
+                tf.path.substr(0, tf.path.size() - 4) + "-format" + std::to_string(format) + ".txt";
+            SDL_RemovePath(old.c_str());
+            if (SDL_RenamePath(tf.path.c_str(), old.c_str())) {
+                SDL_Log("tuning.txt was from an older version: kept as %s, defaults written",
+                        old.c_str());
+                have_file = false;
+            } else {
+                SDL_Log("can't set the old tuning file aside: %s", SDL_GetError());
+            }
+        }
+    }
+    if (have_file) {
         tf.modified = info.modify_time;
         load_tuning(tuning, tf);
     } else {
@@ -402,34 +517,42 @@ void draw_text_centred(SDL_Renderer* r, int view_w, float y, const std::vector<s
     draw_text_block(r, std::floor((static_cast<float>(view_w) - w) * 0.5f), y, lines, colour);
 }
 
-[[nodiscard]] SDL_FPoint on_view(PixelPt origin, float x, float y, float z) {
-    const ScreenPt s = to_screen(x, y, z);
-    return {s.x - static_cast<float>(origin.x), s.y - static_cast<float>(origin.y)};
+[[nodiscard]] SDL_FPoint on_view(const ViewXf& xf, float x, float y, float z) {
+    const ScreenPt p = xf.at(x, y, z);
+    return {p.x, p.y};
+}
+
+// A small mark sized for full size, `w` x `h` px, at a depth scale (never under 1 px).
+[[nodiscard]] SDL_FRect scaled_mark(SDL_FPoint at, float w, float h, float k) {
+    const float sw = std::max(1.0f, std::round(w * k));
+    const float sh = std::max(1.0f, std::round(h * k));
+    return {std::round(at.x - sw * 0.5f), std::round(at.y - sh * 0.5f), sw, sh};
 }
 
 // A practice ground target: a white and red bullseye, glowing yellow just after a hit.
-void draw_bullseye(SDL_Renderer* r, PixelPt origin, const Target& t, float radius) {
+void draw_bullseye(SDL_Renderer* r, const ViewXf& xf, const Target& t, float radius) {
     const SDL_FColor white{0.94f, 0.93f, 0.88f, 1.0f};
     const SDL_FColor red{0.78f, 0.16f, 0.12f, 1.0f};
-    game::fill_ground_disc(r, origin, t.x, t.y, 0.0f, radius, white);
-    game::fill_ground_disc(r, origin, t.x, t.y, 0.0f, radius * 0.7f, red);
-    game::fill_ground_disc(r, origin, t.x, t.y, 0.0f, radius * 0.42f, white);
-    game::fill_ground_disc(r, origin, t.x, t.y, 0.0f, radius * 0.16f, red);
+    game::fill_ground_disc(r, xf, t.x, t.y, 0.0f, radius, white);
+    game::fill_ground_disc(r, xf, t.x, t.y, 0.0f, radius * 0.7f, red);
+    game::fill_ground_disc(r, xf, t.x, t.y, 0.0f, radius * 0.42f, white);
+    game::fill_ground_disc(r, xf, t.x, t.y, 0.0f, radius * 0.16f, red);
     if (t.since_hit_s < 0.15f) {
-        game::fill_ground_disc(r, origin, t.x, t.y, 0.0f, radius * 1.15f,
+        game::fill_ground_disc(r, xf, t.x, t.y, 0.0f, radius * 1.15f,
                                SDL_FColor{1.0f, 0.9f, 0.3f, 0.7f});
     }
 }
 
 // Everything above the ground, in order: scorch marks, ground targets, shadows, dust and blasts,
-// bombs, tracers, then the drones and planes from the back of the view to the front.
-void draw_scene(SDL_Renderer* r, PixelPt origin, const World& world, const Body& plane,
-                const game::PlaneSprites& sprites, const game::Effects& effects,
-                const Tuning& tuning, bool marker) {
-    effects.draw_ground(r, origin, tuning.look.scorch_fade_s);
+// bombs, tracers, then the drones and planes from the lowest (the farthest) up. Everything is sized
+// by its depth (core/view_xf.hpp).
+void draw_scene(SDL_Renderer* r, const ViewXf& xf, const World& world, const Body& plane,
+                game::PlaneSprites& sprites, const game::Effects& effects, const Tuning& tuning,
+                bool marker) {
+    effects.draw_ground(r, xf, tuning.look.scorch_fade_s);
     for (const Target& t : world.targets) {
         if (t.kind == TargetKind::Ground) {
-            draw_bullseye(r, origin, t, tuning.rules.targets.ground_radius_u);
+            draw_bullseye(r, xf, t, tuning.rules.targets.ground_radius_u);
         }
     }
 
@@ -454,19 +577,19 @@ void draw_scene(SDL_Renderer* r, PixelPt origin, const World& world, const Body&
     }
     fliers.push_back(Flier{plane, false, false});
     for (const Flier& f : fliers) {
-        sprites.draw(f.body, origin, true);
+        sprites.draw(f.body, xf, true);
     }
     for (const Bomb& m : world.bombs) {
-        const SDL_FPoint s = on_view(origin, m.x, m.y, 0.0f);
+        const SDL_FRect shadow =
+            scaled_mark(on_view(xf, m.x, m.y, 0.0f), 2.0f, 1.0f, xf.scale_at(0.0f));
         SDL_SetRenderDrawColor(r, 0, 0, 0, 90);
-        const SDL_FRect shadow{std::round(s.x) - 1.0f, std::round(s.y), 2.0f, 1.0f};
         SDL_RenderFillRect(r, &shadow);
     }
-    effects.draw_air(r, origin);
+    effects.draw_air(r, xf);
     for (const Bomb& m : world.bombs) {
-        const SDL_FPoint s = on_view(origin, m.x, m.y, m.z);
+        const SDL_FRect bomb =
+            scaled_mark(on_view(xf, m.x, m.y, m.z), 3.0f, 2.0f, xf.scale_at(m.z));
         SDL_SetRenderDrawColor(r, 36, 38, 30, 255);
-        const SDL_FRect bomb{std::round(s.x) - 1.0f, std::round(s.y) - 1.0f, 3.0f, 2.0f};
         SDL_RenderFillRect(r, &bomb);
     }
     // Tracers: a short streak behind each one, along its flight.
@@ -478,27 +601,29 @@ void draw_scene(SDL_Renderer* r, PixelPt origin, const World& world, const Body&
         const float len =
             std::sqrt(round.vx * round.vx + round.vy * round.vy + round.vz * round.vz);
         const float back = len > 0.0f ? 7.0f / len : 0.0f;
-        const SDL_FPoint a = on_view(origin, round.x, round.y, round.z);
-        const SDL_FPoint b = on_view(origin, round.x - round.vx * back, round.y - round.vy * back,
+        const SDL_FPoint a = on_view(xf, round.x, round.y, round.z);
+        const SDL_FPoint b = on_view(xf, round.x - round.vx * back, round.y - round.vy * back,
                                      round.z - round.vz * back);
         SDL_RenderLine(r, std::round(a.x), std::round(a.y), std::round(b.x), std::round(b.y));
     }
     if (marker && plane.outcome == Outcome::Flying) {
-        const GroundSpot spot =
-            bomb_impact(plane, tuning.rules.weapon, tuning.rules.flight.gravity);
-        const SDL_FPoint s = on_view(origin, spot.x, spot.y, 0.0f);
+        const GroundSpot spot = bomb_impact(plane, tuning.rules.weapon, tuning.rules.flight);
+        const SDL_FPoint s = on_view(xf, spot.x, spot.y, 0.0f);
         SDL_SetRenderDrawColor(r, 255, 80, 60, 255);
         SDL_RenderLine(r, s.x - 4.0f, s.y, s.x + 4.0f, s.y);
         SDL_RenderLine(r, s.x, s.y - 2.0f, s.x, s.y + 2.0f);
     }
     std::sort(fliers.begin(), fliers.end(), [](const Flier& a, const Flier& b) {
+        if (a.body.z != b.body.z) {
+            return a.body.z < b.body.z;
+        }
         return to_screen(a.body.x, a.body.y).y < to_screen(b.body.x, b.body.y).y;
     });
     for (const Flier& f : fliers) {
         if (!f.drone && f.body.outcome == Outcome::Crashed) {
             continue;
         }
-        sprites.draw(f.body, origin, false,
+        sprites.draw(f.body, xf, false,
                      f.drone ? SDL_Color{255, 120, 90, 255} : SDL_Color{255, 255, 255, 255},
                      f.flash);
     }
@@ -506,11 +631,58 @@ void draw_scene(SDL_Renderer* r, PixelPt origin, const World& world, const Body&
     SDL_SetRenderDrawColor(r, 255, 244, 190, 255);
     for (const Target& t : world.targets) {
         if (t.since_hit_s < 2.0f) {
-            const SDL_FPoint s = on_view(origin, t.x, t.y, t.z);
+            const SDL_FPoint s = on_view(xf, t.x, t.y, t.z);
             const std::string n = std::to_string(t.hits);
             SDL_RenderDebugText(r, std::round(s.x) - static_cast<float>(n.size()) * 4.0f,
-                                std::round(s.y) - 22.0f, n.c_str());
+                                std::round(s.y - 22.0f * xf.scale_at(t.z)), n.c_str());
         }
+    }
+}
+
+// The nation screen (design/planes.md): until PR 7's menus, a plain choice between v0.1's two
+// nations. You fly that nation's fighter; the other nation is the enemy. Empty if the window was
+// closed or Esc pressed.
+std::optional<Nation> choose_nation(SDL_Renderer* r) {
+    for (;;) {
+        SDL_Event e;
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_EVENT_QUIT) {
+                return std::nullopt;
+            }
+            if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
+                if (e.key.key == SDLK_ESCAPE) {
+                    return std::nullopt;
+                }
+                if (e.key.key == SDLK_1 || e.key.key == SDLK_KP_1) {
+                    return Nation::US;
+                }
+                if (e.key.key == SDLK_2 || e.key.key == SDLK_KP_2) {
+                    return Nation::Germany;
+                }
+            }
+        }
+        int w = 0;
+        int h = 0;
+        SDL_GetRenderOutputSize(r, &w, &h);
+        const ViewFit fit = fit_view(w, h);
+        SDL_SetRenderTarget(r, nullptr);
+        SDL_SetRenderScale(r, static_cast<float>(fit.scale), static_cast<float>(fit.scale));
+        SDL_SetRenderDrawColor(r, 22, 30, 40, 255);
+        SDL_RenderClear(r);
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        draw_text_centred(r, fit.w, static_cast<float>(fit.h) * 0.5f - 50.0f,
+                          {"WINGS OF FREEDOM", "", "CHOOSE YOUR NATION"},
+                          SDL_Color{255, 236, 170, 255});
+        const PlaneType& us = plane_type(fighter_of(Nation::US));
+        const PlaneType& de = plane_type(fighter_of(Nation::Germany));
+        draw_text_centred(
+            r, fit.w, static_cast<float>(fit.h) * 0.5f,
+            {format("1  UNITED STATES  %.*s", static_cast<int>(us.name.size()), us.name.data()),
+             format("2  GERMANY        %.*s", static_cast<int>(de.name.size()), de.name.data()), "",
+             "The other nation is the enemy."},
+            SDL_Color{236, 232, 200, 255});
+        SDL_SetRenderScale(r, 1.0f, 1.0f);
+        SDL_RenderPresent(r);
     }
 }
 
@@ -576,7 +748,7 @@ bool apply_damage_spec(const char* spec, Body& b, const DamageParams& d) {
 // when it's gone), a fuel spray while the fuselage leaks, heavy black smoke while going down, and a
 // fireball where a plane's flight ends in a crash or in the air.
 void emit_trails(const World& w, const std::vector<Body>& before, game::Effects& fx,
-                 const DamageParams& d) {
+                 const Rules& rules) {
     using Trail = game::Effects::Trail;
     for (std::size_t i = 0; i < w.bodies.size(); ++i) {
         const Body& b = w.bodies[i];
@@ -588,28 +760,60 @@ void emit_trails(const World& w, const std::vector<Body>& before, game::Effects&
         if (b.outcome != Outcome::Flying) {
             continue;
         }
-        // Puffs come from just behind the nose, so they trail as the plane flies on.
+        const DamageParams& d = plane_of(rules, b).damage;
+        // Puffs come from just behind the nose (or a twin's engine on each wing), so they trail as
+        // the plane flies on.
         const float h = b.heading_deg * 3.14159265f / 180.0f;
         const float x = b.x + std::sin(h) * 3.0f;
         const float y = b.y + std::cos(h) * 3.0f;
         const std::int64_t t = w.tick;
-        const Stage engine = part_stage(b, Part::Engine, d);
         if (b.damage.going_down) {
             if (t % 2 == 0) {
                 fx.trail(x, y, b.z, Trail::Black);
             }
-        } else if (engine == Stage::Critical || engine == Stage::Destroyed) {
-            if (t % 3 == 0) {
-                fx.trail(x, y, b.z, Trail::Black);
+        } else {
+            const bool twin = b.damage.engines > 1;
+            for (const Part engine_part : {Part::Engine, Part::Engine2}) {
+                if (engine_part == Part::Engine2 && !twin) {
+                    continue;
+                }
+                // A twin's engines sit out on the wings: left (Engine) and right (Engine2).
+                const float side = !twin ? 0.0f : (engine_part == Part::Engine ? -5.0f : 5.0f);
+                const float ex = x + std::cos(h) * side;
+                const float ey = y - std::sin(h) * side;
+                const Stage engine = part_stage(b, engine_part, d);
+                if (engine == Stage::Critical || engine == Stage::Destroyed) {
+                    if (t % 3 == 0) {
+                        fx.trail(ex, ey, b.z, Trail::Black);
+                    }
+                } else if (engine == Stage::Danger && t % 6 == 0) {
+                    fx.trail(ex, ey, b.z, Trail::Grey);
+                }
             }
-        } else if (engine == Stage::Danger && t % 6 == 0) {
-            fx.trail(x, y, b.z, Trail::Grey);
         }
         if (b.damage.fuselage > 0.0f && b.damage.fuselage < d.fuselage_hp && b.fuel > 0.0f &&
             t % 4 == 0) {
             fx.trail(b.x - std::sin(h) * 4.0f, b.y - std::cos(h) * 4.0f, b.z - 1.0f, Trail::Spray);
         }
     }
+}
+
+// Rounds left per gun type, for the readout: ".30 500  .50 200".
+std::string guns_text(const Body& b, const PlaneRules& plane) {
+    std::string out;
+    for (int c = 0; c < kCalibres; ++c) {
+        const auto cal = static_cast<Calibre>(c);
+        bool carried = false;
+        for (int g = 0; g < plane.gun_count; ++g) {
+            const GunSpec& s = plane.guns[static_cast<std::size_t>(g)];
+            carried = carried || (s.mount == Mount::Fixed && s.calibre == cal);
+        }
+        if (carried) {
+            out += format("%s%s %d", out.empty() ? "" : "  ", calibre_name(cal),
+                          rounds_left(b, plane, cal));
+        }
+    }
+    return out.empty() ? std::string("NO GUNS") : out;
 }
 
 // The colour a part's stage is shown in.
@@ -672,7 +876,12 @@ RichLine damage_line(const Body& b, const DamageParams& d) {
         line.push_back(Piece{stage_name(s), stage_colour(s)});
         line.push_back(Piece{"  ", label});
     };
-    add("ENG ", Part::Engine);
+    if (b.damage.engines > 1) {
+        add("ENG L ", Part::Engine);
+        add("R ", Part::Engine2);
+    } else {
+        add("ENG ", Part::Engine);
+    }
     add("LW ", Part::LeftWing);
     add("RW ", Part::RightWing);
     add("FUS ", Part::Fuselage);
@@ -730,16 +939,32 @@ int main(int argc, char** argv) {
 
     int exit_code = 0;
     {
-        game::PlaneSprites sprites(renderer);
-        if (!sprites.bake()) {
-            exit_code = 1;
+        // The player's nation (design/planes.md): chosen on the nation screen, or by --nation.
+        Nation nation = opts.has_nation ? opts.nation : Nation::US;
+        if (!opts.has_nation && !tool_mode) {
+            const std::optional<Nation> chosen = choose_nation(renderer);
+            if (!chosen) {
+                SDL_DestroyRenderer(renderer);
+                SDL_DestroyWindow(window);
+                SDL_Quit();
+                return 0;
+            }
+            nation = *chosen;
         }
+        const ModelId player_model = plane_type(fighter_of(nation)).model;
         if (opts.sprite_sheet != nullptr) {
-            const bool ok = exit_code == 0 && sprites.save_sheet(opts.sprite_sheet);
+            const bool ok =
+                game::PlaneSprites::save_sheet(opts.sprite_sheet, player_model, opts.sheet_step);
             SDL_DestroyRenderer(renderer);
             SDL_DestroyWindow(window);
             SDL_Quit();
             return ok ? 0 : 1;
+        }
+        // The player's plane and the practice drones' (the P-26's model): full size now, the other
+        // sizes in the background (in line for a screenshot, so it's exact).
+        game::PlaneSprites sprites(renderer, shot_mode);
+        if (!sprites.bake(player_model) || !sprites.bake(ModelId::P26)) {
+            exit_code = 1;
         }
 
         Tuning tuning;
@@ -769,9 +994,11 @@ int main(int argc, char** argv) {
             const float x =
                 opts.has_at ? static_cast<float>(opts.at_x) : static_cast<float>(kMapWidthU) * 0.5f;
             const float y = opts.has_at ? static_cast<float>(opts.at_y) : 480.0f;
-            Body b = start_body(tuning.rules.flight, x, y, opts.heading);
+            // The nation's fighter, with its real stats, guns and bombs.
+            Body b = new_plane(tuning.rules, fighter_of(nation), x, y, opts.heading);
+            const PlaneRules& plane = plane_of(tuning.rules, b);
             if (opts.has_height) {
-                b.z = std::fmin(opts.height, tuning.rules.flight.ceiling_u);
+                b.z = std::fmin(opts.height, plane.flight.ceiling_u);
             }
             if (opts.has_pitch) {
                 b.pitch_deg = opts.pitch;
@@ -779,9 +1006,7 @@ int main(int argc, char** argv) {
             if (opts.has_throttle) {
                 b.throttle = opts.throttle_pct / 100.0f;
             }
-            arm(b, tuning.rules.weapon);
-            repair(b, tuning.rules.damage);
-            if (opts.damage != nullptr && !apply_damage_spec(opts.damage, b, tuning.rules.damage)) {
+            if (opts.damage != nullptr && !apply_damage_spec(opts.damage, b, plane.damage)) {
                 SDL_Log("--damage: expected engine=, lwing=, rwing=, fuselage=, tail= or pilot= "
                         "with numbers, separated by commas");
             }
@@ -841,15 +1066,14 @@ int main(int argc, char** argv) {
                         constexpr std::array<HitFrom, 4> kSides = {HitFrom::Ahead, HitFrom::Behind,
                                                                    HitFrom::Left, HitFrom::Right};
                         const HitFrom from = kSides[world.rng.next_below(4)];
-                        debug_hits(world, 0, from,
-                                   static_cast<float>(tuning.rules.weapon.round_damage), 5,
+                        debug_hits(world, 0, from, tuning.rules.weapon.calibres[0].damage, 5,
                                    tuning.rules);
                         effects.add(world.events, tuning.rules.weapon.blast_radius_u);
                     } else if (!run_over && e.key.key == SDLK_F6) {
                         // Developer tool: a flak-sized hit (design/flight.md, Flak guns).
                         debug_hits(world, 0, HitFrom::Burst, 12.0f, 1, tuning.rules);
                     } else if (!run_over && e.key.key == SDLK_F7) {
-                        repair(world.bodies[0], tuning.rules.damage);
+                        repair(world.bodies[0], plane_of(tuning.rules, world.bodies[0]).damage);
                     } else if (run_over && (e.key.key == SDLK_RETURN ||
                                             e.key.key == SDLK_KP_ENTER || e.key.key == SDLK_R)) {
                         new_run();
@@ -893,7 +1117,7 @@ int main(int argc, char** argv) {
                         own_blast_damage = ev.damage;
                     }
                 }
-                emit_trails(world, previous, effects, tuning.rules.damage);
+                emit_trails(world, previous, effects, tuning.rules);
             }
             if (world.bodies[0].outcome != Outcome::Flying && !shot_mode) {
                 // The run is over and the world waits, but the fire and smoke play out.
@@ -908,16 +1132,19 @@ int main(int argc, char** argv) {
                 fps_since = now;
             }
 
-            // The world, 1:1 in art pixels, into the view target.
+            // The world into the view target: 1:1 in art pixels at your height, the ground
+            // shrinking as you climb and everything else by its depth (design/planes.md).
             const ViewFit& fit = screen.fit;
-            const PixelPt origin = view_origin(camera.focus(alpha), fit.w, fit.h);
+            const Body plane = between(previous[0], world.bodies[0], alpha);
+            const ViewXf xf = make_view(camera.focus(alpha), plane.z, tuning.rules.flight.ceiling_u,
+                                        tuning.look.zoom_at_ceiling, fit.w, fit.h);
+            sprites.pump();
             SDL_SetRenderTarget(renderer, screen.target);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
             SDL_RenderClear(renderer);
-            ground.draw(origin, fit.w, fit.h);
+            draw_ground(renderer, screen, ground, xf);
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            const Body plane = between(previous[0], world.bodies[0], alpha);
-            draw_scene(renderer, origin, world, plane, sprites, effects, tuning, marker);
+            draw_scene(renderer, xf, world, plane, sprites, effects, tuning, marker);
 
             // A temporary readout until PR 6's HUD: throttle, speed, height, fuel, warnings.
             std::string flags_line;
@@ -941,15 +1168,16 @@ int main(int argc, char** argv) {
             std::vector<RichLine> readout = {
                 {Piece{format("THR %3.0f%%  %3.0f MPH  %5.0f FT  FUEL %3.0f%%",
                               static_cast<double>(plane.throttle * 100.0f),
-                              static_cast<double>(plane.speed_u_s * kMphPerUs),
+                              static_cast<double>(mph_of(plane.speed_u_s, tuning.rules.scale)),
                               static_cast<double>(plane.z * kFeetPerU),
                               static_cast<double>(plane.fuel * 100.0f)),
                        text}},
-                {Piece{format("GUN %3d  BOMBS %d  [%s]  RULE %s  HITS %d", plane.loadout.rounds,
+                {Piece{format("%s  BOMBS %d  [%s]  RULE %s  HITS %d",
+                              guns_text(plane, plane_of(tuning.rules, plane)).c_str(),
                               plane.loadout.bombs, heavy_name(plane.loadout.heavy),
                               height_rule_name(height_rule), hits),
                        text}},
-                damage_line(plane, tuning.rules.damage)};
+                damage_line(plane, plane_of(tuning.rules, plane).damage)};
             if (!flags_line.empty()) {
                 readout.push_back({Piece{flags_line, SDL_Color{255, 150, 110, 255}}});
             }
@@ -982,10 +1210,14 @@ int main(int argc, char** argv) {
                     {format("Wings of Freedom %s  %d fps  %s", WOF_VERSION, fps, backend),
                      format("window %dx%d  scale %dx  view %dx%d", screen.out_w, screen.out_h,
                             fit.scale, fit.w, fit.h),
-                     format("camera %d,%d  lead %.0f,%.0f u", origin.x, origin.y,
+                     format("camera %.0f,%.0f  ground %.2f  lead %.0f,%.0f u",
+                            static_cast<double>(xf.focus.x), static_cast<double>(xf.focus.y),
+                            static_cast<double>(xf.scale_at(0.0f)),
                             static_cast<double>(camera.lead().x),
                             static_cast<double>(camera.lead().y)),
-                     format("plane %.0f,%.0f  %.0f u  %.1f u/s", static_cast<double>(plane.x),
+                     format("%.*s  %.0f,%.0f  %.0f u  %.1f u/s",
+                            static_cast<int>(plane_type(plane.type).name.size()),
+                            plane_type(plane.type).name.data(), static_cast<double>(plane.x),
                             static_cast<double>(plane.y), static_cast<double>(plane.z),
                             static_cast<double>(plane.speed_u_s)),
                      format("heading %.0f  pitch %.0f  bank %.0f  pose %d,%d",
@@ -996,9 +1228,10 @@ int main(int argc, char** argv) {
                             static_cast<double>(plane.throttle * 100.0f),
                             static_cast<double>(plane.fuel * 100.0f),
                             plane.stalled ? "stalled " : "", plane.engine_on ? "" : "engine off"),
-                     format("ground %s  tiles %d  tick %lld  sprites %.0f ms",
-                            ground_name(under.kind), ground.cached(),
-                            static_cast<long long>(world.tick), sprites.bake_ms()),
+                     format("ground %s  tiles %d  tick %lld", ground_name(under.kind),
+                            ground.cached(), static_cast<long long>(world.tick)),
+                     format("sprites %.0f ms  ready %d  queued %d", sprites.bake_ms(),
+                            sprites.ready(), sprites.queued()),
                      format("rounds in flight %zu  bombs falling %zu  targets %zu%s",
                             world.rounds.size(), world.bombs.size(), world.targets.size(),
                             marker ? "  marker on" : "")},
@@ -1024,6 +1257,13 @@ int main(int argc, char** argv) {
         if (screen.target != nullptr) {
             SDL_DestroyTexture(screen.target);
         }
+        if (screen.ground != nullptr) {
+            SDL_DestroyTexture(screen.ground);
+        }
+        if (screen.ground_half != nullptr) {
+            SDL_DestroyTexture(screen.ground_half);
+        }
+        sprites.shutdown();
     }
 
     SDL_DestroyRenderer(renderer);

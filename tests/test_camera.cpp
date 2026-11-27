@@ -1,4 +1,5 @@
 #include "core/camera.hpp"
+#include "core/view_xf.hpp"
 
 #include <doctest/doctest.h>
 
@@ -15,7 +16,7 @@ Body plane_at(float x, float y, float z, float heading) {
 }
 } // namespace
 
-TEST_CASE("The camera centres halfway between the plane and its shadow") {
+TEST_CASE("The camera aims a little above halfway up from the shadow to the plane") {
     CameraParams p;
     p.lead_u = 0.0f;
     Camera cam;
@@ -24,7 +25,7 @@ TEST_CASE("The camera centres halfway between the plane and its shadow") {
     const ScreenPt plane = to_screen(b.x, b.y, b.z);
     const ScreenPt shadow = to_screen(b.x, b.y, 0.0f);
     CHECK(cam.focus().x == doctest::Approx(plane.x));
-    CHECK(cam.focus().y == doctest::Approx((plane.y + shadow.y) * 0.5f));
+    CHECK(cam.focus().y == doctest::Approx(shadow.y + (plane.y - shadow.y) * 0.6f));
 }
 
 TEST_CASE("The camera leads along the heading, so north leads up-right") {
@@ -75,4 +76,24 @@ TEST_CASE("view_origin snaps the view to whole art pixels") {
     CHECK(view_origin({100.4f, 50.6f}, 480, 270) == PixelPt{-140, -84});
     CHECK(view_origin({0.0f, 0.0f}, 512, 288) == PixelPt{-256, -144});
     CHECK(view_origin({-0.6f, 0.6f}, 2, 2) == PixelPt{-2, 0});
+}
+
+TEST_CASE("The shadow gap keeps growing as you climb, and the plane stays on screen") {
+    CameraParams p;
+    p.lead_u = 0.0f;
+    float last_gap = -1.0f;
+    for (float z = 0.0f; z <= 600.0f; z += 50.0f) {
+        CAPTURE(z);
+        Camera cam;
+        const Body b = plane_at(1000.0f, 2000.0f, z, 0.0f);
+        cam.snap_to(b, p);
+        const ViewXf xf = make_view(cam.focus(), z, 600.0f, 0.25f, 480, 270);
+        const ScreenPt plane = xf.at(b.x, b.y, z);
+        const ScreenPt shadow = xf.at(b.x, b.y, 0.0f);
+        const float gap = shadow.y - plane.y;
+        CHECK(gap >= last_gap);
+        last_gap = gap;
+        CHECK(plane.y >= 24.0f); // the sprite's half height from the top of the 270 px view
+    }
+    CHECK(last_gap == doctest::Approx(132.0f).epsilon(0.03));
 }

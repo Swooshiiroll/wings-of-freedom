@@ -11,8 +11,8 @@ GroundPt settled_lead(float heading_deg, const CameraParams& p) noexcept {
 }
 
 ScreenPt Camera::aim(const Body& b) const noexcept {
-    // Halfway up the gap between the plane (at z) and its shadow (at 0).
-    return to_screen(b.x + lead_.x, b.y + lead_.y, b.z * 0.5f);
+    // Up the gap between the plane (at z) and its shadow (at 0).
+    return to_screen(b.x + lead_.x, b.y + lead_.y, b.z * kCameraAim);
 }
 
 void Camera::snap_to(const Body& b, const CameraParams& p) noexcept {

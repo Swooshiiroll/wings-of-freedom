@@ -36,11 +36,12 @@ shop, pilots, saving, other planes and eras, trucks and tanks, sound, gamepad, c
 - **Projection:** 2:1 true isometric at 480x270. North points up-right on screen and south (home)
   down-left. One unit of ground is about one art pixel.
 - **Height:** 0 is the ground. It is drawn as the gap between a plane and its shadow, **0.4 px per
-  u** × the ground zoom.
+  u**, sized by depth (design/planes.md, Height).
   - The ceiling is **30,000 ft (600 u) for every plane** (owner, 2026-11-26).
-  - **The ground zooms out as you climb:** its scale is 1 − 0.5 × height / ceiling (half size at
-    30,000 ft), so at the ceiling the gap is 120 px. Plane sprites stay full size.
-  - The zoomed ground is drawn smooth. That's the one exception to pixel-perfect.
+  - **Everything is sized by its depth** from your plane: full size at your height, down to a
+    quarter for the ground from 30,000 ft, up to 1.5× above you. Planes change size in crisp
+    eighth steps; the ground is drawn smooth (the one exception to pixel-perfect).
+  - **The shadow gap** grows to about 130 px at 30,000 ft.
 - **Map:** **2880 u east-west by 4800 u north-south** (about 6 screens across and 10 deep). The
   ground is flat in v0.1, with drawn detail only.
 - **The ground** is a **farmland patchwork** (placeholder look until v0.3's art).
@@ -96,10 +97,12 @@ The simulation runs at a fixed **60 ticks per second**.
     - The propeller's thrust is full up to **110 u/s**, then falls as 1/speed, scaled by the
       throttle. Its power is set so that full throttle levels off at 150.
 - **Pitch:** W/S changes it at **60°/s** (bombers 30°/s), up to **±40°**. **Let go and the nose
-  eases back to level** at the same rate (owner, 2026-11-26). The climb rate is speed × sin(pitch).
-  - **Best sustained climb:** each plane's real climb rate, scaled. For the P-26A that's
-    **15 u/s** (2,360 ft/min real), so deck to 30,000 ft takes about 40 s. Its thrust is worked
-    out to hit both its top speed and this climb.
+  eases back to level** at the same rate (owner, 2026-11-26). Height changes at speed × sin(pitch)
+  × **1/3** (`flight.height_share`; owner, 2026-11-27: climbing should take a while), climbing and
+  diving alike. Speed trades with the climb angle as before.
+  - **Best sustained climb:** each plane's real climb rate, scaled. For the P-26A that's **15 u/s**
+    of climbing (2,360 ft/min real), a third of it height, so deck to 30,000 ft takes about
+    2 minutes. Its thrust is worked out to hit both its top speed and this climb.
   - Holding S climbs at up to 40° and loses speed fast: from 110 u/s to a stall in about 2 s.
 - **Turning:** **100°/s** at the best turn speed of **110 u/s**.
   - Below that speed the rate falls with speed (50°/s at 55); above it, with 1/speed (73°/s at
@@ -119,7 +122,9 @@ The simulation runs at a fixed **60 ticks per second**.
 
 ### Fuel
 
-- A full tank lasts **240 s at full throttle**. Burn scales with throttle, down to **30%** at idle.
+- A full tank lasts **8 minutes** (480 s) at full throttle in the P-26A, others in proportion to
+  their real endurance. Burn scales with throttle, down to **30%** at idle. A climb to 30,000 ft
+  costs about a quarter of it.
 - **Engine off** (fuel empty or engine destroyed): no thrust, so the plane **glides**. Best glide
   is about **6 u forward per 1 u of height**, at **90 u/s**. Whether you get home depends on how
   high you were.
@@ -396,7 +401,13 @@ The enemy is the **other nation** (`planes.md`): fly the US and you fight German
     plane starts.
   - `--overlay` starts with the F1 overlay shown.
   - `--fire` and `--bomb` hold the guns or the bomb release throughout.
-- `--sprite-sheet FILE`: saves every baked plane pose to a PNG and exits.
+- `--sprite-sheet FILE`: saves every baked plane pose to a PNG and exits (the `--nation`'s
+  fighter); `--sprite-scale PCT` picks the size (25-150, in eighth steps).
+- `--nation us|de`: fly that nation's fighter and skip the nation screen (design/planes.md).
+- **`tuning.txt` format:** the file starts with `format = 3`. A file of an older format is renamed
+  `tuning-format<N>.txt` (a file with no format line is format 1) and the defaults are written, so
+  its old ceiling, tank and zoom numbers don't quietly win. Each plane's speeds, climb, stall, turn, pitch rate and tank
+  come from its real stats through the `scale.*` keys, so they're no longer in the file.
 - **F2** practice targets on/off (`--no-targets`), **F3** the height rule (`--height-rule`), **F4**
   the bomb marker.
 - **Damage testing until enemies arrive** (owner, 2026-11-26):
@@ -438,7 +449,9 @@ input commands, so tests can replay scripted flights.
 - **Flight:**
   - climbing loses speed and diving gains it, up to the dive limit;
   - stall below 55 u/s drops the nose;
-  - the ceiling holds.
+  - the ceiling holds;
+  - a fighter takes about 2 minutes from the deck to 30,000 ft, a bomber longer;
+  - sizes by depth: a quarter for the ground from the top, up to 1.5x above.
 - **Fuel:**
   - burn follows the throttle;
   - an empty tank glides at about 6:1.

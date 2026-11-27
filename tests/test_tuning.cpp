@@ -1,5 +1,6 @@
 #include "core/tuning.hpp"
 
+#include <initializer_list>
 #include <string>
 
 #include <doctest/doctest.h>
@@ -10,10 +11,12 @@ TEST_CASE("The tuning file round-trips every value exactly") {
     Tuning t;
     t.camera.lead_u = 37.25f;
     t.camera.lead_ease = 0.3f;
-    t.rules.flight.max_level_u_s = 123.456f;
+    t.rules.flight.ceiling_u = 543.25f;
+    t.rules.scale.u_per_mph = 0.7f;
     t.rules.edge.countdown_s = 7.5f;
     t.ground.field_max_u = 199;
     t.ground.weights[2] = 7;
+    t.rules.rederive(); // the planes follow the base and the scale, as loading does
     const std::string text = to_tuning(t);
     Tuning back;
     std::string errors;
@@ -81,4 +84,30 @@ TEST_CASE("An old tuning file's stand-in keys are reported, and the rest still l
     CHECK_FALSE(from_tuning("stand_in.speed_u_s = 110\ncamera.lead_u = 33\n", t, errors));
     CHECK(errors.find("line 1: unknown key stand_in.speed_u_s") != std::string::npos);
     CHECK(t.camera.lead_u == doctest::Approx(33.0f));
+}
+
+TEST_CASE("The file says its format; files from before real planes are format 1") {
+    const std::string text = to_tuning(Tuning{});
+    CHECK(text.find("format = 3\n") != std::string::npos);
+    CHECK(tuning_format(text) == kTuningFormat);
+    CHECK(tuning_format("# old\ncamera.lead_u = 40\nflight.ceiling_u = 240\n") == 1);
+    CHECK(tuning_format("") == 1);
+    // alpha.5's file (format 2) is older too, so it's set aside.
+    CHECK(tuning_format("format = 2\nscale.tank_s_per_hour = 133.33\n") == 2);
+    CHECK(2 < kTuningFormat);
+    CHECK(text.find("flight.height_share = ") != std::string::npos);
+    Tuning t;
+    std::string errors;
+    CHECK(from_tuning(text, t, errors)); // the format line itself is no error
+    CHECK(errors.empty());
+}
+
+TEST_CASE("Each plane's own flight numbers aren't in the file: they come from its real stats") {
+    const std::string text = to_tuning(Tuning{});
+    for (const char* gone : {"flight.max_level_u_s", "flight.turn_rate_deg_s", "flight.stall_u_s",
+                             "flight.tank_s", "flight.best_glide_u_s", "weapon.rounds"}) {
+        CAPTURE(gone);
+        CHECK(text.find(gone) == std::string::npos);
+    }
+    CHECK(text.find("flight.ceiling_u = 600\n") != std::string::npos);
 }

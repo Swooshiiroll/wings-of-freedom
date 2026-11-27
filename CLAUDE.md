@@ -9,8 +9,8 @@ Claude, who implements.
 
 ## Models
 
-- **Planning** (plan mode: design rounds, bug triage, the plan itself): Opus 5.5, high effort.
-- **Carrying out an approved plan:** Sonnet 5.5, medium effort.
+- **Planning** (plan mode: design rounds, bug triage, the plan itself): Opus 5.5, xhigh effort.
+- **Carrying out an approved plan:** Sonnet 5.5, high effort.
 
 This is automatic: the owner's Claude Code user settings use `opusplan`, which switches from Opus to
 Sonnet when a plan is approved, with the effort set per model. So plan in plan mode. If a session
@@ -112,5 +112,13 @@ Logs go to `out/`.
   `tests/test_ground.cpp` pins it on both. If you change the generator on purpose, update the hash
   in the same pull request and say why.
 - **Smoke run:** `WingsOfFreedom --shot out/shot.png` flies 120 ticks with no input, saves the view
-  as a PNG and exits. `--window`, `--heading`, `--height`, `--pitch`, `--throttle`, `--at` and
-  `--overlay` set up the shot. `--sprite-sheet out/sheet.png` saves every baked plane pose.
+  as a PNG and exits. `--window`, `--nation us|de`, `--heading`, `--height`, `--pitch`,
+  `--throttle`, `--at` and `--overlay` set up the shot. `--sprite-sheet out/sheet.png` saves every
+  baked pose of the `--nation`'s fighter, at `--sprite-scale PCT`. Shots and sheets skip the
+  nation screen.
+- **Depth and pixel-perfect:** everything is sized by its depth from the player's plane
+  (`core/view_xf.hpp`). The ground below is drawn at full size into its own target and shrunk
+  smoothly (the one exception to pixel-perfect). Planes are never stretched: each size step is
+  baked as pixel art, in the background, and only until it's ready is the nearest one stretched.
+- **`std::thread` (the sprite baker) uses only the pure core functions;** SDL textures are made
+  on the main thread.

@@ -99,3 +99,93 @@ std::vector<Block> fighter_model() {
 }
 
 } // namespace wof
+
+namespace wof {
+namespace {
+
+constexpr Rgb8 kRlmGrey{176, 179, 168}; // the He 51's pre-war light grey
+constexpr Rgb8 kGreyMetal{140, 143, 136};
+constexpr Rgb8 kDark{44, 44, 42};
+
+// A thin upright strut from (x, y, z0) to (x, y, z1).
+Block strut(float x, float y, float z0, float z1, Part part) {
+    return box(x - 0.15f, x + 0.15f, y - 0.2f, y + 0.2f, z0, z1, kDark, part);
+}
+
+// A straight biplane wing from the root at x = root to the tip at x = tip, its chord from y_back
+// to y_front, its underside at z at the root, `thick` deep, the tip raised by `dihedral`.
+Block slab(float root, float tip, float y_back, float y_front, float z, float thick, float dihedral,
+           Part part) {
+    Block k;
+    k.corners = {{{root, y_back, z},
+                  {tip, y_back, z + dihedral},
+                  {tip, y_front, z + dihedral},
+                  {root, y_front, z},
+                  {root, y_back, z + thick},
+                  {tip, y_back, z + thick + dihedral},
+                  {tip, y_front, z + thick + dihedral},
+                  {root, y_front, z + thick}}};
+    k.colour = kRlmGrey;
+    k.part = part;
+    return k;
+}
+
+} // namespace
+
+std::vector<Block> he51_model() {
+    std::vector<Block> m;
+    // The inline engine's long, pointed nose, a radiator underneath, and the spinner.
+    m.push_back(
+        taper_y(5.5f, 1.2f, -1.0f, 1.3f, 10.0f, 0.6f, -0.35f, 0.7f, kGreyMetal, Part::Engine));
+    m.push_back(box(-0.7f, 0.7f, 5.0f, 7.0f, -2.0f, -1.0f, kDark, Part::Engine));
+    m.push_back(box(-0.35f, 0.35f, 10.0f, 11.0f, -0.15f, 0.55f, kSpinnerColour, Part::Engine));
+    // Fuselage and tail cone.
+    m.push_back(box(-1.1f, 1.1f, -2.0f, 5.5f, -1.0f, 1.3f, kRlmGrey, Part::Fuselage));
+    m.push_back(
+        taper_y(-2.0f, 1.1f, -1.0f, 1.3f, -11.0f, 0.35f, -0.1f, 0.6f, kRlmGrey, Part::Tail));
+    // Biplane wings: the lower ones from the fuselage, the upper ones above on struts, staggered
+    // forward. Each side's upper and lower wing (and its struts) are one part.
+    // The slabs are 0.8 u thick (thinner ones break up edge-on), and the lower wings have a
+    // little dihedral, so a wing seen edge-on still reads as a line.
+    m.push_back(slab(-1.1f, -12.5f, -1.0f, 3.0f, -1.1f, 0.8f, 0.6f, Part::LeftWing));
+    m.push_back(slab(1.1f, 12.5f, -1.0f, 3.0f, -1.1f, 0.8f, 0.6f, Part::RightWing));
+    m.push_back(slab(-0.3f, -14.0f, 0.2f, 4.4f, 3.0f, 0.8f, 0.0f, Part::LeftWing));
+    m.push_back(slab(0.3f, 14.0f, 0.2f, 4.4f, 3.0f, 0.8f, 0.0f, Part::RightWing));
+    m.push_back(strut(-8.5f, 1.6f, -0.1f, 3.0f, Part::LeftWing));
+    m.push_back(strut(8.5f, 1.6f, -0.1f, 3.0f, Part::RightWing));
+    m.push_back(strut(-0.8f, 1.8f, 1.3f, 3.0f, Part::Fuselage)); // the cabane
+    m.push_back(strut(0.8f, 1.8f, 1.3f, 3.0f, Part::Fuselage));
+    // Tailplane and fin.
+    m.push_back(box(-4.5f, 4.5f, -10.6f, -8.4f, 0.1f, 0.4f, kRlmGrey, Part::Tail));
+    m.push_back(taper_y(-11.2f, 0.22f, 0.4f, 3.0f, -8.4f, 0.22f, 0.4f, 0.6f, kRlmGrey, Part::Tail));
+    // The open cockpit, behind the upper wing.
+    m.push_back(box(-0.6f, 0.6f, -0.6f, -0.2f, 1.3f, 1.9f, kGlass, Part::Cockpit));
+    m.push_back(box(-0.45f, 0.45f, -1.7f, -0.9f, 1.3f, 2.3f, kLeather, Part::Cockpit));
+    // Fixed landing gear: legs and wheels.
+    m.push_back(box(-2.4f, -1.9f, 3.0f, 3.5f, -3.0f, -1.0f, kDark, Part::Fuselage));
+    m.push_back(box(1.9f, 2.4f, 3.0f, 3.5f, -3.0f, -1.0f, kDark, Part::Fuselage));
+    m.push_back(box(-2.6f, -2.0f, 2.4f, 4.1f, -4.0f, -2.6f, kDark, Part::Fuselage));
+    m.push_back(box(2.0f, 2.6f, 2.4f, 4.1f, -4.0f, -2.6f, kDark, Part::Fuselage));
+    return m;
+}
+
+std::vector<Block> plane_model(ModelId id) {
+    switch (id) {
+    case ModelId::He51:
+        return he51_model();
+    case ModelId::P26:
+        break;
+    }
+    return fighter_model();
+}
+
+std::vector<Block> scaled_model(std::vector<Block> model, float s) {
+    for (Block& b : model) {
+        for (Vec3& c : b.corners) {
+            c = {c.x * s, c.y * s, c.z * s};
+        }
+    }
+    return model;
+}
+
+} // namespace wof

@@ -94,20 +94,20 @@ void auto_aim(const World& w, std::size_t shooter, const WeaponParams& p, Round&
     }
 }
 
-void burst(World& w, const Rules& rules, float gx, float gy, int owner) {
-    const WeaponParams& p = rules.weapon;
-    w.events.push_back(Event{EventKind::Blast, -1, owner, gx, gy, 0.0f, 0.0f});
+void burst(World& w, const Rules& rules, float gx, float gy, int owner, const Blast& blast) {
+    w.events.push_back(Event{EventKind::Blast, -1, owner, gx, gy, 0.0f, blast.radius_u});
     for (std::size_t j = 0; j < w.bodies.size(); ++j) {
         Body& b = w.bodies[j];
         if (b.outcome != Outcome::Flying) {
             continue;
         }
         const float d = std::sqrt((b.x - gx) * (b.x - gx) + (b.y - gy) * (b.y - gy) + b.z * b.z);
-        const float damage = blast_damage_at(p, d);
+        const float damage = blast_damage_at(blast, d);
         if (damage > 0.0f) {
             // Blasts land like a flak burst's hits (design/flight.md, Where hits land).
-            const Part part = pick_part(b, HitFrom::Burst, rules.damage, w.rng);
-            apply_hit(b, part, damage, rules.damage);
+            const DamageParams& dp = plane_of(rules, b).damage;
+            const Part part = pick_part(b, HitFrom::Burst, dp, w.rng);
+            apply_hit(b, part, damage, dp);
             Event e{EventKind::BlastHitPlane, static_cast<int>(j), owner, b.x, b.y, b.z, damage};
             e.part = static_cast<std::int8_t>(part);
             w.events.push_back(e);
@@ -118,10 +118,10 @@ void burst(World& w, const Rules& rules, float gx, float gy, int owner) {
         const float across = std::hypot(t.x - gx, t.y - gy);
         const float d = t.kind == TargetKind::Drone ? std::hypot(across, t.z)
                                                     : across - rules.targets.ground_radius_u;
-        if (d < p.blast_radius_u) {
+        if (d < blast.radius_u) {
             hit_target(t);
             w.events.push_back(Event{EventKind::BlastHitTarget, static_cast<int>(k), owner, t.x,
-                                     t.y, t.z, blast_damage_at(p, std::max(0.0f, d))});
+                                     t.y, t.z, blast_damage_at(blast, std::max(0.0f, d))});
         }
     }
 }
@@ -151,30 +151,50 @@ bool parse_height_rule(std::string_view text, HeightRule& out) noexcept {
     return false;
 }
 
-void arm(Body& b, const WeaponParams& p) noexcept {
+void arm(Body& b, const PlaneRules& plane) noexcept {
     b.loadout = Loadout{};
-    b.loadout.rounds = p.rounds;
-    b.loadout.bombs = p.bombs;
+    for (int g = 0; g < std::min(plane.gun_count, kGunSlots); ++g) {
+        b.loadout.guns[static_cast<std::size_t>(g)].rounds =
+            plane.guns[static_cast<std::size_t>(g)].rounds;
+    }
+    b.loadout.bombs = plane.bombs;
 }
 
-float blast_damage_at(const WeaponParams& p, float distance) noexcept {
-    if (p.blast_radius_u <= 0.0f || distance >= p.blast_radius_u) {
+Blast blast_of(float weight_lb, const WeaponParams& p) noexcept {
+    const float k = std::cbrt(std::max(0.0f, weight_lb) / 100.0f);
+    return {p.blast_radius_u * k, p.blast_damage * k};
+}
+
+float blast_damage_at(const Blast& blast, float distance) noexcept {
+    if (blast.radius_u <= 0.0f || distance >= blast.radius_u) {
         return 0.0f;
     }
-    return p.blast_damage * (1.0f - std::max(0.0f, distance) / p.blast_radius_u);
+    return blast.damage * (1.0f - std::max(0.0f, distance) / blast.radius_u);
+}
+
+int rounds_left(const Body& b, const PlaneRules& plane, Calibre c) noexcept {
+    int n = 0;
+    for (int g = 0; g < std::min(plane.gun_count, kGunSlots); ++g) {
+        const auto i = static_cast<std::size_t>(g);
+        if (plane.guns[i].mount == Mount::Fixed && plane.guns[i].calibre == c) {
+            n += b.loadout.guns[i].rounds;
+        }
+    }
+    return n;
 }
 
 namespace {
 
-// A bomb as it leaves the plane: just below it, with the plane's velocity.
-Bomb release(const Body& b, const WeaponParams& p, int owner) noexcept {
+// A bomb as it leaves the plane: just below it, with the plane's velocity (its real up or down
+// speed, so the climb's height share too).
+Bomb release(const Body& b, const WeaponParams& p, float height_share, int owner) noexcept {
     const Vec nose = nose_of(b);
     return Bomb{b.x,
                 b.y,
                 b.z - p.bomb_drop_u,
                 nose.x * b.speed_u_s,
                 nose.y * b.speed_u_s,
-                nose.z * b.speed_u_s,
+                nose.z * b.speed_u_s * height_share,
                 owner};
 }
 
@@ -198,11 +218,11 @@ bool fall(Bomb& m, float gravity, float& gx, float& gy) noexcept {
 
 } // namespace
 
-GroundSpot bomb_impact(const Body& b, const WeaponParams& p, float gravity) noexcept {
-    Bomb m = release(b, p, -1);
+GroundSpot bomb_impact(const Body& b, const WeaponParams& p, const FlightParams& flight) noexcept {
+    Bomb m = release(b, p, flight.height_share, -1);
     GroundSpot spot{m.x, m.y};
     for (int i = 0; i < kMaxBombSteps; ++i) {
-        if (fall(m, gravity, spot.x, spot.y)) {
+        if (fall(m, flight.gravity, spot.x, spot.y)) {
             return spot;
         }
     }
@@ -211,46 +231,65 @@ GroundSpot bomb_impact(const Body& b, const WeaponParams& p, float gravity) noex
 
 void fire_weapons(World& w, std::size_t body, const InputCommand& cmd, const Rules& rules) {
     const WeaponParams& p = rules.weapon;
+    const PlaneRules& plane = plane_of(rules, w.bodies[body]);
     Body& b = w.bodies[body];
     Loadout& l = b.loadout;
     if (cmd.switch_heavy) {
         l.heavy = Heavy::Bombs; // the only heavy weapon so far: nothing else to switch to
     }
 
-    // Guns: one round every 1/gun_rate_per_s while held, from the two guns in turn.
-    if (l.gun_cooldown > 0) {
-        --l.gun_cooldown;
-    }
-    if (cmd.guns && l.rounds > 0 && l.gun_cooldown == 0) {
-        const Vec nose = nose_of(b);
-        const float h = b.heading_deg * kDegToRad;
-        const float side = (l.rounds_fired % 2 == 0 ? -1.0f : 1.0f) * p.gun_spacing_u;
-        const float speed = p.round_speed_u_s + b.speed_u_s;
+    // Guns: each of the pilot's fixed guns fires at its own real rate while F is held.
+    const Vec nose = nose_of(b);
+    const float h = b.heading_deg * kDegToRad;
+    for (int g = 0; g < std::min(plane.gun_count, kGunSlots); ++g) {
+        const GunSpec& spec = plane.guns[static_cast<std::size_t>(g)];
+        GunState& gun = l.guns[static_cast<std::size_t>(g)];
+        if (spec.mount != Mount::Fixed) {
+            continue; // a gunner's gun (the bombers', PR 6)
+        }
+        // The time between shots carries over from tick to tick, so the gun keeps its exact rate;
+        // while it isn't firing, it can't save shots up.
+        gun.wait_s -= kTickSeconds;
+        if (!cmd.guns || gun.rounds <= 0) {
+            gun.wait_s = std::max(0.0f, gun.wait_s);
+            continue;
+        }
+        if (gun.wait_s > 0.0f) {
+            continue;
+        }
+        const CalibreParams& cal = p.calibres[static_cast<std::size_t>(spec.calibre)];
+        const float speed = cal.speed_u_s + b.speed_u_s;
         Round r;
-        r.x = b.x + nose.x * p.muzzle_u + std::cos(h) * side;
-        r.y = b.y + nose.y * p.muzzle_u - std::sin(h) * side;
+        r.x = b.x + nose.x * p.muzzle_u + std::cos(h) * spec.side_u;
+        r.y = b.y + nose.y * p.muzzle_u - std::sin(h) * spec.side_u;
         r.z = b.z + nose.z * p.muzzle_u;
         r.vx = nose.x * speed;
         r.vy = nose.y * speed;
         r.vz = nose.z * speed;
-        r.life_s = p.round_life_s;
+        r.life_s = cal.life_s;
         r.owner = static_cast<int>(body);
-        r.tracer = p.tracer_every > 0 && l.rounds_fired % p.tracer_every == 0;
+        r.tracer = p.tracer_every > 0 && gun.fired % p.tracer_every == 0;
+        r.damage = cal.damage;
         if (rules.height_rule == HeightRule::AutoAim) {
             auto_aim(w, body, p, r);
         }
         w.rounds.push_back(r);
-        --l.rounds;
-        ++l.rounds_fired;
-        l.gun_cooldown = ticks_of(1.0f / std::max(0.01f, p.gun_rate_per_s));
+        --gun.rounds;
+        ++gun.fired;
+        gun.wait_s += 60.0f / std::max(1.0f, spec.rpm);
     }
 
-    // Bombs: one now, then one every bomb_interval_s while Space is held (a ripple).
+    // Bombs: one now, then one every bomb_interval_s while Space is held (a ripple). Each bomb's
+    // blast is by its real weight.
     if (l.bomb_cooldown > 0) {
         --l.bomb_cooldown;
     }
     if (cmd.heavy && l.heavy == Heavy::Bombs && l.bombs > 0 && l.bomb_cooldown == 0) {
-        w.bombs.push_back(release(b, p, static_cast<int>(body)));
+        Bomb m = release(b, p, plane.flight.height_share, static_cast<int>(body));
+        const Blast blast = blast_of(plane.bomb_lb, p);
+        m.radius_u = blast.radius_u;
+        m.damage = blast.damage;
+        w.bombs.push_back(m);
         --l.bombs;
         l.bomb_cooldown = ticks_of(p.bomb_interval_s);
     }
@@ -308,10 +347,10 @@ void move_projectiles(World& w, const Rules& rules) {
         if (hit_body >= 0) {
             // The part it lands on depends on where it came from: back along its path.
             Body& target = w.bodies[static_cast<std::size_t>(hit_body)];
-            const auto damage = static_cast<float>(p.round_damage);
-            const Part part =
-                pick_part(target, hit_from(target, -r.vx, -r.vy), rules.damage, w.rng);
-            apply_hit(target, part, damage, rules.damage);
+            const float damage = r.damage;
+            const DamageParams& dp = plane_of(rules, target).damage;
+            const Part part = pick_part(target, hit_from(target, -r.vx, -r.vy), dp, w.rng);
+            apply_hit(target, part, damage, dp);
             Event e{EventKind::RoundHitPlane, hit_body, r.owner, hx, hy, hz, damage};
             e.part = static_cast<std::int8_t>(part);
             w.events.push_back(e);
@@ -319,8 +358,8 @@ void move_projectiles(World& w, const Rules& rules) {
         }
         if (hit_drone >= 0) {
             hit_target(w.targets[static_cast<std::size_t>(hit_drone)]);
-            w.events.push_back(Event{EventKind::RoundHitTarget, hit_drone, r.owner, hx, hy, hz,
-                                     static_cast<float>(p.round_damage)});
+            w.events.push_back(
+                Event{EventKind::RoundHitTarget, hit_drone, r.owner, hx, hy, hz, r.damage});
             continue;
         }
 
@@ -346,8 +385,8 @@ void move_projectiles(World& w, const Rules& rules) {
             }
             if (nearest >= 0) {
                 hit_target(w.targets[static_cast<std::size_t>(nearest)]);
-                w.events.push_back(Event{EventKind::RoundHitTarget, nearest, r.owner, gx, gy, 0.0f,
-                                         static_cast<float>(p.round_damage)});
+                w.events.push_back(
+                    Event{EventKind::RoundHitTarget, nearest, r.owner, gx, gy, 0.0f, r.damage});
             }
             continue;
         }
@@ -367,7 +406,7 @@ void move_projectiles(World& w, const Rules& rules) {
         float gx = 0.0f;
         float gy = 0.0f;
         if (fall(m, rules.flight.gravity, gx, gy)) {
-            burst(w, rules, gx, gy, m.owner);
+            burst(w, rules, gx, gy, m.owner, Blast{m.radius_u, m.damage});
         } else {
             bombs.push_back(m);
         }
