@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "core/body.hpp"
+#include "core/planes.hpp"
 
 namespace wof {
 
@@ -41,6 +42,14 @@ struct Block {
 // spats under the wings, an open cockpit with a headrest. Olive drab fuselage, yellow wings and
 // tail, no markings. About 22 u across and 18 u long. Real art replaces it in v0.3.
 [[nodiscard]] std::vector<Block> fighter_model();
+
+// The Heinkel He 51 (design/planes.md): a blocky original biplane model. Long pointed nose (an
+// inline engine) with a radiator underneath, upper and lower wings with struts, open cockpit and
+// fixed landing gear, all in pre-war light grey. About 28 u across and 22 u long.
+[[nodiscard]] std::vector<Block> he51_model();
+
+// A plane's model by its id (core/planes.hpp).
+[[nodiscard]] std::vector<Block> plane_model(ModelId id);
 
 // The colour of the propeller spinner, the nose's very front (tests find the nose by it).
 inline constexpr Rgb8 kSpinnerColour{196, 60, 44};

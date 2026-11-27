@@ -71,6 +71,8 @@ float part_hp(const Body& b, Part p) noexcept {
     switch (p) {
     case Part::Engine:
         return b.damage.engine;
+    case Part::Engine2:
+        return b.damage.engine2;
     case Part::LeftWing:
         return b.damage.left_wing;
     case Part::RightWing:
@@ -89,6 +91,8 @@ Stage part_stage(const Body& b, Part p, const DamageParams& d) noexcept {
     switch (p) {
     case Part::Engine:
         return stage_of(b.damage.engine, d.engine_hp);
+    case Part::Engine2:
+        return b.damage.engines > 1 ? stage_of(b.damage.engine2, d.engine_hp) : Stage::Ok;
     case Part::LeftWing:
         return stage_of(b.damage.left_wing, d.wing_hp);
     case Part::RightWing:
@@ -105,7 +109,7 @@ Stage part_stage(const Body& b, Part p, const DamageParams& d) noexcept {
 
 float total_hp(const Body& b) noexcept {
     const Damage& m = b.damage;
-    return m.engine + m.left_wing + m.right_wing + m.fuselage + m.tail;
+    return m.engine + m.engine2 + m.left_wing + m.right_wing + m.fuselage + m.tail;
 }
 
 std::uint32_t missing_parts(const Body& b) noexcept {
@@ -124,7 +128,9 @@ std::uint32_t missing_parts(const Body& b) noexcept {
 
 void repair(Body& b, const DamageParams& d) noexcept {
     b.damage = Damage{};
+    b.damage.engines = std::clamp(d.engines, 1, 2);
     b.damage.engine = d.engine_hp;
+    b.damage.engine2 = b.damage.engines > 1 ? d.engine_hp : 0.0f;
     b.damage.left_wing = d.wing_hp;
     b.damage.right_wing = d.wing_hp;
     b.damage.fuselage = d.fuselage_hp;
@@ -168,7 +174,17 @@ Part pick_part(const Body& b, HitFrom from, const DamageParams& d, Rng& rng) noe
     }
     switch (column) {
     case 0:
-        return Part::Engine;
+        if (b.damage.engines < 2) {
+            return Part::Engine;
+        }
+        // A twin: the engine on the hit's side, or either one.
+        if (from == HitFrom::Left) {
+            return Part::Engine;
+        }
+        if (from == HitFrom::Right) {
+            return Part::Engine2;
+        }
+        return rng.next_below(2) == 0 ? Part::Engine : Part::Engine2;
     case 1:
         return Part::Cockpit;
     case 2:
@@ -189,7 +205,13 @@ void apply_hit(Body& b, Part p, float damage, const DamageParams& d) noexcept {
     switch (p) {
     case Part::Engine:
         m.engine = std::max(0.0f, m.engine - damage);
-        if (m.engine <= 0.0f) {
+        if (m.engine <= 0.0f && (m.engines < 2 || m.engine2 <= 0.0f)) {
+            b.engine_on = false; // no engine left
+        }
+        break;
+    case Part::Engine2:
+        m.engine2 = std::max(0.0f, m.engine2 - damage);
+        if (m.engine2 <= 0.0f && m.engine <= 0.0f) {
             b.engine_on = false;
         }
         break;
@@ -238,8 +260,22 @@ void apply_hit(Body& b, Part p, float damage, const DamageParams& d) noexcept {
 Handling handling_of(const Body& b, const DamageParams& d) noexcept {
     Handling h;
     const Damage& m = b.damage;
-    h.top_speed_share =
-        d.engine_min_share + (1.0f - d.engine_min_share) * share(m.engine, d.engine_hp);
+    const auto engine_share = [&](float hp) {
+        return hp <= 0.0f ? 0.0f
+                          : d.engine_min_share + (1.0f - d.engine_min_share) * share(hp, d.engine_hp);
+    };
+    if (m.engines < 2) {
+        h.top_speed_share = engine_share(m.engine);
+    } else {
+        // A twin: the power adds up, and top speed goes as the cube root of power, so losing one
+        // engine (half the power) leaves about 79% of the top speed.
+        const float a = engine_share(m.engine);
+        const float c = engine_share(m.engine2);
+        h.top_speed_share = std::cbrt(0.5f * (a * a * a + c * c * c));
+    }
+    if (h.top_speed_share <= 0.0f) {
+        h.top_speed_share = 1.0f; // no engine at all: the plane glides, nothing to scale
+    }
     const float weaker = std::min(share(m.left_wing, d.wing_hp), share(m.right_wing, d.wing_hp));
     h.turn_share = d.wing_min_share + (1.0f - d.wing_min_share) * weaker;
     if (m.fuselage > 0.0f) {

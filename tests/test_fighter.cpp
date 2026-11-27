@@ -1,7 +1,9 @@
 #include "core/fighter.hpp"
 #include "core/raster.hpp"
 
+#include <algorithm>
 #include <cstddef>
+#include <initializer_list>
 #include <vector>
 
 #include <doctest/doctest.h>
@@ -178,4 +180,75 @@ TEST_CASE("A plane can be drawn with a part missing") {
                                        kAllParts & ~part_bit(Part::LeftWing));
     CHECK(centre_of(whole, m, left).count > 0);
     CHECK(centre_of(broken, m, left).count == 0);
+}
+
+namespace {
+// Where the He 51's nose is drawn: its spinner on its own.
+Centre he51_nose_at(float heading, float pitch) {
+    std::vector<Block> spinner;
+    for (const Block& b : he51_model()) {
+        if (b.colour == kSpinnerColour) {
+            spinner.push_back(b);
+        }
+    }
+    REQUIRE(spinner.size() == 1u);
+    return centre_of(plane(spinner, heading, pitch, 0.0f), spinner,
+                     [](const Block&) { return true; });
+}
+} // namespace
+
+TEST_CASE("The He 51 points its nose along its heading, and its pitch shows") {
+    CHECK(he51_nose_at(45.0f, 0.0f).x > kOrigin + 8.0f);
+    CHECK(he51_nose_at(225.0f, 0.0f).x < kOrigin - 8.0f);
+    CHECK(he51_nose_at(315.0f, 0.0f).y < kOrigin - 4.0f);
+    for (const float heading : {0.0f, 120.0f, 250.0f}) {
+        CAPTURE(heading);
+        CHECK(he51_nose_at(heading, 40.0f).y < he51_nose_at(heading, 0.0f).y - 3.0f);
+        CHECK(he51_nose_at(heading, -40.0f).y > he51_nose_at(heading, 0.0f).y + 3.0f);
+    }
+}
+
+TEST_CASE("The He 51 is a biplane: each side's upper and lower wings are one part") {
+    const auto m = he51_model();
+    int left = 0;
+    int right = 0;
+    float top = -100.0f;
+    float bottom = 100.0f;
+    for (const Block& b : m) {
+        left += b.part == Part::LeftWing ? 1 : 0;
+        right += b.part == Part::RightWing ? 1 : 0;
+        if (b.part == Part::LeftWing) {
+            for (const Vec3& c : b.corners) {
+                top = std::max(top, c.z);
+                bottom = std::min(bottom, c.z);
+            }
+        }
+    }
+    CHECK(left == 3); // upper, lower and the strut between
+    CHECK(right == 3);
+    CHECK(top - bottom > 4.0f);
+    // Losing the left wing takes both its wings off.
+    const auto lw = [](const Block& b) { return b.part == Part::LeftWing; };
+    const Sprite broken = render_model(m, Pose{}, kCell, kCell, kOrigin, kOrigin,
+                                       kAllParts & ~part_bit(Part::LeftWing));
+    CHECK(centre_of(broken, m, lw).count == 0);
+    CHECK(plane_model(ModelId::He51).size() == m.size());
+    CHECK(plane_model(ModelId::P26).size() == fighter_model().size());
+}
+
+TEST_CASE("The He 51 fits its 48 px cell at every pose") {
+    const auto m = he51_model();
+    for (int h = 0; h < 32; ++h) {
+        for (int p = -40; p <= 40; p += 20) {
+            for (const float b : {-30.0f, 0.0f, 30.0f}) {
+                const Sprite s = plane(m, static_cast<float>(h) * 11.25f, static_cast<float>(p), b);
+                for (int i = 0; i < kCell; ++i) {
+                    REQUIRE(s.block_at(i, 0) == -1);
+                    REQUIRE(s.block_at(i, kCell - 1) == -1);
+                    REQUIRE(s.block_at(0, i) == -1);
+                    REQUIRE(s.block_at(kCell - 1, i) == -1);
+                }
+            }
+        }
+    }
 }

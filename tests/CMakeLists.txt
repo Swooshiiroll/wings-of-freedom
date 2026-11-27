@@ -1,6 +1,7 @@
 # Unit tests: core library only, so they run headless (no window, no GPU) locally and on CI.
 add_executable(wof_tests
   test_main.cpp
+  test_planes.cpp
   test_camera.cpp
   test_damage.cpp
   test_fighter.cpp

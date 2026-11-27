@@ -8,6 +8,8 @@
 #include "core/damage.hpp"
 #include "core/flight.hpp"
 #include "core/input.hpp"
+#include "core/plane_rules.hpp"
+#include "core/planes.hpp"
 #include "core/rng.hpp"
 #include "core/targets.hpp"
 #include "core/weapons.hpp"
@@ -26,16 +28,27 @@ struct EdgeParams {
 };
 
 // Everything step() needs to know about the rules.
+// - `flight` and `damage` are the base: what every plane shares (gravity, the ceiling, the hit
+//   table...).
+// - `planes` holds each plane type's own rules, worked out from its real stats with `scale`
+//   (core/plane_rules.hpp). Call rederive() after changing the base or the scale.
 struct Rules {
     FlightParams flight;
     EdgeParams edge;
     WeaponParams weapon;
     TargetParams targets;
     DamageParams damage;
+    PlaneScale scale;
     HeightRule height_rule = HeightRule::Forgiving; // a game option, not in tuning.txt
+    std::vector<PlaneRules> planes = derive_roster(flight, damage, scale);
 
-    friend constexpr bool operator==(const Rules&, const Rules&) = default;
+    void rederive() { planes = derive_roster(flight, damage, scale); }
+
+    friend bool operator==(const Rules&, const Rules&) = default;
 };
+
+// A plane's own rules, by its type.
+[[nodiscard]] const PlaneRules& plane_of(const Rules& rules, const Body& b) noexcept;
 
 // Everything that flies, and what it fires. Any number of planes; nothing here assumes there is
 // only one player.
@@ -49,8 +62,10 @@ struct World {
     std::int64_t tick = 0;
 };
 
-// A plane ready for a run: in the air with the start values, armed and undamaged.
-[[nodiscard]] Body new_plane(const Rules& rules, float x, float y, float heading_deg) noexcept;
+// A plane of a type, ready for a run: in the air with the start values, armed with its real guns
+// and bombs, and undamaged.
+[[nodiscard]] Body new_plane(const Rules& rules, PlaneId type, float x, float y,
+                             float heading_deg) noexcept;
 
 // Plane-to-plane collisions (design/flight.md, Collisions): two flying planes within twice the
 // collision radius across and the collision height of each other touch. The one with less total

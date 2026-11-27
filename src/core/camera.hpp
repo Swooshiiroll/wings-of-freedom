@@ -54,4 +54,12 @@ struct PixelPt {
 // the pixel art stays crisp.
 [[nodiscard]] PixelPt view_origin(ScreenPt focus, int view_w, int view_h) noexcept;
 
+// How big the ground is drawn at a height (design/planes.md): full size on the deck, shrinking
+// steadily to `at_ceiling` at the ceiling, so up high you see more and plane and shadow stay in
+// view. Everything in the world is drawn at this scale except the planes' sprites.
+[[nodiscard]] constexpr float ground_zoom(float z, float ceiling, float at_ceiling) noexcept {
+    const float t = ceiling > 0.0f ? (z <= 0.0f ? 0.0f : (z >= ceiling ? 1.0f : z / ceiling)) : 0.0f;
+    return 1.0f - (1.0f - at_ceiling) * t;
+}
+
 } // namespace wof

@@ -25,7 +25,7 @@ struct FlightParams {
     float stall_nose_deg = -30.0f;       // a stall drops the nose toward this
     float stall_nose_rate_deg_s = 40.0f; // at this rate
     float stall_control = 0.3f;          // share of turn and pitch control while stalled
-    float ceiling_u = 240.0f;
+    float ceiling_u = 600.0f; // 30,000 ft for every plane (owner, 2026-11-26)
     float tank_s = 240.0f;  // a full tank lasts this long at full throttle
     float idle_burn = 0.3f; // fuel burn at idle, as a share of full-throttle burn
     float bank_deg = 30.0f; // looks only: how far the plane banks into a turn
@@ -46,6 +46,8 @@ struct Aero {
     float k2 = 0.0f;
     float power = 0.0f; // thrust x speed above full_thrust_below_u_s
     float full_below = 0.0f;
+
+    friend constexpr bool operator==(const Aero&, const Aero&) = default;
 };
 [[nodiscard]] Aero aero_of(const FlightParams& p) noexcept;
 

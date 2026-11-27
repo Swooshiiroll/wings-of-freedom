@@ -50,10 +50,10 @@ PlaneSprites::~PlaneSprites() {
     }
 }
 
-PlaneSprites::Atlas PlaneSprites::bake_atlas(std::uint32_t parts,
+PlaneSprites::Atlas PlaneSprites::bake_atlas(ModelId id, std::uint32_t parts,
                                              std::vector<std::uint32_t>* keep) const {
     const Uint64 start = SDL_GetTicksNS();
-    const std::vector<Block> model = fighter_model();
+    const std::vector<Block> model = plane_model(id);
     const auto n = static_cast<std::size_t>(kAtlasW) * static_cast<std::size_t>(kAtlasH);
     std::vector<std::uint32_t> plane_pixels(n, 0u);
     std::vector<std::uint32_t> shadow_pixels(n, 0u);
@@ -82,19 +82,19 @@ PlaneSprites::Atlas PlaneSprites::bake_atlas(std::uint32_t parts,
     return a;
 }
 
-bool PlaneSprites::bake() {
-    const Atlas a = bake_atlas(kAllParts, &plane_pixels_);
-    atlases_[kAllParts] = a;
+bool PlaneSprites::bake(ModelId id) {
+    const Atlas a = bake_atlas(id, kAllParts, &plane_pixels_);
+    atlases_[key_of(id, kAllParts)] = a;
     return a.plane != nullptr && a.shadow != nullptr;
 }
 
-const PlaneSprites::Atlas& PlaneSprites::atlas_for(std::uint32_t parts) const {
-    const auto found = atlases_.find(parts);
+const PlaneSprites::Atlas& PlaneSprites::atlas_for(ModelId id, std::uint32_t parts) const {
+    const auto found = atlases_.find(key_of(id, parts));
     if (found != atlases_.end()) {
         return found->second;
     }
     // A plane missing a wing or its tail: baked the first time one is seen.
-    return atlases_[parts] = bake_atlas(parts, nullptr);
+    return atlases_[key_of(id, parts)] = bake_atlas(id, parts, nullptr);
 }
 
 PlaneSprites::Cell PlaneSprites::cell_of(const Body& b) noexcept {
@@ -103,21 +103,21 @@ PlaneSprites::Cell PlaneSprites::cell_of(const Body& b) noexcept {
     return {heading_index(b.heading_deg), std::clamp(pitch, 0, kPitches - 1) * kBanks + bank};
 }
 
-void PlaneSprites::draw(const Body& b, PixelPt origin, bool shadow, SDL_Color tint,
+void PlaneSprites::draw(const Body& b, const ViewXf& xf, bool shadow, SDL_Color tint,
                         bool flash) const {
-    const Atlas& set = atlas_for(kAllParts & ~missing_parts(b));
+    const Atlas& set = atlas_for(plane_type(b.type).model, kAllParts & ~missing_parts(b));
     SDL_Texture* atlas = shadow ? set.shadow : set.plane;
     if (atlas == nullptr) {
         return;
     }
     const Cell c = cell_of(b);
-    const ScreenPt at = to_screen(b.x, b.y, shadow ? 0.0f : b.z);
-    const float half = static_cast<float>(kCell) * 0.5f;
+    // The plane is drawn full size at its point; its shadow lies on the ground, so it shrinks with
+    // the ground zoom.
+    const SDL_FPoint at = xf.at(b.x, b.y, shadow ? 0.0f : b.z);
+    const float size = static_cast<float>(kCell) * (shadow ? xf.zoom : 1.0f);
     const SDL_FRect src{static_cast<float>(c.column * kCell), static_cast<float>(c.row * kCell),
                         static_cast<float>(kCell), static_cast<float>(kCell)};
-    const SDL_FRect dst{std::round(at.x) - static_cast<float>(origin.x) - half,
-                        std::round(at.y) - static_cast<float>(origin.y) - half,
-                        static_cast<float>(kCell), static_cast<float>(kCell)};
+    const SDL_FRect dst{std::round(at.x - size * 0.5f), std::round(at.y - size * 0.5f), size, size};
     SDL_SetTextureColorMod(atlas, tint.r, tint.g, tint.b);
     SDL_RenderTexture(renderer_, atlas, &src, &dst);
     if (flash && !shadow) {

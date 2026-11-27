@@ -26,37 +26,20 @@ struct IntKey {
 };
 
 // Every value, in the file's order. The int ranges match validate(GroundParams&).
-constexpr std::array<FloatKey, 58> kFloats = {{
+constexpr std::array<FloatKey, 57> kFloats = {{
     {"Camera: how far ahead it looks (u), and how fast that swings round after a turn (per s)",
      "camera.lead_u", [](Tuning& t) -> float& { return t.camera.lead_u; }, 0.0f, 400.0f},
     {nullptr, "camera.lead_ease", [](Tuning& t) -> float& { return t.camera.lead_ease; }, 0.1f,
      60.0f},
-    {"Flight: speeds in u/s, angles in degrees, times in seconds (design/flight.md, Flight)",
+    {"Flight, for every plane (each plane's speeds, climb, stall, turn, pitch rate and tank come "
+     "from its real stats, below): u/s, degrees and seconds (design/flight.md, Flight)",
      "flight.gravity", [](Tuning& t) -> float& { return t.rules.flight.gravity; }, 1.0f, 1000.0f},
-    {nullptr, "flight.max_level_u_s",
-     [](Tuning& t) -> float& { return t.rules.flight.max_level_u_s; }, 10.0f, 600.0f},
-    {nullptr, "flight.dive_limit_u_s",
-     [](Tuning& t) -> float& { return t.rules.flight.dive_limit_u_s; }, 10.0f, 1000.0f},
-    {nullptr, "flight.full_thrust_below_u_s",
-     [](Tuning& t) -> float& { return t.rules.flight.full_thrust_below_u_s; }, 1.0f, 600.0f},
     {nullptr, "flight.glide_ratio", [](Tuning& t) -> float& { return t.rules.flight.glide_ratio; },
      1.0f, 50.0f},
-    {nullptr, "flight.best_glide_u_s",
-     [](Tuning& t) -> float& { return t.rules.flight.best_glide_u_s; }, 10.0f, 600.0f},
-    {nullptr, "flight.pitch_rate_deg_s",
-     [](Tuning& t) -> float& { return t.rules.flight.pitch_rate_deg_s; }, 1.0f, 720.0f},
     {nullptr, "flight.pitch_limit_deg",
      [](Tuning& t) -> float& { return t.rules.flight.pitch_limit_deg; }, 0.0f, 89.0f},
-    {nullptr, "flight.turn_rate_deg_s",
-     [](Tuning& t) -> float& { return t.rules.flight.turn_rate_deg_s; }, 0.0f, 720.0f},
-    {nullptr, "flight.best_turn_u_s",
-     [](Tuning& t) -> float& { return t.rules.flight.best_turn_u_s; }, 1.0f, 600.0f},
     {nullptr, "flight.throttle_per_s",
      [](Tuning& t) -> float& { return t.rules.flight.throttle_per_s; }, 0.01f, 10.0f},
-    {nullptr, "flight.stall_u_s", [](Tuning& t) -> float& { return t.rules.flight.stall_u_s; },
-     0.0f, 600.0f},
-    {nullptr, "flight.stall_recover_u_s",
-     [](Tuning& t) -> float& { return t.rules.flight.stall_recover_u_s; }, 0.0f, 600.0f},
     {nullptr, "flight.stall_nose_deg",
      [](Tuning& t) -> float& { return t.rules.flight.stall_nose_deg; }, -89.0f, 0.0f},
     {nullptr, "flight.stall_nose_rate_deg_s",
@@ -65,8 +48,6 @@ constexpr std::array<FloatKey, 58> kFloats = {{
      [](Tuning& t) -> float& { return t.rules.flight.stall_control; }, 0.0f, 1.0f},
     {nullptr, "flight.ceiling_u", [](Tuning& t) -> float& { return t.rules.flight.ceiling_u; },
      1.0f, 2000.0f},
-    {nullptr, "flight.tank_s", [](Tuning& t) -> float& { return t.rules.flight.tank_s; }, 1.0f,
-     36000.0f},
     {nullptr, "flight.idle_burn", [](Tuning& t) -> float& { return t.rules.flight.idle_burn; },
      0.0f, 1.0f},
     {nullptr, "flight.bank_deg", [](Tuning& t) -> float& { return t.rules.flight.bank_deg; }, 0.0f,
@@ -85,18 +66,44 @@ constexpr std::array<FloatKey, 58> kFloats = {{
      "edge.warning_u", [](Tuning& t) -> float& { return t.rules.edge.warning_u; }, 0.0f, 2000.0f},
     {nullptr, "edge.countdown_s", [](Tuning& t) -> float& { return t.rules.edge.countdown_s; },
      0.1f, 600.0f},
-    {"Weapons: guns (rounds/s, u/s on top of the plane's speed, s, u), height bands (u, degrees), "
-     "bombs (s, u, damage)",
-     "weapon.gun_rate_per_s", [](Tuning& t) -> float& { return t.rules.weapon.gun_rate_per_s; },
-     0.1f, 60.0f},
-    {nullptr, "weapon.round_speed_u_s",
-     [](Tuning& t) -> float& { return t.rules.weapon.round_speed_u_s; }, 1.0f, 3000.0f},
-    {nullptr, "weapon.round_life_s",
-     [](Tuning& t) -> float& { return t.rules.weapon.round_life_s; }, 0.05f, 10.0f},
-    {nullptr, "weapon.gun_spacing_u",
-     [](Tuning& t) -> float& { return t.rules.weapon.gun_spacing_u; }, 0.0f, 20.0f},
-    {nullptr, "weapon.muzzle_u", [](Tuning& t) -> float& { return t.rules.weapon.muzzle_u; }, 0.0f,
-     40.0f},
+    {"The scale from real stats to game values (design/planes.md): u/s per mph, turn factor, u/s "
+     "per ft/min of climb, dive limit and best turn speed as shares of top speed, tank s per hour "
+     "of endurance, stall margin (u/s)",
+     "scale.u_per_mph", [](Tuning& t) -> float& { return t.rules.scale.u_per_mph; }, 0.01f, 10.0f},
+    {nullptr, "scale.turn_factor", [](Tuning& t) -> float& { return t.rules.scale.turn_factor; },
+     0.1f, 50.0f},
+    {nullptr, "scale.u_per_fpm", [](Tuning& t) -> float& { return t.rules.scale.u_per_fpm; },
+     0.0001f, 1.0f},
+    {nullptr, "scale.dive_factor", [](Tuning& t) -> float& { return t.rules.scale.dive_factor; },
+     1.0f, 5.0f},
+    {nullptr, "scale.best_turn_share",
+     [](Tuning& t) -> float& { return t.rules.scale.best_turn_share; }, 0.1f, 1.0f},
+    {nullptr, "scale.tank_s_per_hour",
+     [](Tuning& t) -> float& { return t.rules.scale.tank_s_per_hour; }, 1.0f, 100000.0f},
+    {nullptr, "scale.stall_margin_u_s",
+     [](Tuning& t) -> float& { return t.rules.scale.stall_margin_u_s; }, 0.0f, 100.0f},
+    {"Calibres: damage per hit, round speed (u/s on top of the plane's), round life (s)",
+     "calibre.rifle.damage", [](Tuning& t) -> float& { return t.rules.weapon.calibres[0].damage; },
+     0.0f, 1000.0f},
+    {nullptr, "calibre.rifle.speed_u_s",
+     [](Tuning& t) -> float& { return t.rules.weapon.calibres[0].speed_u_s; }, 1.0f, 3000.0f},
+    {nullptr, "calibre.rifle.life_s",
+     [](Tuning& t) -> float& { return t.rules.weapon.calibres[0].life_s; }, 0.05f, 10.0f},
+    {nullptr, "calibre.heavy.damage",
+     [](Tuning& t) -> float& { return t.rules.weapon.calibres[1].damage; }, 0.0f, 1000.0f},
+    {nullptr, "calibre.heavy.speed_u_s",
+     [](Tuning& t) -> float& { return t.rules.weapon.calibres[1].speed_u_s; }, 1.0f, 3000.0f},
+    {nullptr, "calibre.heavy.life_s",
+     [](Tuning& t) -> float& { return t.rules.weapon.calibres[1].life_s; }, 0.05f, 10.0f},
+    {nullptr, "calibre.cannon.damage",
+     [](Tuning& t) -> float& { return t.rules.weapon.calibres[2].damage; }, 0.0f, 1000.0f},
+    {nullptr, "calibre.cannon.speed_u_s",
+     [](Tuning& t) -> float& { return t.rules.weapon.calibres[2].speed_u_s; }, 1.0f, 3000.0f},
+    {nullptr, "calibre.cannon.life_s",
+     [](Tuning& t) -> float& { return t.rules.weapon.calibres[2].life_s; }, 0.05f, 10.0f},
+    {"Weapons: where rounds start (u), plane size for hits (u), strafing reach (u), height bands "
+     "(u, degrees), bombs (ripple s, drop u), a 100 lb bomb's blast (u, damage)",
+     "weapon.muzzle_u", [](Tuning& t) -> float& { return t.rules.weapon.muzzle_u; }, 0.0f, 40.0f},
     {nullptr, "weapon.hit_radius_u",
      [](Tuning& t) -> float& { return t.rules.weapon.hit_radius_u; }, 0.5f, 100.0f},
     {nullptr, "weapon.strafe_radius_u",
@@ -121,21 +128,15 @@ constexpr std::array<FloatKey, 58> kFloats = {{
      [](Tuning& t) -> float& { return t.rules.targets.drone_speed_u_s; }, 0.0f, 600.0f},
     {nullptr, "targets.ground_radius_u",
      [](Tuning& t) -> float& { return t.rules.targets.ground_radius_u; }, 1.0f, 200.0f},
-    {"Looks: how long a bomb's scorch mark takes to fade (s)", "look.scorch_fade_s",
-     [](Tuning& t) -> float& { return t.look.scorch_fade_s; }, 0.1f, 3600.0f},
-    {"Damage: part HP, the pilot's wound size, what's left at 1 HP (shares), the leak (s for a "
-     "tank), "
-     "collisions (u), going down (degrees/s, degrees)",
-     "damage.engine_hp", [](Tuning& t) -> float& { return t.rules.damage.engine_hp; }, 1.0f,
+    {"Looks: how long a bomb's scorch mark takes to fade (s); the ground's zoom at the ceiling",
+     "look.scorch_fade_s", [](Tuning& t) -> float& { return t.look.scorch_fade_s; }, 0.1f,
+     3600.0f},
+    {nullptr, "look.zoom_at_ceiling", [](Tuning& t) -> float& { return t.look.zoom_at_ceiling; },
+     0.1f, 1.0f},
+    {"Damage (each plane's HP is its own, design/planes.md): the pilot's wound size, what's left "
+     "at 1 HP (shares), the leak (s for a tank), collisions (u), going down (degrees/s, degrees)",
+     "damage.wound_damage", [](Tuning& t) -> float& { return t.rules.damage.wound_damage; }, 0.1f,
      10000.0f},
-    {nullptr, "damage.wing_hp", [](Tuning& t) -> float& { return t.rules.damage.wing_hp; }, 1.0f,
-     10000.0f},
-    {nullptr, "damage.fuselage_hp", [](Tuning& t) -> float& { return t.rules.damage.fuselage_hp; },
-     1.0f, 10000.0f},
-    {nullptr, "damage.tail_hp", [](Tuning& t) -> float& { return t.rules.damage.tail_hp; }, 1.0f,
-     10000.0f},
-    {nullptr, "damage.wound_damage",
-     [](Tuning& t) -> float& { return t.rules.damage.wound_damage; }, 0.1f, 10000.0f},
     {nullptr, "damage.engine_min_share",
      [](Tuning& t) -> float& { return t.rules.damage.engine_min_share; }, 0.0f, 1.0f},
     {nullptr, "damage.wing_min_share",
@@ -152,14 +153,9 @@ constexpr std::array<FloatKey, 58> kFloats = {{
      [](Tuning& t) -> float& { return t.rules.damage.spin_pitch_deg; }, -89.0f, 0.0f},
 }};
 
-constexpr std::array<IntKey, 39> kInts = {{
-    {"Weapons, whole numbers: rounds, damage per round, one tracer in N, bombs", "weapon.rounds",
-     [](Tuning& t) -> int& { return t.rules.weapon.rounds; }, 0, 100000},
-    {nullptr, "weapon.round_damage", [](Tuning& t) -> int& { return t.rules.weapon.round_damage; },
-     0, 1000},
-    {nullptr, "weapon.tracer_every", [](Tuning& t) -> int& { return t.rules.weapon.tracer_every; },
-     1, 100},
-    {nullptr, "weapon.bombs", [](Tuning& t) -> int& { return t.rules.weapon.bombs; }, 0, 100},
+constexpr std::array<IntKey, 36> kInts = {{
+    {"Weapons: one round in N, per gun, is a tracer", "weapon.tracer_every",
+     [](Tuning& t) -> int& { return t.rules.weapon.tracer_every; }, 1, 100},
     {"Damage: the pilot's wounds (the last kills); where hits land, in percent of hits by where "
      "they come from",
      "damage.pilot_wounds", [](Tuning& t) -> int& { return t.rules.damage.pilot_wounds; }, 1, 100},
@@ -241,7 +237,8 @@ std::string to_tuning(const Tuning& t) {
     Tuning copy = t; // the table's accessors take a non-const Tuning
     std::string out =
         "# Wings of Freedom live tuning: the game reloads this file when it changes.\n";
-    out += "# Every number is a (start) value; see design/flight.md.\n";
+    out += "# Every number is a (start) value; see design/flight.md and design/planes.md.\n";
+    out += "format = " + std::to_string(kTuningFormat) + "\n";
     for (const FloatKey& k : kFloats) {
         section(out, k.section);
         out.append(k.key).append(" = ").append(format_float(k.field(copy))).append("\n");
@@ -251,6 +248,17 @@ std::string to_tuning(const Tuning& t) {
         out.append(k.key).append(" = ").append(std::to_string(k.field(copy))).append("\n");
     }
     return out;
+}
+
+int tuning_format(std::string_view text) {
+    KeyValueLines lines(text);
+    while (lines.next()) {
+        int v = 0;
+        if (!lines.bad() && lines.key() == "format" && parse_int(std::string(lines.value()), v)) {
+            return v;
+        }
+    }
+    return 1;
 }
 
 bool from_tuning(std::string_view text, Tuning& t, std::string& errors) {
@@ -263,6 +271,9 @@ bool from_tuning(std::string_view text, Tuning& t, std::string& errors) {
         }
         const std::string_view key = lines.key();
         const std::string value(lines.value());
+        if (key == "format") {
+            continue; // which version wrote the file: see tuning_format()
+        }
         const auto f = std::find_if(kFloats.begin(), kFloats.end(),
                                     [&](const FloatKey& k) { return key == k.key; });
         if (f != kFloats.end()) {
@@ -302,6 +313,7 @@ bool from_tuning(std::string_view text, Tuning& t, std::string& errors) {
         errors += "ground: adjusted to stay usable (field_max_u at least twice field_min_u, and "
                   "at least one field weight above 0)\n";
     }
+    t.rules.rederive(); // each plane's rules follow the base and the scale
     return errors.size() == errors_before;
 }
 
