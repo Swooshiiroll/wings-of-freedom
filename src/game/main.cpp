@@ -579,8 +579,8 @@ void draw_enemy_arrows(SDL_Renderer* r, const ViewXf& xf, const Body& plane,
         const float tx =
             std::clamp(a.x - c * 24.0f - w * 0.5f, 0.0f, static_cast<float>(view_w) - w);
         const float bottom = static_cast<float>(view_h) - 12.0f;
-        SDL_FRect box{std::round(tx), std::round(std::clamp(a.y - s * 14.0f - 5.0f, 0.0f, bottom)), w,
-                      11.0f};
+        SDL_FRect box{std::round(tx), std::round(std::clamp(a.y - s * 14.0f - 5.0f, 0.0f, bottom)),
+                      w, 11.0f};
         const float step = box.y < static_cast<float>(view_h) * 0.5f ? 12.0f : -12.0f;
         for (int tries = 0; tries < 6; ++tries) {
             const bool covered = std::any_of(labels.begin(), labels.end(), [&](const SDL_FRect& o) {

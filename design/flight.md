@@ -431,7 +431,7 @@ then flak.
 - **F2** practice targets on/off (`--targets` starts with them on), **F3** the height rule
   (`--height-rule`), **F4**
   the bomb marker.
-- **Damage testing until enemies arrive** (owner, 2026-11-26):
+- **Damage testing** (owner, 2026-11-26, for before enemies; still handy):
   - **F5** takes a 5-round gun burst from a random side;
   - **F6** takes a flak-sized hit (12 damage);
   - **F7** repairs everything;
