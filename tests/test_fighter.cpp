@@ -2,6 +2,7 @@
 #include "core/raster.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <initializer_list>
@@ -14,6 +15,8 @@ using namespace wof;
 namespace {
 constexpr int kCell = 48;
 constexpr float kOrigin = 24.0f;
+constexpr std::array<ModelId, 6> kFighterModels{ModelId::P26,  ModelId::He51, ModelId::P12,
+                                                ModelId::Ar65, ModelId::P36,  ModelId::Bf109};
 
 struct Centre {
     float x = 0.0f;
@@ -255,7 +258,7 @@ TEST_CASE("The He 51 fits its 48 px cell at every pose") {
 }
 
 TEST_CASE("A scaled model fits its cell at the smallest and largest sprite sizes") {
-    for (const ModelId id : {ModelId::P26, ModelId::He51}) {
+    for (const ModelId id : kFighterModels) {
         for (const int step : {2, 4, 8, 12}) {
             const int cell = 6 * step;
             const std::vector<Block> m =
@@ -289,7 +292,9 @@ TEST_CASE("A scaled model fits its cell at the smallest and largest sprite sizes
 }
 
 TEST_CASE("Seen from any heading, every part of the tail is drawn") {
-    for (const auto& model : {fighter_model(), he51_model()}) {
+    for (const ModelId id : kFighterModels) {
+        const std::vector<Block> model = plane_model(id);
+        CAPTURE(static_cast<int>(id));
         for (const Block& b : model) {
             if (b.part != Part::Tail) {
                 continue;
@@ -299,14 +304,17 @@ TEST_CASE("Seen from any heading, every part of the tail is drawn") {
                 const float heading = static_cast<float>(step) * 11.25f;
                 CAPTURE(heading);
                 const Sprite s = plane(one, heading, 0.0f, 0.0f);
-                CHECK(std::any_of(s.block.begin(), s.block.end(), [](auto id) { return id >= 0; }));
+                CHECK(std::any_of(s.block.begin(), s.block.end(),
+                                  [](auto block) { return block >= 0; }));
             }
         }
     }
 }
 
 TEST_CASE("Heading north or south, the spinner shows too") {
-    for (const auto& model : {fighter_model(), he51_model()}) {
+    for (const ModelId id : kFighterModels) {
+        const std::vector<Block> model = plane_model(id);
+        CAPTURE(static_cast<int>(id));
         std::vector<Block> spinner;
         for (const Block& b : model) {
             if (b.colour == kSpinnerColour) {
@@ -315,7 +323,46 @@ TEST_CASE("Heading north or south, the spinner shows too") {
         }
         for (const float heading : {0.0f, 180.0f}) {
             const Sprite s = plane(spinner, heading, 0.0f, 0.0f);
-            CHECK(std::any_of(s.block.begin(), s.block.end(), [](auto id) { return id >= 0; }));
+            CHECK(
+                std::any_of(s.block.begin(), s.block.end(), [](auto block) { return block >= 0; }));
+        }
+    }
+}
+
+TEST_CASE("Every fighter points its nose along its heading, shows its pitch and fits its cell") {
+    for (const ModelId id : kFighterModels) {
+        CAPTURE(static_cast<int>(id));
+        const std::vector<Block> m = plane_model(id);
+        std::vector<Block> spinner;
+        for (const Block& b : m) {
+            if (b.colour == kSpinnerColour) {
+                spinner.push_back(b);
+            }
+        }
+        REQUIRE(spinner.size() == 1u);
+        const auto nose = [&](float heading, float pitch) {
+            return centre_of(plane(spinner, heading, pitch, 0.0f), spinner,
+                             [](const Block&) { return true; });
+        };
+        CHECK(nose(90.0f, 0.0f).x > kOrigin + 6.0f);
+        CHECK(nose(270.0f, 0.0f).x < kOrigin - 6.0f);
+        CHECK(nose(0.0f, 0.0f).y < kOrigin - 3.0f);
+        CHECK(nose(180.0f, 0.0f).y > kOrigin + 3.0f);
+        CHECK(nose(0.0f, 40.0f).y < nose(0.0f, 0.0f).y - 3.0f);
+        CHECK(nose(0.0f, -40.0f).y > nose(0.0f, 0.0f).y + 3.0f);
+        for (int h = 0; h < 32; ++h) {
+            for (int p = -40; p <= 40; p += 20) {
+                for (const float bank : {-30.0f, 0.0f, 30.0f}) {
+                    const Sprite s =
+                        plane(m, static_cast<float>(h) * 11.25f, static_cast<float>(p), bank);
+                    for (int i = 0; i < kCell; ++i) {
+                        REQUIRE(s.block_at(i, 0) == -1);
+                        REQUIRE(s.block_at(i, kCell - 1) == -1);
+                        REQUIRE(s.block_at(0, i) == -1);
+                        REQUIRE(s.block_at(kCell - 1, i) == -1);
+                    }
+                }
+            }
         }
     }
 }

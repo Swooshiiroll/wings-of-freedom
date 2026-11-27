@@ -6,7 +6,8 @@
 //   WingsOfFreedom [--seed N] [--window WxH] [--shot FILE.png] [--ticks N] [--heading DEG]
 //                  [--height U] [--pitch DEG] [--throttle PCT] [--at X,Y] [--overlay]
 //                  [--height-rule forgiving|strict|auto] [--targets] [--wave N] [--fire] [--bomb]
-//                  [--nation us|de] [--sprite-sheet FILE.png] [--sprite-scale PCT] [--version]
+//                  [--nation us|de] [--plane ID] [--sprite-sheet FILE.png] [--sprite-scale PCT]
+//                  [--version]
 //     --seed N        developer tool: the ground from seed N (decimal, or 0x hex)
 //     --window WxH    developer tool: open the window at W x H
 //     --shot FILE     developer tool: fly N ticks with no input (--ticks, default 120), save the
@@ -19,17 +20,17 @@
 //                     middle of the battle area's south end, 1440,480)
 //     --overlay       developer tool: start with the F1 overlay shown
 //     --height-rule R your gun aim: forgiving, strict or auto (else settings.txt's)
-//     --menu PAGE     developer tool: start with a menu page open (pause, options, controls)
+//     --menu PAGE     developer tool: start with a menu page open (pause, options, controls), or
+//                     with --shot, planes: the plane screen
 //     --panel N       the dashboard 96, 80 or 64 px tall (else settings.txt)
 //     --units U       arrows and banners in nation, imperial or metric units (else settings.txt)
 //     --targets       developer tool: start with the practice targets (also F2)
 //     --wave N        developer tool: the first wave is wave N
 //     --fire, --bomb  developer tool: with --shot, hold the guns or the bomb release throughout
-//     --sprite-sheet F  developer tool: save every baked plane pose of your nation's fighter to F
-//     (PNG)
-//                     and exit
+//     --sprite-sheet F  developer tool: save every baked pose of your fighter to F (PNG) and exit
 //     --sprite-scale PCT  developer tool: the sprite sheet's size, 25-150 (in steps of 1/8)
-//     --nation us|de  fly that nation's fighter, skipping the nation screen
+//     --nation us|de  fly that nation's first fighter, skipping the plane screen
+//     --plane ID      fly that fighter: p12e, p26a, p36a (US), ar65, he51b, bf109b (Germany)
 //     --version       print the version and exit
 //
 // Keys (design/flight.md, Controls; rebindable in the menu): A/D turn, W dive, S climb, Shift/Ctrl
@@ -117,7 +118,10 @@ struct Options {
     bool hold_fire = false;           // --shot: hold the guns
     bool hold_bomb = false;           // --shot: hold the bomb release
     const char* damage = nullptr;     // --damage engine=10,lwing=0,...
-    bool has_nation = false;          // --nation us|de: skip the nation screen
+    bool has_nation = false;          // --nation us|de: skip the plane screen
+    bool has_plane = false;           // --plane ID: the fighter, skipping the plane screen
+    bool show_planes = false;         // --menu planes: --shot the plane screen
+    PlaneId plane = PlaneId::P12E;
     Nation nation = Nation::US;
     const char* sprite_sheet = nullptr;
     int sheet_step = kFullSizeStep; // --sprite-scale
@@ -233,12 +237,13 @@ int parse_options(int argc, char** argv, Options& out) {
             out.has_height_rule = true;
         } else if (std::strcmp(argv[i], "--menu") == 0 && has_value) {
             const std::string page = argv[++i];
+            out.show_planes = page == "planes";
             out.menu = page == "pause"      ? MenuPage::Pause
                        : page == "options"  ? MenuPage::Options
                        : page == "controls" ? MenuPage::Controls
                                             : MenuPage::Closed;
-            if (out.menu == MenuPage::Closed) {
-                std::fprintf(stderr, "--menu takes pause, options or controls\n");
+            if (out.menu == MenuPage::Closed && !out.show_planes) {
+                std::fprintf(stderr, "--menu takes pause, options, controls or planes\n");
                 return 2;
             }
         } else if (std::strcmp(argv[i], "--no-targets") == 0) {
@@ -264,6 +269,14 @@ int parse_options(int argc, char** argv, Options& out) {
             out.nation = n == "de" ? Nation::Germany : Nation::US;
             if (!out.has_nation) {
                 std::fprintf(stderr, "--nation takes us or de\n");
+                return 2;
+            }
+        } else if (std::strcmp(argv[i], "--plane") == 0 && has_value) {
+            const char* id = argv[++i];
+            out.has_plane =
+                find_plane(id, out.plane) && plane_type(out.plane).role == Role::Fighter;
+            if (!out.has_plane) {
+                std::fprintf(stderr, "--plane takes p12e, p26a, p36a, ar65, he51b or bf109b\n");
                 return 2;
             }
         } else if (std::strcmp(argv[i], "--panel") == 0 && has_value) {
@@ -292,7 +305,8 @@ int parse_options(int argc, char** argv, Options& out) {
                          "[--ticks N] [--heading DEG] [--height U] [--pitch DEG] [--throttle PCT] "
                          "[--at X,Y] [--overlay] [--height-rule forgiving|strict|auto] "
                          "[--targets] [--wave N] [--menu pause|options|controls] [--fire] [--bomb] "
-                         "[--nation us|de] [--panel 96|80|64] [--units nation|imperial|metric] "
+                         "[--nation us|de] [--plane ID] [--panel 96|80|64] "
+                         "[--units nation|imperial|metric] "
                          "[--sprite-sheet FILE.png] "
                          "[--sprite-scale PCT] "
                          "[--version]\n");
@@ -839,59 +853,78 @@ SDL_FPoint mouse_view(SDL_Renderer* r, const SDL_Event& e, const ViewFit& fit) {
     return {x / scale, y / scale};
 }
 
-// The nation screen (design/planes.md): until PR 7's, a plain choice between v0.1's two nations,
-// by 1/2, the arrows and Enter, or the mouse. You fly that nation's fighter; the other nation is
-// the enemy. Empty if the window was closed or Esc pressed.
-std::optional<Nation> choose_nation(SDL_Renderer* r) {
-    int pick = 0; // the highlighted line
+// The plane screen (design/aircraft_tree.md): until the hangar, every fighter of both nations,
+// listed along its tree, by 1-6, the arrows and Enter, or the mouse. The other nation is the
+// enemy. Empty if the window was closed or Esc pressed. With `shot`, saves the screen there and
+// returns instead.
+std::optional<PlaneId> choose_plane(SDL_Renderer* r, const char* shot = nullptr) {
+    const std::array<Nation, 2> nations{Nation::US, Nation::Germany};
+    std::vector<PlaneId> planes;          // the choices, in order
+    std::vector<std::size_t> plane_lines; // the line each is on
+    std::vector<std::string> lines;
+    for (const Nation n : nations) {
+        lines.emplace_back(n == Nation::US ? "UNITED STATES" : "GERMANY");
+        for (const PlaneId id : fighter_tree(n)) {
+            const PlaneType& t = plane_type(id);
+            plane_lines.push_back(lines.size());
+            planes.push_back(id);
+            lines.push_back(format("%d  %-22.*s %d  %3.0f MPH", static_cast<int>(planes.size()),
+                                   static_cast<int>(t.name.size()), t.name.data(), t.year,
+                                   static_cast<double>(t.top_mph)));
+        }
+        lines.emplace_back("");
+    }
+    lines.emplace_back("The other nation is the enemy.");
+    const int count = static_cast<int>(planes.size());
+    int pick = 0;
     for (;;) {
         int w = 0;
         int h = 0;
         SDL_GetRenderOutputSize(r, &w, &h);
         const ViewFit fit = fit_view(w, h);
-        const float list_y = std::floor(static_cast<float>(fit.h) * 0.5f);
-        // The nation's line under a view position, or -1.
+        const float list_y = std::floor(static_cast<float>(fit.h) * 0.5f - 50.0f);
+        // The plane's line under a view position, or -1 (a line is 10 px, from 2 px down).
         const auto line_at = [&](float y) {
-            return y >= list_y && y < list_y + 12.0f           ? 0
-                   : y >= list_y + 12.0f && y < list_y + 22.0f ? 1
-                                                               : -1;
+            const float row = (y - list_y - 2.0f) / 10.0f;
+            for (int i = 0; i < count; ++i) {
+                const auto line = static_cast<float>(plane_lines[static_cast<std::size_t>(i)]);
+                if (row >= line && row < line + 1.0f) {
+                    return i;
+                }
+            }
+            return -1;
         };
-        const auto nation_of = [](int line) { return line == 0 ? Nation::US : Nation::Germany; };
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_EVENT_QUIT) {
                 return std::nullopt;
             }
             if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
-                switch (e.key.scancode) {
-                case SDL_SCANCODE_ESCAPE:
+                const SDL_Scancode key = e.key.scancode;
+                if (key == SDL_SCANCODE_ESCAPE) {
                     return std::nullopt;
-                case SDL_SCANCODE_1:
-                case SDL_SCANCODE_KP_1:
-                    return Nation::US;
-                case SDL_SCANCODE_2:
-                case SDL_SCANCODE_KP_2:
-                    return Nation::Germany;
-                case SDL_SCANCODE_UP:
-                case SDL_SCANCODE_DOWN:
-                case SDL_SCANCODE_W:
-                case SDL_SCANCODE_S:
-                    pick = 1 - pick;
-                    break;
-                case SDL_SCANCODE_RETURN:
-                case SDL_SCANCODE_KP_ENTER:
-                case SDL_SCANCODE_SPACE:
-                    return nation_of(pick);
-                default:
-                    break;
+                }
+                if (key >= SDL_SCANCODE_1 && key < SDL_SCANCODE_1 + count) {
+                    return planes[static_cast<std::size_t>(key - SDL_SCANCODE_1)];
+                }
+                if (key >= SDL_SCANCODE_KP_1 && key < SDL_SCANCODE_KP_1 + count) {
+                    return planes[static_cast<std::size_t>(key - SDL_SCANCODE_KP_1)];
+                }
+                if (key == SDL_SCANCODE_UP || key == SDL_SCANCODE_W) {
+                    pick = (pick + count - 1) % count;
+                } else if (key == SDL_SCANCODE_DOWN || key == SDL_SCANCODE_S) {
+                    pick = (pick + 1) % count;
+                } else if (key == SDL_SCANCODE_RETURN || key == SDL_SCANCODE_KP_ENTER ||
+                           key == SDL_SCANCODE_SPACE) {
+                    return planes[static_cast<std::size_t>(pick)];
                 }
             } else if (e.type == SDL_EVENT_MOUSE_MOTION) {
-                const int line = line_at(mouse_view(r, e, fit).y);
-                pick = line >= 0 ? line : pick;
+                const int at = line_at(mouse_view(r, e, fit).y);
+                pick = at >= 0 ? at : pick;
             } else if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
                        e.button.button == SDL_BUTTON_LEFT) {
-                if (const int line = line_at(mouse_view(r, e, fit).y); line >= 0) {
-                    return nation_of(line);
+                if (const int at = line_at(mouse_view(r, e, fit).y); at >= 0) {
+                    return planes[static_cast<std::size_t>(at)];
                 }
             }
         }
@@ -900,23 +933,19 @@ std::optional<Nation> choose_nation(SDL_Renderer* r) {
         SDL_SetRenderDrawColor(r, 22, 30, 40, 255);
         SDL_RenderClear(r);
         SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-        draw_text_centred(r, fit.w, static_cast<float>(fit.h) * 0.5f - 50.0f,
-                          {"WINGS OF FREEDOM", "", "CHOOSE YOUR NATION"},
+        draw_text_centred(r, fit.w, list_y - 30.0f, {"WINGS OF FREEDOM", "CHOOSE YOUR PLANE"},
                           SDL_Color{255, 236, 170, 255});
-        const PlaneType& us = plane_type(fighter_of(Nation::US));
-        const PlaneType& de = plane_type(fighter_of(Nation::Germany));
-        draw_text_centred(
-            r, fit.w, list_y,
-            {format("1  UNITED STATES  %.*s", static_cast<int>(us.name.size()), us.name.data()),
-             format("2  GERMANY        %.*s", static_cast<int>(de.name.size()), de.name.data()), "",
-             "The other nation is the enemy."},
-            SDL_Color{236, 232, 200, 255});
-        // The highlighted nation.
+        draw_text_centred(r, fit.w, list_y, lines, SDL_Color{236, 232, 200, 255});
+        // The highlighted plane.
         SDL_SetRenderDrawColor(r, 255, 220, 120, 70);
-        const SDL_FRect bar{std::floor(static_cast<float>(fit.w) * 0.5f) - 150.0f,
-                            list_y + 1.0f + static_cast<float>(pick) * 10.0f, 300.0f, 10.0f};
+        const auto line = static_cast<float>(plane_lines[static_cast<std::size_t>(pick)]);
+        const SDL_FRect bar{std::floor(static_cast<float>(fit.w) * 0.5f) - 170.0f,
+                            list_y + 1.0f + line * 10.0f, 340.0f, 10.0f};
         SDL_RenderFillRect(r, &bar);
         SDL_SetRenderScale(r, 1.0f, 1.0f);
+        if (shot != nullptr) {
+            return save_png(r, shot) ? std::optional<PlaneId>{planes.front()} : std::nullopt;
+        }
         SDL_RenderPresent(r);
     }
 }
@@ -1149,19 +1178,32 @@ int main(int argc, char** argv) {
 
     int exit_code = 0;
     {
-        // The player's nation (design/planes.md): chosen on the nation screen, or by --nation.
-        Nation nation = opts.has_nation ? opts.nation : Nation::US;
-        if (!opts.has_nation && !tool_mode) {
-            const std::optional<Nation> chosen = choose_nation(renderer);
+        // The player's fighter (design/aircraft_tree.md): chosen on the plane screen, or by
+        // --plane, or --nation (its first fighter).
+        PlaneId player_type =
+            opts.has_plane ? opts.plane
+                           : fighter_tree(opts.has_nation ? opts.nation : Nation::US).front();
+        if (opts.show_planes && shot_mode) {
+            const bool ok = choose_plane(renderer, opts.shot).has_value();
+            SDL_DestroyRenderer(renderer);
+            SDL_DestroyWindow(window);
+            SDL_Quit();
+            return ok ? 0 : 1;
+        }
+        if (!opts.has_plane && !opts.has_nation && !tool_mode) {
+            const std::optional<PlaneId> chosen = choose_plane(renderer);
             if (!chosen) {
                 SDL_DestroyRenderer(renderer);
                 SDL_DestroyWindow(window);
                 SDL_Quit();
                 return 0;
             }
-            nation = *chosen;
+            player_type = *chosen;
         }
-        const ModelId player_model = plane_type(fighter_of(nation)).model;
+        const Nation nation = plane_type(player_type).nation;
+        const Nation enemy_nation = nation == Nation::US ? Nation::Germany : Nation::US;
+        const FighterTree enemy_tree = fighter_tree(enemy_nation);
+        const ModelId player_model = plane_type(player_type).model;
         if (opts.sprite_sheet != nullptr) {
             const bool ok =
                 game::PlaneSprites::save_sheet(opts.sprite_sheet, player_model, opts.sheet_step);
@@ -1173,10 +1215,15 @@ int main(int argc, char** argv) {
         // The planes' sprites: full size now, the other sizes in the background (in line for a
         // screenshot, so it's exact).
         game::PlaneSprites sprites(renderer, shot_mode);
-        // Both nations' fighters: yours, the enemy's, and the practice drones' (the P-26).
-        if (!sprites.bake(player_model) || !sprites.bake(ModelId::P26) ||
-            !sprites.bake(ModelId::He51)) {
+        // Yours and the enemy's first fighter at every size; the enemy's later ones start with
+        // their full size, in the background, and bake their other sizes as they're seen. The
+        // practice drones (the P-26) too, when they're on.
+        if (!sprites.bake(player_model) || !sprites.bake(plane_type(enemy_tree[0]).model) ||
+            (opts.targets && !sprites.bake(ModelId::P26))) {
             exit_code = 1;
+        }
+        for (std::size_t step = 1; step < enemy_tree.size(); ++step) {
+            sprites.queue(plane_type(enemy_tree[step]).model);
         }
 
         Tuning tuning;
@@ -1224,7 +1271,6 @@ int main(int argc, char** argv) {
         };
         int closed_by = 0; // the key that closed the menu: not a flight key until let go
         bool targets_on = opts.targets;
-        const Nation enemy_nation = nation == Nation::US ? Nation::Germany : Nation::US;
         std::string banner;       // a wave arriving, or an enemy down
         float banner_s = 0.0f;    // how long it still shows
         bool marker = false;      // the bomb marker (a developer switch until it's an upgrade)
@@ -1235,8 +1281,8 @@ int main(int argc, char** argv) {
             const float x =
                 opts.has_at ? static_cast<float>(opts.at_x) : static_cast<float>(kMapWidthU) * 0.5f;
             const float y = opts.has_at ? static_cast<float>(opts.at_y) : 480.0f;
-            // The nation's fighter, with its real stats, guns and bombs.
-            Body b = new_plane(tuning.rules, fighter_of(nation), x, y, opts.heading);
+            // Your fighter, with its real stats, guns and bombs.
+            Body b = new_plane(tuning.rules, player_type, x, y, opts.heading);
             const PlaneRules& plane = plane_of(tuning.rules, b);
             if (opts.has_height) {
                 b.z = std::fmin(opts.height, plane.flight.ceiling_u);
@@ -1254,7 +1300,7 @@ int main(int argc, char** argv) {
             world = World{};
             world.rng = Rng(splitmix64(seed + runs++)); // where hits land, different each run
             world.bodies.push_back(b);
-            world.waves = start_waves(tuning.rules, fighter_of(enemy_nation), opts.wave);
+            world.waves = start_waves(tuning.rules, enemy_tree, opts.wave);
             banner_s = 0.0f;
             if (targets_on) {
                 world.targets = practice_targets(tuning.rules.targets);

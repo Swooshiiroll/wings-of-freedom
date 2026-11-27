@@ -131,8 +131,10 @@ full design, with sources, is in `planes.md`.
   - Sides follow history: Allies against the Axis through WWII, then West against East.
 - **Maps by theatre:** the European farmland first, and a Pacific map for Japan.
 - **v0.1 is the pre-war US against Germany:**
-  - US: the Boeing P-26A fighter and the Martin B-10B bomber;
-  - Germany: the Heinkel He 51 fighter and the He 111B bomber.
+  - US: the P-12E, P-26A and P-36A fighters and the Martin B-10B bomber;
+  - Germany: the Ar 65, He 51 and Bf 109B fighters and the He 111B bomber.
+- **The aircraft tree** (owner, 2026-11-27): you start in the first fighter and earn the next with
+  points you bring home (`aircraft_tree.md`).
 
 ## Enemies
 
@@ -169,8 +171,8 @@ How the code is shaped for this from the start:
 
 | Milestone | Holds |
 |---|---|
-| v0.1 Fly and fight | The pre-war US and Germany (P-26A, B-10B, He 51, He 111B) with real stats; choosing your nation; flight to 30,000 ft, fuel, guns by calibre, bombs, the damage model; enemy fighters, bombers and real flak; HUD; controls menu; the height-rule option. Crashing or flying home restarts. |
-| v0.2 Strike loop | Objectives, base visits and services, runway grace period, SOS and escort, points, kill chains, the shop, pilots, saving |
+| v0.1 Fly and fight | The pre-war US and Germany with real stats; the aircraft tree (three fighters each) with points, hangar and upgrades; B-10B and He 111B bombers; flight to 30,000 ft, fuel, guns by calibre, bombs, the damage model; enemy fighters, bombers and real flak; HUD; controls menu; the height-rule option. Crashing or flying home restarts. |
+| v0.2 Strike loop | Objectives, base visits and services, runway grace period, SOS and escort, pilots and the campaign |
 | v0.3 Pre-war nations and art | The UK, Italy, Japan and the USSR's pre-war planes, the Pacific map, real art replacing the placeholders, sound |
 | v0.4 Co-op | Two or more players, friendly fire, direct IP and a hosted server |
 | Backlog | WWII, Korea, Vietnam and Cold War eras; one-monitor-per-player, gamepad, Android, Steam |

@@ -141,6 +141,12 @@ bool PlaneSprites::bake(ModelId id) {
     return a.plane != nullptr && a.shadow != nullptr;
 }
 
+void PlaneSprites::queue(ModelId id) {
+    if (!in_line_) {
+        request(Job{key_of(id, kAllParts, kFullSizeStep), id, kAllParts, kFullSizeStep}, false);
+    }
+}
+
 void PlaneSprites::request(const Job& job, bool urgent) {
     if (atlases_.count(job.key) != 0) {
         return;

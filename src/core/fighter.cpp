@@ -115,7 +115,7 @@ Block strut(float x, float y, float z0, float z1, Part part) {
 // A straight biplane wing from the root at x = root to the tip at x = tip, its chord from y_back
 // to y_front, its underside at z at the root, `thick` deep, the tip raised by `dihedral`.
 Block slab(float root, float tip, float y_back, float y_front, float z, float thick, float dihedral,
-           Part part) {
+           Part part, Rgb8 colour = kRlmGrey) {
     Block k;
     k.corners = {{{root, y_back, z},
                   {tip, y_back, z + dihedral},
@@ -125,12 +125,161 @@ Block slab(float root, float tip, float y_back, float y_front, float z, float th
                   {tip, y_back, z + thick + dihedral},
                   {tip, y_front, z + thick + dihedral},
                   {root, y_front, z + thick}}};
-    k.colour = kRlmGrey;
+    k.colour = colour;
     k.part = part;
     return k;
 }
 
+// A monoplane's low wing, tapering from the root (chord back0..front0) to the tip (back1..front1),
+// from z `bottom` to `top` at the root, the tip raised by `dihedral`.
+Block low_wing(float root, float tip, float back0, float front0, float back1, float front1,
+               float bottom, float top, float dihedral, Part part, Rgb8 colour) {
+    Block k;
+    k.corners = {{{root, back0, bottom},
+                  {tip, back1, bottom + dihedral},
+                  {tip, front1, bottom + dihedral},
+                  {root, front0, bottom},
+                  {root, back0, top},
+                  {tip, back1, top + dihedral},
+                  {tip, front1, top + dihedral},
+                  {root, front0, top}}};
+    k.colour = colour;
+    k.part = part;
+    return k;
+}
+
+constexpr Rgb8 kArmyOlive{92, 98, 56}; // the US Army's pre-war scheme, as on the P-26
+constexpr Rgb8 kArmyOliveDark{70, 76, 44};
+constexpr Rgb8 kArmyYellow{224, 182, 46};
+constexpr Rgb8 kSilver{182, 186, 192}; // bare metal
+constexpr Rgb8 kSilverDark{128, 132, 140};
+constexpr Rgb8 kRlm02{118, 128, 104};   // the Ar 65's grey-green
+constexpr Rgb8 kRlmGreen{90, 99, 84};   // the Bf 109B's dark grey-green, clear of the fields
+constexpr Rgb8 kRlmBlue{146, 172, 196}; // its pale blue underside
+
+// A fin: an upright blade on the tail, its back at y0 and front at y1, `height` tall.
+Block fin_blade(float y0, float y1, float height, Rgb8 colour) {
+    return taper_y(y0, 0.22f, 0.4f, height, y1, 0.22f, 0.4f, 0.6f, colour, Part::Tail);
+}
+
+// An open cockpit: windscreen at `y` and the pilot's head behind it.
+void open_cockpit(std::vector<Block>& m, float y) {
+    m.push_back(box(-0.6f, 0.6f, y - 0.4f, y, 1.3f, 1.9f, kGlass, Part::Cockpit));
+    m.push_back(box(-0.45f, 0.45f, y - 1.5f, y - 0.7f, 1.3f, 2.3f, kLeather, Part::Cockpit));
+}
+
+// Fixed landing gear: a leg and a wheel each side, at x = +-`x`.
+void fixed_gear(std::vector<Block>& m, float x) {
+    for (const float side : {-1.0f, 1.0f}) {
+        const float at = side * x;
+        m.push_back(box(at - 0.25f, at + 0.25f, 2.2f, 2.7f, -2.8f, -1.0f, kDark, Part::Fuselage));
+        m.push_back(box(at - 0.3f, at + 0.3f, 1.6f, 3.3f, -3.8f, -2.4f, kDark, Part::Fuselage));
+    }
+}
+
 } // namespace
+
+// The Boeing P-12E: a short, stubby biplane with a radial engine, the upper wing a little longer,
+// in the Army's olive drab and chrome yellow. About 23 u across and 16 u long.
+std::vector<Block> p12_model() {
+    std::vector<Block> m;
+    m.push_back(box(-1.7f, 1.7f, 4.4f, 6.6f, -1.1f, 1.5f, kArmyOliveDark, Part::Engine));
+    m.push_back(box(-1.2f, 1.2f, 4.4f, 6.6f, -1.55f, 1.95f, kArmyOliveDark, Part::Engine));
+    m.push_back(box(-1.35f, 1.35f, 6.6f, 6.85f, -1.0f, 1.4f, kDark, Part::Engine));
+    m.push_back(box(-0.45f, 0.45f, 6.85f, 7.7f, -0.25f, 0.65f, kSpinnerColour, Part::Engine));
+    m.push_back(box(-1.1f, 1.1f, -1.5f, 4.4f, -1.0f, 1.3f, kArmyOlive, Part::Fuselage));
+    m.push_back(
+        taper_y(-1.5f, 1.1f, -1.0f, 1.3f, -8.0f, 0.35f, -0.1f, 0.6f, kArmyOlive, Part::Tail));
+    for (const float side : {-1.0f, 1.0f}) {
+        const Part part = side < 0.0f ? Part::LeftWing : Part::RightWing;
+        m.push_back(
+            slab(side * 1.0f, side * 10.2f, -0.8f, 2.2f, -1.2f, 0.8f, 0.5f, part, kArmyYellow));
+        m.push_back(
+            slab(side * 0.3f, side * 11.7f, 0.6f, 3.8f, 2.8f, 0.8f, 0.0f, part, kArmyYellow));
+        m.push_back(strut(side * 7.0f, 1.4f, -0.3f, 2.8f, part));
+        m.push_back(strut(side * 0.8f, 2.0f, 1.3f, 2.8f, Part::Fuselage));
+    }
+    m.push_back(box(-3.8f, 3.8f, -8.4f, -6.6f, 0.1f, 0.4f, kArmyYellow, Part::Tail));
+    m.push_back(fin_blade(-8.8f, -6.6f, 2.8f, kArmyYellow));
+    open_cockpit(m, -0.6f);
+    fixed_gear(m, 2.1f);
+    return m;
+}
+
+// The Arado Ar 65E: a big biplane with a long inline engine, a deep chin radiator and two struts a
+// side, all in grey-green. About 29 u across and 22 u long.
+std::vector<Block> ar65_model() {
+    std::vector<Block> m;
+    m.push_back(
+        taper_y(5.0f, 1.25f, -1.1f, 1.3f, 9.3f, 0.85f, -0.6f, 0.9f, kGreyMetal, Part::Engine));
+    m.push_back(box(-0.9f, 0.9f, 4.8f, 7.6f, -2.5f, -1.1f, kDark, Part::Engine));
+    m.push_back(box(-0.45f, 0.45f, 9.3f, 10.2f, -0.2f, 0.6f, kSpinnerColour, Part::Engine));
+    m.push_back(box(-1.15f, 1.15f, -2.0f, 5.0f, -1.1f, 1.3f, kRlm02, Part::Fuselage));
+    m.push_back(taper_y(-2.0f, 1.15f, -1.1f, 1.3f, -11.0f, 0.35f, -0.1f, 0.6f, kRlm02, Part::Tail));
+    for (const float side : {-1.0f, 1.0f}) {
+        const Part part = side < 0.0f ? Part::LeftWing : Part::RightWing;
+        m.push_back(slab(side * 1.1f, side * 12.6f, -1.4f, 2.2f, -1.2f, 0.8f, 0.5f, part, kRlm02));
+        m.push_back(slab(side * 0.3f, side * 14.3f, 0.2f, 4.2f, 3.0f, 0.8f, 0.0f, part, kRlm02));
+        m.push_back(strut(side * 6.0f, 1.2f, -0.4f, 3.0f, part));
+        m.push_back(strut(side * 10.0f, 1.2f, -0.2f, 3.0f, part));
+        m.push_back(strut(side * 0.8f, 1.8f, 1.3f, 3.0f, Part::Fuselage));
+    }
+    m.push_back(box(-4.8f, 4.8f, -11.0f, -8.8f, 0.1f, 0.4f, kRlm02, Part::Tail));
+    m.push_back(fin_blade(-11.5f, -8.8f, 3.0f, kRlm02));
+    open_cockpit(m, -0.7f);
+    fixed_gear(m, 2.2f);
+    return m;
+}
+
+// The Curtiss P-36A Hawk: a low-wing monoplane with a big radial, an enclosed canopy and its gear
+// up; bare metal with yellow wings and tail. About 29 u across and 22 u long.
+std::vector<Block> p36_model() {
+    std::vector<Block> m;
+    m.push_back(box(-1.8f, 1.8f, 5.8f, 8.8f, -1.3f, 1.7f, kSilverDark, Part::Engine));
+    m.push_back(box(-1.3f, 1.3f, 5.8f, 8.8f, -1.75f, 2.15f, kSilverDark, Part::Engine));
+    m.push_back(box(-1.4f, 1.4f, 8.8f, 9.05f, -1.1f, 1.6f, kDark, Part::Engine));
+    m.push_back(box(-0.5f, 0.5f, 9.05f, 10.1f, -0.2f, 0.8f, kSpinnerColour, Part::Engine));
+    m.push_back(box(-1.25f, 1.25f, -2.0f, 5.8f, -1.2f, 1.4f, kSilver, Part::Fuselage));
+    m.push_back(
+        taper_y(-2.0f, 1.25f, -1.2f, 1.4f, -11.0f, 0.35f, -0.1f, 0.7f, kSilver, Part::Tail));
+    m.push_back(low_wing(-1.2f, -14.5f, -1.0f, 4.4f, 0.4f, 2.8f, -1.1f, -0.5f, 1.2f, Part::LeftWing,
+                         kArmyYellow));
+    m.push_back(low_wing(1.2f, 14.5f, -1.0f, 4.4f, 0.4f, 2.8f, -1.1f, -0.5f, 1.2f, Part::RightWing,
+                         kArmyYellow));
+    m.push_back(box(-5.0f, 5.0f, -11.4f, -9.2f, 0.15f, 0.45f, kArmyYellow, Part::Tail));
+    m.push_back(fin_blade(-12.0f, -8.8f, 3.6f, kArmyYellow));
+    // The canopy, its fairing running back to the tail, and the pilot inside.
+    m.push_back(taper_y(3.2f, 0.65f, 1.4f, 2.4f, -0.2f, 0.65f, 1.4f, 2.6f, kGlass, Part::Cockpit));
+    m.push_back(box(-0.4f, 0.4f, -0.2f, 0.6f, 1.4f, 2.7f, kLeather, Part::Cockpit));
+    m.push_back(
+        taper_y(-0.2f, 0.55f, 1.4f, 2.5f, -4.2f, 0.2f, 1.4f, 1.5f, kSilver, Part::Fuselage));
+    return m;
+}
+
+// The Messerschmitt Bf 109B: a slim low-wing monoplane with a pointed inline nose, a framed
+// canopy and square-cut wingtips; dark green over a pale blue belly. About 25 u across and 22 u
+// long.
+std::vector<Block> bf109_model() {
+    std::vector<Block> m;
+    m.push_back(
+        taper_y(5.5f, 1.1f, -1.0f, 1.2f, 9.8f, 0.65f, -0.5f, 0.8f, kRlmGreen, Part::Engine));
+    m.push_back(box(-0.55f, 0.55f, 5.6f, 8.0f, -1.7f, -0.9f, kDark, Part::Engine));
+    m.push_back(box(-0.45f, 0.45f, 9.8f, 10.8f, -0.25f, 0.65f, kSpinnerColour, Part::Engine));
+    m.push_back(box(-1.05f, 1.05f, -2.0f, 5.5f, 0.0f, 1.3f, kRlmGreen, Part::Fuselage));
+    m.push_back(box(-1.05f, 1.05f, -2.0f, 5.5f, -1.0f, 0.0f, kRlmBlue, Part::Fuselage));
+    m.push_back(
+        taper_y(-2.0f, 1.05f, -1.0f, 1.3f, -10.5f, 0.3f, -0.1f, 0.6f, kRlmGreen, Part::Tail));
+    m.push_back(low_wing(-1.0f, -12.65f, -0.6f, 3.8f, 0.6f, 2.8f, -1.0f, -0.45f, 1.0f,
+                         Part::LeftWing, kRlmGreen));
+    m.push_back(low_wing(1.0f, 12.65f, -0.6f, 3.8f, 0.6f, 2.8f, -1.0f, -0.45f, 1.0f,
+                         Part::RightWing, kRlmGreen));
+    m.push_back(box(-4.2f, 4.2f, -10.4f, -8.6f, 0.3f, 0.6f, kRlmGreen, Part::Tail));
+    m.push_back(fin_blade(-11.0f, -8.8f, 3.2f, kRlmGreen));
+    m.push_back(box(-0.55f, 0.55f, -0.2f, 2.8f, 1.3f, 2.2f, kGlass, Part::Cockpit));
+    m.push_back(
+        taper_y(-0.2f, 0.5f, 1.3f, 2.1f, -4.0f, 0.2f, 1.3f, 1.45f, kRlmGreen, Part::Fuselage));
+    return m;
+}
 
 std::vector<Block> he51_model() {
     std::vector<Block> m;
@@ -173,6 +322,14 @@ std::vector<Block> plane_model(ModelId id) {
     switch (id) {
     case ModelId::He51:
         return he51_model();
+    case ModelId::P12:
+        return p12_model();
+    case ModelId::Ar65:
+        return ar65_model();
+    case ModelId::P36:
+        return p36_model();
+    case ModelId::Bf109:
+        return bf109_model();
     case ModelId::P26:
         break;
     }

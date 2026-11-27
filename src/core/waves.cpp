@@ -35,7 +35,9 @@ float arrive(World& w, const Rules& rules, Edge edge, int index) {
         x = edge == Edge::East ? width - p.edge_inset_u : p.edge_inset_u;
         heading = edge == Edge::East ? 270.0f : 90.0f;
     }
-    Body b = new_plane(rules, w.waves.enemy, x, y, heading);
+    const TierSpan span = enemy_steps(w.waves.current, p.tier_every);
+    const int step = span.lo == span.hi || w.rng.next_below(2) == 0 ? span.lo : span.hi;
+    Body b = new_plane(rules, w.waves.enemy[static_cast<std::size_t>(step)], x, y, heading);
     const PlaneRules& plane = plane_of(rules, b);
     const float offset = (w.rng.next_float() * 2.0f - 1.0f) * p.height_spread_u;
     b.z = std::clamp(player.z + offset, rules.ai.floor_u + 20.0f, plane.flight.ceiling_u - 20.0f);
@@ -50,7 +52,7 @@ float arrive(World& w, const Rules& rules, Edge edge, int index) {
 
 } // namespace
 
-WaveState start_waves(const Rules& rules, PlaneId enemy, int first) noexcept {
+WaveState start_waves(const Rules& rules, const FighterTree& enemy, int first) noexcept {
     WaveState s;
     s.enabled = true;
     s.enemy = enemy;

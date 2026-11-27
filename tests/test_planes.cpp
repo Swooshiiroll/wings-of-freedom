@@ -33,7 +33,7 @@ float settled_top_speed(const PlaneRules& pr) {
 }
 } // namespace
 
-TEST_CASE("The roster holds the v0.1 planes, and each nation has its fighter") {
+TEST_CASE("The roster holds the v0.1 planes, and each nation has its tree of fighters") {
     CHECK(plane_type(PlaneId::P26A).nation == Nation::US);
     CHECK(plane_type(PlaneId::He51B).nation == Nation::Germany);
     CHECK(plane_type(PlaneId::B10B).role == Role::Bomber);
@@ -42,13 +42,23 @@ TEST_CASE("The roster holds the v0.1 planes, and each nation has its fighter") {
     CHECK(find_plane("he51b", id));
     CHECK(id == PlaneId::He51B);
     CHECK_FALSE(find_plane("spitfire", id));
-    CHECK(fighter_of(Nation::US) == PlaneId::P26A);
-    CHECK(fighter_of(Nation::Germany) == PlaneId::He51B);
-    // The P-26A carries one .30 and one .50 (owner, 2026-11-26).
+    CHECK(fighter_tree(Nation::US) == FighterTree{PlaneId::P12E, PlaneId::P26A, PlaneId::P36A});
+    CHECK(fighter_tree(Nation::Germany) ==
+          FighterTree{PlaneId::Ar65E, PlaneId::He51B, PlaneId::Bf109B});
+    for (const Nation n : {Nation::US, Nation::Germany}) {
+        float last = 0.0f;
+        for (const PlaneId step : fighter_tree(n)) {
+            CHECK(plane_type(step).nation == n);
+            CHECK(plane_type(step).role == Role::Fighter);
+            CHECK(plane_type(step).top_mph > last); // each step is faster
+            last = plane_type(step).top_mph;
+        }
+    }
+    // The P-26A starts with two .30s (owner, 2026-11-27); the .50 is an upgrade.
     const PlaneType& p26 = plane_type(PlaneId::P26A);
     REQUIRE(p26.gun_count == 2);
     CHECK(p26.guns[0].calibre == Calibre::Rifle);
-    CHECK(p26.guns[1].calibre == Calibre::Heavy);
+    CHECK(p26.guns[1].calibre == Calibre::Rifle);
 }
 
 TEST_CASE("Each plane flies by its real stats, scaled: top speed, climb, stall, turn, dive, tank") {
@@ -79,9 +89,21 @@ TEST_CASE("Each plane carries its real guns and bombs, and its own HP") {
     const Rules rules;
     const Body p26 = new_plane(rules, PlaneId::P26A, 0.0f, 0.0f, 0.0f);
     CHECK(p26.loadout.guns[0].rounds == 500);
-    CHECK(p26.loadout.guns[1].rounds == 200);
+    CHECK(p26.loadout.guns[1].rounds == 500);
     CHECK(p26.loadout.bombs == 2);
     CHECK(p26.damage.engines == 1);
+    const Body p12 = new_plane(rules, PlaneId::P12E, 0.0f, 0.0f, 0.0f);
+    CHECK(rounds_left(p12, plane_of(rules, p12), Calibre::Rifle) == 1200);
+    CHECK(p12.loadout.bombs == 2);
+    const Body ar65 = new_plane(rules, PlaneId::Ar65E, 0.0f, 0.0f, 0.0f);
+    CHECK(rounds_left(ar65, plane_of(rules, ar65), Calibre::Rifle) == 1000);
+    CHECK(ar65.loadout.bombs == 0);
+    const Body p36 = new_plane(rules, PlaneId::P36A, 0.0f, 0.0f, 0.0f);
+    CHECK(rounds_left(p36, plane_of(rules, p36), Calibre::Heavy) == 200);
+    CHECK(rounds_left(p36, plane_of(rules, p36), Calibre::Rifle) == 500);
+    const Body bf = new_plane(rules, PlaneId::Bf109B, 0.0f, 0.0f, 0.0f);
+    CHECK(rounds_left(bf, plane_of(rules, bf), Calibre::Rifle) == 1000);
+    CHECK(bf.loadout.bombs == 0);
     const Body he51 = new_plane(rules, PlaneId::He51B, 0.0f, 0.0f, 0.0f);
     CHECK(he51.loadout.bombs == 6);
     CHECK(rounds_left(he51, plane_of(rules, he51), Calibre::Rifle) == 1000);
@@ -184,6 +206,14 @@ TEST_CASE("Climbing to 30,000 ft takes about two minutes in a fighter, longer in
     const float he51 = climb_seconds(rules.planes[1]);
     const float b10 = climb_seconds(rules.planes[2]);
     const float he111 = climb_seconds(rules.planes[3]);
+    // The tree's others: every fighter climbs the whole way in a couple of minutes or so.
+    for (const PlaneId id : {PlaneId::P12E, PlaneId::Ar65E, PlaneId::P36A, PlaneId::Bf109B}) {
+        const float s = climb_seconds(rules.planes[static_cast<std::size_t>(id)]);
+        CAPTURE(static_cast<int>(id));
+        CAPTURE(s);
+        CHECK(s > 70.0f);
+        CHECK(s < 170.0f);
+    }
     CAPTURE(p26);
     CAPTURE(he51);
     CAPTURE(b10);

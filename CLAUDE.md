@@ -115,10 +115,10 @@ Logs go to `out/`.
   `tests/test_ground.cpp` pins it on both. If you change the generator on purpose, update the hash
   in the same pull request and say why.
 - **Smoke run:** `WingsOfFreedom --shot out/shot.png` flies 120 ticks with no input, saves the view
-  as a PNG and exits. `--window`, `--nation us|de`, `--heading`, `--height`, `--pitch`,
+  as a PNG and exits. `--window`, `--plane ID` (or `--nation us|de`), `--heading`, `--height`, `--pitch`,
   `--throttle`, `--at`, `--overlay`, `--wave N` and `--targets` set up the shot (the first wave
   arrives at 10 s, so `--ticks 600` or more shows enemies). `--sprite-sheet out/sheet.png` saves every
-  baked pose of the `--nation`'s fighter, at `--sprite-scale PCT`. Shots and sheets skip the
+  baked pose of your plane, at `--sprite-scale PCT`. Shots and sheets skip the
   nation screen. `--menu pause|options|controls` shows a menu page over the shot; shots use the
   default settings, not `settings.txt`. `--panel 96|80|64` and `--units nation|imperial|metric`
   set the dashboard up; the cockpit clock reads 10:10 in a shot.

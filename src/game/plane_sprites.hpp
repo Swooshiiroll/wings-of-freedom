@@ -47,6 +47,9 @@ class PlaneSprites {
     // texture couldn't be made.
     bool bake(ModelId id);
 
+    // Queues a model's full size for the background; its other sizes bake as they're seen.
+    void queue(ModelId id);
+
     // Uploads one finished background bake, if there is one. Once a frame.
     void pump();
 
