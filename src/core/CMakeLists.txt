@@ -1,8 +1,11 @@
 # Pure C++20 simulation core: no SDL, no I/O. Unit tests link only this.
 add_library(wof_core STATIC
   camera.cpp
+  fighter.cpp
   fixed_step.cpp
+  flight.cpp
   ground.cpp
+  raster.cpp
   tuning.cpp
   view.cpp
   world.cpp)

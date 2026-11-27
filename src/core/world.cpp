@@ -1,25 +1,55 @@
 #include "core/world.hpp"
 
-#include <algorithm>
-#include <cmath>
 #include <cstddef>
-#include <numbers>
 
-#include "core/iso.hpp"
+#include "core/map.hpp"
 
 namespace wof {
 
-void step(World& world, std::span<const InputCommand> commands, const StandInParams& p) {
-    constexpr float kDegToRad = std::numbers::pi_v<float> / 180.0f;
+void apply_edges(Body& b, const EdgeParams& e, float dt) noexcept {
+    if (b.outcome != Outcome::Flying) {
+        return;
+    }
+    if (b.z <= 0.0f) {
+        b.z = 0.0f;
+        b.outcome = Outcome::Crashed;
+        return;
+    }
+    if (b.y < 0.0f) {
+        b.outcome = Outcome::ReturnedHome;
+        b.edge_warning = false;
+        b.edge_countdown_s = -1.0f;
+        return;
+    }
+    const auto w = static_cast<float>(kMapWidthU);
+    const auto d = static_cast<float>(kMapDepthU);
+    const bool outside = b.x < 0.0f || b.x > w || b.y > d;
+    b.edge_warning =
+        !outside && (b.x < e.warning_u || b.x > w - e.warning_u || b.y > d - e.warning_u);
+    if (!outside) {
+        b.edge_countdown_s = -1.0f;
+        return;
+    }
+    if (b.edge_countdown_s < 0.0f) {
+        b.edge_countdown_s = e.countdown_s;
+    }
+    b.edge_countdown_s -= dt;
+    if (b.edge_countdown_s <= 0.0f) {
+        b.edge_countdown_s = 0.0f;
+        b.outcome = Outcome::LeftArea;
+    }
+}
+
+void step(World& world, std::span<const InputCommand> commands, const Rules& rules) {
+    const Aero aero = aero_of(rules.flight);
     for (std::size_t i = 0; i < world.bodies.size(); ++i) {
-        const InputCommand cmd = i < commands.size() ? commands[i] : InputCommand{};
         Body& b = world.bodies[i];
-        b.heading_deg = wrap_heading(b.heading_deg + axis(cmd.turn) * p.turn_deg_s * kTickSeconds);
-        b.z = std::clamp(b.z + axis(cmd.pitch) * p.climb_u_s * kTickSeconds, 0.0f, p.ceiling_u);
-        b.speed_u_s = p.speed_u_s;
-        const float h = b.heading_deg * kDegToRad;
-        b.x += std::sin(h) * b.speed_u_s * kTickSeconds;
-        b.y += std::cos(h) * b.speed_u_s * kTickSeconds;
+        if (b.outcome != Outcome::Flying) {
+            continue;
+        }
+        const InputCommand cmd = i < commands.size() ? commands[i] : InputCommand{};
+        fly(b, cmd, rules.flight, aero, kTickSeconds);
+        apply_edges(b, rules.edge, kTickSeconds);
     }
     ++world.tick;
 }

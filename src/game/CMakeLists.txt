@@ -1,6 +1,7 @@
 add_executable(wof
   bindings.cpp
   ground_view.cpp
+  plane_sprites.cpp
   main.cpp)
 set_target_properties(wof PROPERTIES OUTPUT_NAME "WingsOfFreedom")
 target_compile_definitions(wof PRIVATE WOF_VERSION="${PROJECT_VERSION}")

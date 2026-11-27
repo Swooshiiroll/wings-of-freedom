@@ -4,22 +4,27 @@
 // the world.
 //
 //   WingsOfFreedom [--seed N] [--window WxH] [--shot FILE.png] [--ticks N] [--heading DEG]
-//                  [--height U] [--at X,Y] [--overlay] [--version]
+//                  [--height U] [--pitch DEG] [--throttle PCT] [--at X,Y] [--overlay]
+//                  [--sprite-sheet FILE.png] [--version]
 //     --seed N        developer tool: the ground from seed N (decimal, or 0x hex)
 //     --window WxH    developer tool: open the window at W x H
 //     --shot FILE     developer tool: fly N ticks with no input (--ticks, default 120), save the
 //                     view to FILE (PNG) and exit
 //     --heading DEG   developer tool: the plane's starting heading (0 north, 90 east)
-//     --height U      developer tool: the plane's starting height in u (default 120)
+//     --height U      developer tool: the plane's starting height in u (default: tuning.txt)
+//     --pitch DEG     developer tool: the plane's starting pitch (it eases back to level)
+//     --throttle PCT  developer tool: the plane's starting throttle, 0-100
 //     --at X,Y        developer tool: the plane's starting ground position in u (default: the
 //                     middle of the battle area's south end, 1440,480)
-//     --overlay      developer tool: start with the F1 overlay shown
+//     --overlay       developer tool: start with the F1 overlay shown
+//     --sprite-sheet F  developer tool: save every baked plane pose to F (PNG) and exit
 //     --version       print the version and exit
 //
-// Keys (design/flight.md, Controls): A/D turn, W dive, S climb. Shift/Ctrl, F, Space and Tab are
-// read into the plane's input command but do nothing until their pull requests. F1 shows the
-// developer overlay, F11 toggles fullscreen, and Esc quits (the pause menu comes in PR 6). The
-// tuning file (tuning.txt next to the executable) is reloaded when it changes.
+// Keys (design/flight.md, Controls): A/D turn, W dive, S climb, Shift/Ctrl throttle up/down. F,
+// Space and Tab are read into the plane's input command but do nothing until their pull requests.
+// F1 shows the developer overlay, F11 toggles fullscreen, and Esc quits (the pause menu comes in
+// PR 6). When a run ends, Enter or R starts a new one. The tuning file (tuning.txt next to the
+// executable) is reloaded when it changes.
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -32,12 +37,13 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <initializer_list>
 #include <string>
 #include <vector>
 
+#include "core/body.hpp"
 #include "core/camera.hpp"
 #include "core/fixed_step.hpp"
+#include "core/flight.hpp"
 #include "core/ground.hpp"
 #include "core/hash.hpp"
 #include "core/iso.hpp"
@@ -48,6 +54,7 @@
 #include "core/world.hpp"
 #include "game/bindings.hpp"
 #include "game/ground_view.hpp"
+#include "game/plane_sprites.hpp"
 
 namespace {
 
@@ -56,6 +63,7 @@ using namespace wof;
 constexpr std::int64_t kTickNs = 1'000'000'000 / kTicksPerSecond;
 constexpr int kMaxTicksPerFrame = 8;
 constexpr Uint64 kTuningCheckNs = 500'000'000; // the tuning file is checked this often
+constexpr float kGlyph = 8.0f;                 // the debug font's character size
 
 struct Options {
     bool has_seed = false;
@@ -65,11 +73,17 @@ struct Options {
     const char* shot = nullptr;
     long ticks = 120;
     float heading = 0.0f;
-    float height = 120.0f;
+    bool has_height = false;
+    float height = 0.0f;
+    bool has_pitch = false;
+    float pitch = 0.0f;
+    bool has_throttle = false;
+    float throttle_pct = 0.0f;
     bool has_at = false;
     int at_x = 0;
     int at_y = 0;
     bool overlay = false;
+    const char* sprite_sheet = nullptr;
 };
 
 // Parses "A<sep>B" into two whole numbers. False on anything else.
@@ -123,6 +137,8 @@ int parse_options(int argc, char** argv, Options& out) {
             }
         } else if (std::strcmp(argv[i], "--shot") == 0 && has_value) {
             out.shot = argv[++i];
+        } else if (std::strcmp(argv[i], "--sprite-sheet") == 0 && has_value) {
+            out.sprite_sheet = argv[++i];
         } else if (std::strcmp(argv[i], "--ticks") == 0 && has_value) {
             out.ticks = std::strtol(argv[++i], nullptr, 10);
             if (out.ticks < 1) {
@@ -135,8 +151,22 @@ int parse_options(int argc, char** argv, Options& out) {
                 return 2;
             }
         } else if (std::strcmp(argv[i], "--height") == 0 && has_value) {
-            if (!parse_number(argv[++i], out.height) || out.height < 0.0f) {
+            out.has_height = parse_number(argv[++i], out.height) && out.height >= 0.0f;
+            if (!out.has_height) {
                 std::fprintf(stderr, "--height takes a height in u, 0 or more\n");
+                return 2;
+            }
+        } else if (std::strcmp(argv[i], "--pitch") == 0 && has_value) {
+            out.has_pitch = parse_number(argv[++i], out.pitch);
+            if (!out.has_pitch) {
+                std::fprintf(stderr, "--pitch takes degrees (nose up is positive)\n");
+                return 2;
+            }
+        } else if (std::strcmp(argv[i], "--throttle") == 0 && has_value) {
+            out.has_throttle = parse_number(argv[++i], out.throttle_pct) &&
+                               out.throttle_pct >= 0.0f && out.throttle_pct <= 100.0f;
+            if (!out.has_throttle) {
+                std::fprintf(stderr, "--throttle takes a percentage, 0-100\n");
                 return 2;
             }
         } else if (std::strcmp(argv[i], "--at") == 0 && has_value) {
@@ -150,8 +180,8 @@ int parse_options(int argc, char** argv, Options& out) {
         } else {
             std::fprintf(stderr,
                          "usage: WingsOfFreedom [--seed N] [--window WxH] [--shot FILE.png] "
-                         "[--ticks N] [--heading DEG] [--height U] [--at X,Y] [--overlay] "
-                         "[--version]\n");
+                         "[--ticks N] [--heading DEG] [--height U] [--pitch DEG] [--throttle PCT] "
+                         "[--at X,Y] [--overlay] [--sprite-sheet FILE.png] [--version]\n");
             return 2;
         }
     }
@@ -278,78 +308,27 @@ bool watch_tuning(Tuning& tuning, TuningFile& tf) {
     return false;
 }
 
-// A body partway between two ticks, for smooth drawing (the heading the short way round).
+// The shorter way round from angle a to angle b, in degrees.
+float angle_between(float a, float b) {
+    float d = b - a;
+    if (d > 180.0f) {
+        d -= 360.0f;
+    } else if (d < -180.0f) {
+        d += 360.0f;
+    }
+    return d;
+}
+
+// A body partway between two ticks, for smooth drawing.
 Body between(const Body& a, const Body& b, float t) {
     Body out = b;
     out.x = a.x + (b.x - a.x) * t;
     out.y = a.y + (b.y - a.y) * t;
     out.z = a.z + (b.z - a.z) * t;
-    float turn = b.heading_deg - a.heading_deg;
-    if (turn > 180.0f) {
-        turn -= 360.0f;
-    } else if (turn < -180.0f) {
-        turn += 360.0f;
-    }
-    out.heading_deg = wrap_heading(a.heading_deg + turn * t);
+    out.heading_deg = wrap_heading(a.heading_deg + angle_between(a.heading_deg, b.heading_deg) * t);
+    out.pitch_deg = a.pitch_deg + (b.pitch_deg - a.pitch_deg) * t;
+    out.bank_deg = a.bank_deg + (b.bank_deg - a.bank_deg) * t;
     return out;
-}
-
-// The stand-in plane's outline, in u: x to the right wing, y forward. Fuselage, wings, tailplane.
-struct Quad {
-    std::array<GroundPt, 4> corners;
-};
-constexpr std::array<Quad, 3> kStandIn = {{
-    {{{{-1.2f, 9.0f}, {1.2f, 9.0f}, {1.2f, -9.0f}, {-1.2f, -9.0f}}}},
-    {{{{-10.0f, 3.0f}, {10.0f, 3.0f}, {10.0f, -1.0f}, {-10.0f, -1.0f}}}},
-    {{{{-4.0f, -6.0f}, {4.0f, -6.0f}, {4.0f, -9.0f}, {-4.0f, -9.0f}}}},
-}};
-
-// Draws the stand-in at its height, or (shadow) its shadow flat on the ground below it. The
-// anchor is snapped to whole art pixels, so the shape doesn't shimmer as it moves.
-void draw_stand_in(SDL_Renderer* r, const Body& b, PixelPt origin, bool shadow) {
-    const float h = b.heading_deg * (3.14159265f / 180.0f);
-    const GroundPt right{std::cos(h), -std::sin(h)};
-    const GroundPt fwd{std::sin(h), std::cos(h)};
-    const ScreenPt at = to_screen(b.x, b.y, shadow ? 0.0f : b.z);
-    const float ax = std::round(at.x) - static_cast<float>(origin.x);
-    const float ay = std::round(at.y) - static_cast<float>(origin.y);
-    const SDL_FColor body{0.78f, 0.80f, 0.70f, 1.0f};
-    const SDL_FColor wing{0.66f, 0.70f, 0.60f, 1.0f};
-    const SDL_FColor dark{0.0f, 0.0f, 0.0f, 0.38f};
-    std::array<SDL_Vertex, 18> v{};
-    std::size_t n = 0;
-    for (std::size_t q = 0; q < kStandIn.size(); ++q) {
-        std::array<SDL_FPoint, 4> p{};
-        for (std::size_t c = 0; c < 4; ++c) {
-            const GroundPt l = kStandIn[q].corners[c];
-            const ScreenPt s =
-                to_screen(right.x * l.x + fwd.x * l.y, right.y * l.x + fwd.y * l.y, 0.0f);
-            p[c] = {ax + s.x, ay + s.y};
-        }
-        const SDL_FColor col = shadow ? dark : (q == 1 ? wing : body);
-        for (const std::size_t c : {0u, 1u, 2u, 0u, 2u, 3u}) {
-            v[n++] = SDL_Vertex{p[c], col, {0.0f, 0.0f}};
-        }
-    }
-    SDL_RenderGeometry(r, nullptr, v.data(), static_cast<int>(n), nullptr, 0);
-}
-
-// The developer overlay (F1), pinned to the view's top-left in the 8x8 debug font.
-void draw_overlay(SDL_Renderer* r, const std::vector<std::string>& lines) {
-    std::size_t widest = 0;
-    for (const std::string& l : lines) {
-        widest = l.size() > widest ? l.size() : widest;
-    }
-    const SDL_FRect back{0.0f, 0.0f, static_cast<float>(widest * 8 + 4),
-                         static_cast<float>(lines.size() * 10 + 2)};
-    SDL_SetRenderDrawColor(r, 0, 0, 0, 160);
-    SDL_RenderFillRect(r, &back);
-    SDL_SetRenderDrawColor(r, 236, 232, 200, 255);
-    float y = 2.0f;
-    for (const std::string& l : lines) {
-        SDL_RenderDebugText(r, 2.0f, y, l.c_str());
-        y += 10.0f;
-    }
 }
 
 std::string format(const char* fmt, ...) SDL_PRINTF_VARARG_FUNC(1);
@@ -362,6 +341,50 @@ std::string format(const char* fmt, ...) {
     return buf;
 }
 
+// Lines of debug-font text on a dark backing, with the block's top-left at (x, y).
+void draw_text_block(SDL_Renderer* r, float x, float y, const std::vector<std::string>& lines,
+                     SDL_Color colour) {
+    std::size_t widest = 0;
+    for (const std::string& l : lines) {
+        widest = l.size() > widest ? l.size() : widest;
+    }
+    const SDL_FRect back{x, y, static_cast<float>(widest) * kGlyph + 4.0f,
+                         static_cast<float>(lines.size()) * 10.0f + 2.0f};
+    SDL_SetRenderDrawColor(r, 0, 0, 0, 160);
+    SDL_RenderFillRect(r, &back);
+    SDL_SetRenderDrawColor(r, colour.r, colour.g, colour.b, colour.a);
+    float line_y = y + 2.0f;
+    for (const std::string& l : lines) {
+        SDL_RenderDebugText(r, x + 2.0f, line_y, l.c_str());
+        line_y += 10.0f;
+    }
+}
+
+// The same, centred across a view `view_w` pixels wide.
+void draw_text_centred(SDL_Renderer* r, int view_w, float y, const std::vector<std::string>& lines,
+                       SDL_Color colour) {
+    std::size_t widest = 0;
+    for (const std::string& l : lines) {
+        widest = l.size() > widest ? l.size() : widest;
+    }
+    const float w = static_cast<float>(widest) * kGlyph + 4.0f;
+    draw_text_block(r, std::floor((static_cast<float>(view_w) - w) * 0.5f), y, lines, colour);
+}
+
+const char* banner_of(Outcome o) {
+    switch (o) {
+    case Outcome::Crashed:
+        return "CRASHED";
+    case Outcome::LeftArea:
+        return "LEFT THE BATTLE AREA";
+    case Outcome::ReturnedHome:
+        return "RETURNED TO BASE";
+    case Outcome::Flying:
+        break;
+    }
+    return "";
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -370,6 +393,7 @@ int main(int argc, char** argv) {
         return parsed == 1 ? 0 : 2;
     }
     const bool shot_mode = opts.shot != nullptr;
+    const bool tool_mode = shot_mode || opts.sprite_sheet != nullptr;
 
     SDL_SetAppMetadata("Wings of Freedom", WOF_VERSION, "io.github.swooshiiroll.wingsoffreedom");
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -387,7 +411,7 @@ int main(int argc, char** argv) {
         size = start_window(usable.w, usable.h);
     }
     SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-    if (shot_mode) {
+    if (tool_mode) {
         flags |= SDL_WINDOW_HIDDEN;
     }
     SDL_Window* window = nullptr;
@@ -398,7 +422,7 @@ int main(int argc, char** argv) {
         SDL_Quit();
         return 1;
     }
-    if (!shot_mode) {
+    if (!tool_mode) {
         SDL_SetRenderVSync(renderer, 1);
     }
     const char* backend = SDL_GetRendererName(renderer);
@@ -408,6 +432,18 @@ int main(int argc, char** argv) {
 
     int exit_code = 0;
     {
+        game::PlaneSprites sprites(renderer);
+        if (!sprites.bake()) {
+            exit_code = 1;
+        }
+        if (opts.sprite_sheet != nullptr) {
+            const bool ok = exit_code == 0 && sprites.save_sheet(opts.sprite_sheet);
+            SDL_DestroyRenderer(renderer);
+            SDL_DestroyWindow(window);
+            SDL_Quit();
+            return ok ? 0 : 1;
+        }
+
         Tuning tuning;
         TuningFile tuning_file;
         const char* base_path = SDL_GetBasePath();
@@ -419,25 +455,37 @@ int main(int argc, char** argv) {
         game::GroundView ground(renderer);
         ground.reset(tuning.ground, seed);
 
-        // One player for now, flying north from near the south edge; the world takes any number.
+        // A run: one player for now, in the air near the south edge heading north (or where the
+        // options say). The world itself takes any number of planes.
         World world;
-        Body start;
-        start.x =
-            opts.has_at ? static_cast<float>(opts.at_x) : static_cast<float>(kMapWidthU) * 0.5f;
-        start.y = opts.has_at ? static_cast<float>(opts.at_y) : 480.0f;
-        start.z = std::fmin(opts.height, tuning.stand_in.ceiling_u);
-        start.heading_deg = wrap_heading(opts.heading);
-        start.speed_u_s = tuning.stand_in.speed_u_s;
-        world.bodies.push_back(start);
-        std::vector<Body> previous = world.bodies;
+        std::vector<Body> previous;
         Camera camera;
-        camera.snap_to(world.bodies[0], tuning.camera);
+        const auto new_run = [&]() {
+            const float x =
+                opts.has_at ? static_cast<float>(opts.at_x) : static_cast<float>(kMapWidthU) * 0.5f;
+            const float y = opts.has_at ? static_cast<float>(opts.at_y) : 480.0f;
+            Body b = start_body(tuning.rules.flight, x, y, opts.heading);
+            if (opts.has_height) {
+                b.z = std::fmin(opts.height, tuning.rules.flight.ceiling_u);
+            }
+            if (opts.has_pitch) {
+                b.pitch_deg = opts.pitch;
+            }
+            if (opts.has_throttle) {
+                b.throttle = opts.throttle_pct / 100.0f;
+            }
+            world = World{};
+            world.bodies.push_back(b);
+            previous = world.bodies;
+            camera.snap_to(world.bodies[0], tuning.camera);
+        };
+        new_run();
 
         const game::Bindings bindings = game::default_bindings();
         bool switch_pressed = false;
         bool overlay = opts.overlay;
         Screen screen;
-        if (!refresh_screen(renderer, screen)) {
+        if (exit_code == 0 && !refresh_screen(renderer, screen)) {
             exit_code = 1;
         }
 
@@ -449,6 +497,7 @@ int main(int argc, char** argv) {
         bool running = exit_code == 0;
 
         while (running) {
+            const bool run_over = world.bodies[0].outcome != Outcome::Flying;
             SDL_Event e;
             while (SDL_PollEvent(&e)) {
                 if (e.type == SDL_EVENT_QUIT) {
@@ -461,6 +510,9 @@ int main(int argc, char** argv) {
                     } else if (e.key.key == SDLK_F11) {
                         const bool full = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
                         SDL_SetWindowFullscreen(window, !full);
+                    } else if (run_over && (e.key.key == SDLK_RETURN ||
+                                            e.key.key == SDLK_KP_ENTER || e.key.key == SDLK_R)) {
+                        new_run();
                     } else if (game::is_key(bindings, game::Action::SwitchHeavy, e.key.scancode)) {
                         switch_pressed = true;
                     }
@@ -475,18 +527,18 @@ int main(int argc, char** argv) {
             }
 
             // The simulation's ticks: real time normally, exactly one a frame for --shot (and with
-            // no input), so a screenshot is the same every time.
+            // no input), so a screenshot is the same every time. When the run is over, it waits.
             const Uint64 now = SDL_GetTicksNS();
             const int ticks = shot_mode ? 1 : step.advance(static_cast<std::int64_t>(now - last));
             last = now;
             const bool* keys = SDL_GetKeyboardState(nullptr);
-            for (int t = 0; t < ticks; ++t) {
+            for (int t = 0; t < ticks && world.bodies[0].outcome == Outcome::Flying; ++t) {
                 previous = world.bodies;
                 const std::array<InputCommand, 1> commands = {
                     shot_mode ? InputCommand{}
                               : game::read_command(bindings, keys, switch_pressed)};
                 switch_pressed = false;
-                wof::step(world, commands, tuning.stand_in);
+                wof::step(world, commands, tuning.rules);
                 camera.follow(world.bodies[0], tuning.camera);
             }
             const float alpha = shot_mode ? 1.0f : step.alpha();
@@ -507,31 +559,79 @@ int main(int argc, char** argv) {
             ground.draw(origin, fit.w, fit.h);
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
             const Body plane = between(previous[0], world.bodies[0], alpha);
-            draw_stand_in(renderer, plane, origin, true);
-            draw_stand_in(renderer, plane, origin, false);
+            sprites.draw(plane, origin, true);
+            if (plane.outcome != Outcome::Crashed) {
+                sprites.draw(plane, origin, false);
+            }
+
+            // A temporary readout until PR 6's HUD: throttle, speed, height, fuel, warnings.
+            const float bottom = static_cast<float>(fit.h) - 24.0f;
+            std::string flags_line;
+            if (plane.stalled) {
+                flags_line += "STALL  ";
+            }
+            if (!plane.engine_on) {
+                flags_line += "ENGINE OFF";
+            }
+            std::vector<std::string> readout = {
+                format("THR %3.0f%%  %3.0f MPH  %5.0f FT  FUEL %3.0f%%",
+                       static_cast<double>(plane.throttle * 100.0f),
+                       static_cast<double>(plane.speed_u_s * kMphPerUs),
+                       static_cast<double>(plane.z * kFeetPerU),
+                       static_cast<double>(plane.fuel * 100.0f))};
+            if (!flags_line.empty()) {
+                readout.push_back(flags_line);
+            }
+            draw_text_block(renderer, 2.0f, bottom - (readout.size() > 1 ? 0.0f : -10.0f), readout,
+                            SDL_Color{236, 232, 200, 255});
+            if (plane.edge_countdown_s >= 0.0f && plane.outcome == Outcome::Flying) {
+                draw_text_centred(renderer, fit.w, 40.0f,
+                                  {format("RETURN TO THE BATTLE AREA  %d",
+                                          static_cast<int>(std::ceil(plane.edge_countdown_s)))},
+                                  SDL_Color{255, 120, 90, 255});
+            } else if (plane.edge_warning) {
+                draw_text_centred(renderer, fit.w, 40.0f, {"EDGE OF THE BATTLE AREA"},
+                                  SDL_Color{255, 220, 120, 255});
+            }
+            if (plane.outcome != Outcome::Flying) {
+                const long secs = static_cast<long>(world.tick / kTicksPerSecond);
+                draw_text_centred(renderer, fit.w, static_cast<float>(fit.h) * 0.5f - 20.0f,
+                                  {banner_of(plane.outcome),
+                                   format("time flown %ld:%02ld", secs / 60, secs % 60),
+                                   "ENTER OR R: NEW RUN"},
+                                  SDL_Color{255, 236, 170, 255});
+            }
+
             if (overlay) {
                 const GroundSample under =
                     sample_ground(tuning.ground, seed, static_cast<int>(std::floor(plane.x)),
                                   static_cast<int>(std::floor(plane.y)));
-                draw_overlay(
-                    renderer,
+                const game::PlaneSprites::Cell cell = game::PlaneSprites::cell_of(plane);
+                draw_text_block(
+                    renderer, 0.0f, 0.0f,
                     {format("Wings of Freedom %s  %d fps  %s", WOF_VERSION, fps, backend),
                      format("window %dx%d  scale %dx  view %dx%d", screen.out_w, screen.out_h,
                             fit.scale, fit.w, fit.h),
                      format("camera %d,%d  lead %.0f,%.0f u", origin.x, origin.y,
                             static_cast<double>(camera.lead().x),
                             static_cast<double>(camera.lead().y)),
-                     format("plane %.0f,%.0f  %.0f u (%.0f ft)  %.0f mph",
-                            static_cast<double>(plane.x), static_cast<double>(plane.y),
-                            static_cast<double>(plane.z), static_cast<double>(plane.z * kFeetPerU),
-                            static_cast<double>(plane.speed_u_s * kMphPerUs)),
-                     format("heading %.0f (sprite %d of 32)",
+                     format("plane %.0f,%.0f  %.0f u  %.1f u/s", static_cast<double>(plane.x),
+                            static_cast<double>(plane.y), static_cast<double>(plane.z),
+                            static_cast<double>(plane.speed_u_s)),
+                     format("heading %.0f  pitch %.0f  bank %.0f  pose %d,%d",
                             static_cast<double>(plane.heading_deg),
-                            heading_index(plane.heading_deg)),
-                     format("ground %s  tiles %d  tick %lld", ground_name(under.kind),
-                            ground.cached(), static_cast<long long>(world.tick))});
+                            static_cast<double>(plane.pitch_deg),
+                            static_cast<double>(plane.bank_deg), cell.column, cell.row),
+                     format("throttle %.0f%%  fuel %.1f%%  %s%s",
+                            static_cast<double>(plane.throttle * 100.0f),
+                            static_cast<double>(plane.fuel * 100.0f),
+                            plane.stalled ? "stalled " : "", plane.engine_on ? "" : "engine off"),
+                     format("ground %s  tiles %d  tick %lld  sprites %.0f ms",
+                            ground_name(under.kind), ground.cached(),
+                            static_cast<long long>(world.tick), sprites.bake_ms())},
+                    SDL_Color{236, 232, 200, 255});
             }
-            if (shot_mode && world.tick >= opts.ticks) {
+            if (shot_mode && (world.tick >= opts.ticks || plane.outcome != Outcome::Flying)) {
                 if (!save_png(renderer, opts.shot)) {
                     exit_code = 1;
                 }

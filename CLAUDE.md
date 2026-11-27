@@ -112,4 +112,5 @@ Logs go to `out/`.
   `tests/test_ground.cpp` pins it on both. If you change the generator on purpose, update the hash
   in the same pull request and say why.
 - **Smoke run:** `WingsOfFreedom --shot out/shot.png` flies 120 ticks with no input, saves the view
-  as a PNG and exits. `--window`, `--heading`, `--height`, `--at` and `--overlay` set up the shot.
+  as a PNG and exits. `--window`, `--heading`, `--height`, `--pitch`, `--throttle`, `--at` and
+  `--overlay` set up the shot. `--sprite-sheet out/sheet.png` saves every baked plane pose.
