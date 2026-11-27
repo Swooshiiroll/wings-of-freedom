@@ -1,7 +1,7 @@
 # Fly and fight (v0.1)
 
-The spec for the first playable build. You fly a real pre-war fighter (the US's Boeing P-26A or
-Germany's Heinkel He 51) with full altitude control, burning fuel. You fight the other nation's
+The spec for the first playable build. You fly a real pre-war fighter of the US or Germany, from
+its aircraft tree (`aircraft_tree.md`), with full altitude control, burning fuel. You fight the other nation's
 fighters, bombers and flak with guns and bombs, and take damage part by part. Written from the
 owner's answers of 2026-11-26 (flight rounds 1-5, the first draft's open questions, and the
 real-planes rounds).
@@ -150,12 +150,12 @@ The simulation runs at a fixed **60 ticks per second**.
 - Fixed, firing forward along the nose, pitch included.
 - **Each plane carries its real guns** (owner, 2026-11-26), with their real rate of fire and ammo.
   Damage depends on calibre (`planes.md`): rifle calibre 1, .50 cal 2.5, 20 mm 8.
-- **The P-26A:** one **.30 cal** and one **.50 cal** in the cowling (owner, 2026-11-26), 1 u
+- **The P-26A:** two **.30 cal** in the cowling (owner, 2026-11-27: the .50 is an upgrade), 1 u
   either side of the nose.
-  - The .30 fires about 1,000 rounds/min with 500 rounds: about 30 s of fire.
-  - The .50 fires about 600 rounds/min with 200 rounds: about 20 s of fire, at 2.5 damage a hit.
-  - Together that's about 27 rounds and 42 damage a second.
-- **The He 51:** two 7.92 mm MG 17s, the same way.
+  - Each fires about 1,000 rounds/min with 500 rounds: about 30 s of fire.
+  - With the .50 upgrade, one .30 becomes a .50 (about 600 rounds/min, 200 rounds, 2.5 damage a
+    hit).
+- **The He 51:** two 7.92 mm MG 17s, the same way. The other fighters' guns are in `planes.md`.
 - Rifle-calibre rounds leave at **360 u/s** plus the plane's speed and last **0.8 s**. That's a
   game value, not the real muzzle velocity.
 - *(PR 3-4 had 12 rounds/s doing 2 damage each. Real guns replace that, with damage by calibre in
@@ -301,7 +301,7 @@ then flak.
 
 | | |
 |---|---|
-| Plane | The enemy nation's fighter (He 51 or P-26A), with its real stats |
+| Plane | From the enemy's aircraft tree, growing with the waves (`aircraft_tree.md`) |
 | Style | Each fighter gets one of three, at random |
 | Turn-fighter | Gets on your tail and stays there |
 | Dive-and-climb | Climbs above you, dives through, climbs away |
@@ -323,14 +323,17 @@ then flak.
 - Every 3rd wave brings a formation (owner, 2026-11-27): **a pair** at wave 3, **a V of three**
   from wave 6, **five** from wave 9.
 - From wave 6 they have **escort fighters**: one for each pair (three bring 1, five bring 2).
+  Escorts **guard** their bombers: they break off to fight you near the formation and return if
+  you pull away. Neither bombers nor escorts count toward the 6 fighters in the air at most.
 - They come in at the north edge and fly **south at 8,000-15,000 ft** (160-300 u) and their real
-  cruising speed to bomb your base, **holding course** under fire.
+  cruising speed (B-10B **193 mph**, He 111B-2 **229 mph**) to bomb your base, **holding course**
+  under fire. Escorted formations slow to a speed their escorts can hold.
 - They're **announced as they enter**: how many, their height and direction.
 - They're tough: **two engines of 60 HP each** (losing one halves the power), each wing **100**,
   fuselage **160**, tail **40**.
 - **Three gunners** (nose, dorsal, ventral), with the bomber's real guns and rate, fire at any
-  plane within **160 u** in their arcs. They follow your enemy aim setting and sharpen with later
-  waves (owner, 2026-11-27).
+  plane within **160 u** in their arcs, in **short bursts** (about 0.6 s on and off). They follow
+  your enemy aim setting and sharpen with later waves (owner, 2026-11-27).
   - **Nose:** forward, ±60° of the nose.
   - **Dorsal:** behind and above, ±120° of the tail.
   - **Ventral:** behind and below, ±60° of the tail.
@@ -366,6 +369,8 @@ then flak.
   edge, abreast of you or north of you. On this map the first fight comes about **2 minutes** in.
 - **Wave n** brings **1 + n/2 fighters** (rounded down). Every 3rd wave adds a bomber formation
   (above).
+- The fighters **grow up the enemy's aircraft tree**: step 1 in waves 1-4, mixed with step 2 in
+  5-8, steps 2 and 3 in 9-12, step 3 from wave 13 (`aircraft_tree.md`).
 - Fighters arrive **within about 3,000 ft of your height** (owner, 2026-11-27). At most **6** are in
   the air; the rest of a wave waits for a place.
 - **Every wave is announced** with a notice on the dashboard (its size and height), which also counts waves
@@ -400,9 +405,8 @@ then flak.
     one; reset to defaults. Esc and F1-F12 are reserved.
   - Keyboard (arrows or W/S, Enter, Esc) and mouse. The nation screen works the same way.
   - Choices are saved in `settings.txt` next to the game, which the updater keeps.
-- **Before a run, you choose your nation:** the US or Germany in v0.1 (owner, 2026-11-26). You fly
-  its fighter, and the other nation is the enemy. A simple screen and `--nation us|de` come in
-  PR 5; PR 7's menus make it a proper screen.
+- **Before a run, you choose your plane:** any of the six fighters until the hangar
+  (`aircraft_tree.md`). The other nation is the enemy (owner, 2026-11-26).
 
 ## Look (placeholder art)
 
@@ -418,6 +422,13 @@ then flak.
     cockpit with headrest. Olive drab fuselage, yellow wings and tail, red spinner.
   - **Heinkel He 51:** biplane (upper and lower wings with struts), inline engine, fixed gear.
     Light grey.
+  - **Boeing P-12E:** a short, stubby biplane with a radial engine; olive drab and chrome yellow.
+  - **Arado Ar 65E:** a big biplane, long inline engine, deep chin radiator, two struts a side;
+    grey-green.
+  - **Curtiss P-36A:** low-wing monoplane with a radial and an enclosed canopy; bare metal with
+    yellow wings and tail.
+  - **Messerschmitt Bf 109B:** slim low-wing monoplane, pointed nose, square wingtips; dark
+    grey-green over pale blue.
   - **Martin B-10B:** twin-engine, glazed nose turret, enclosed cockpits. True blue fuselage,
     yellow wings.
   - **Heinkel He 111B:** twin-engine, rounded wings, stepped cockpit, dorsal and ventral guns.
@@ -441,11 +452,12 @@ then flak.
   - `--overlay` starts with the F1 overlay shown.
   - `--fire` and `--bomb` hold the guns or the bomb release throughout.
   - `--menu pause|options|controls` shows a menu page over the shot (shots use the default
-    settings).
-- `--sprite-sheet FILE`: saves every baked plane pose to a PNG and exits (the `--nation`'s
-  fighter); `--sprite-scale PCT` picks the size (25-150, in eighth steps).
-- `--nation us|de`: fly that nation's fighter and skip the nation screen (design/planes.md).
-- **`tuning.txt` format:** the file starts with `format = 3`. A file of an older format is renamed
+    settings); `--menu planes` saves the plane screen.
+- `--sprite-sheet FILE`: saves every baked plane pose to a PNG and exits (your plane's);
+  `--sprite-scale PCT` picks the size (25-150, in eighth steps).
+- `--plane ID` (p12e, p26a, p36a, ar65, he51b, bf109b) or `--nation us|de` (its first fighter):
+  fly it and skip the plane screen.
+- **`tuning.txt` format:** the file starts with `format = 4`. A file of an older format is renamed
   `tuning-format<N>.txt` (a file with no format line is format 1) and the defaults are written, so
   its old ceiling, tank and zoom numbers don't quietly win. Each plane's speeds, climb, stall, turn, pitch rate and tank
   come from its real stats through the `scale.*` keys, so they're no longer in the file.

@@ -223,7 +223,8 @@ TEST_CASE("Hits land by the table: shares hold for each direction, and side hits
 }
 
 TEST_CASE("Another plane's rounds do their calibre's damage to the parts they hit") {
-    const Rules r;
+    Rules r; // the P-26A with its .50 upgrade
+    r.planes[0].guns[1] = {Calibre::Heavy, 600.0f, 200, 1.0f, Mount::Fixed};
     World w = with_plane(r, 100.0f);
     Body target = w.bodies[0];
     target.y += 150.0f;
@@ -237,7 +238,7 @@ TEST_CASE("Another plane's rounds do their calibre's damage to the parts they hi
         step(w, std::vector<InputCommand>{fire, InputCommand{}}, r);
         for (const Event& e : w.events) {
             if (e.kind == EventKind::RoundHitPlane) {
-                // The P-26A's .30 does 1, its .50 2.5 (design/planes.md).
+                // A .30 does 1, a .50 2.5 (design/planes.md).
                 CHECK((e.damage == doctest::Approx(1.0f) || e.damage == doctest::Approx(2.5f)));
                 dealt += e.damage;
             }

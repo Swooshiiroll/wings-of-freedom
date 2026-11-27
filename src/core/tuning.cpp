@@ -198,9 +198,11 @@ constexpr std::array<FloatKey, 79> kFloats = {{
      0.0f, 2000.0f},
 }};
 
-constexpr std::array<IntKey, 37> kInts = {{
+constexpr std::array<IntKey, 38> kInts = {{
     {"Waves: enemy fighters in the air at once, at most", "wave.max_alive",
      [](Tuning& t) -> int& { return t.rules.wave.max_alive; }, 1, 64},
+    {"Waves: the enemy's fighters move up a stage of its aircraft tree every this many waves",
+     "wave.tier_every", [](Tuning& t) -> int& { return t.rules.wave.tier_every; }, 1, 100},
     {"Weapons: one round in N, per gun, is a tracer", "weapon.tracer_every",
      [](Tuning& t) -> int& { return t.rules.weapon.tracer_every; }, 1, 100},
     {"Damage: the pilot's wounds (the last kills); where hits land, in percent of hits by where "

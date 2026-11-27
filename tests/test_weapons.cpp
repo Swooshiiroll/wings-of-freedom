@@ -21,8 +21,16 @@ InputCommand fire(bool guns, bool bombs = false, int pitch = 0) {
     return c;
 }
 
-// One armed P-26A (a .30 on the left, a .50 on the right, 2 x 100 lb bombs), level at full
-// throttle (its steady speed, 150 u/s), heading north.
+// The rules with the P-26A's .50 upgrade fitted (a .30 on the left, a .50 on the right), the guns
+// these tests are written around.
+Rules fifty_rules() {
+    Rules r;
+    r.planes[0].guns[1] = {Calibre::Heavy, 600.0f, 200, 1.0f, Mount::Fixed};
+    return r;
+}
+
+// One armed P-26A with the .50 (a .30 on the left, a .50 on the right, 2 x 100 lb bombs), level at
+// full throttle (its steady speed, 150 u/s), heading north.
 World one_plane(const Rules& r, float z = 100.0f) {
     World w;
     Body b = new_plane(r, PlaneId::P26A, 1440.0f, 2000.0f, 0.0f);
@@ -81,7 +89,7 @@ bool run_until(World& w, const InputCommand& c, int ticks, const Rules& r, Event
 
 // Fires one round from a level plane at a still drone straight ahead, `dz` above or below.
 int hits_on_drone_ahead(HeightRule rule, float dz, float side = 0.0f) {
-    Rules r;
+    Rules r = fifty_rules();
     r.height_rule = rule;
     World w = one_plane(r);
     w.targets.push_back(drone_at(1440.0f + side, 2150.0f, 100.0f + dz));
@@ -92,7 +100,7 @@ int hits_on_drone_ahead(HeightRule rule, float dz, float side = 0.0f) {
 } // namespace
 
 TEST_CASE("Each gun fires at its real rate: the P-26A's .30 at ~1,000 and .50 at ~600 a minute") {
-    const Rules r;
+    const Rules r = fifty_rules();
     World w = one_plane(r);
     run(w, fire(true), 1, r);
     REQUIRE(w.rounds.size() == 2u); // both guns open fire at once
@@ -108,7 +116,7 @@ TEST_CASE("Each gun fires at its real rate: the P-26A's .30 at ~1,000 and .50 at
 }
 
 TEST_CASE("The guns stop when their rounds run out") {
-    const Rules r;
+    const Rules r = fifty_rules();
     World w = one_plane(r);
     w.bodies[0].loadout.guns[0].rounds = 3;
     w.bodies[0].loadout.guns[1].rounds = 2;
@@ -120,7 +128,7 @@ TEST_CASE("The guns stop when their rounds run out") {
 }
 
 TEST_CASE("Every 3rd round from each gun is a tracer") {
-    const Rules r;
+    const Rules r = fifty_rules();
     World w = one_plane(r);
     run(w, fire(true), 30, r); // none expired yet
     for (const float calibre_damage : {1.0f, 2.5f}) {
@@ -139,7 +147,7 @@ TEST_CASE("Every 3rd round from each gun is a tracer") {
 }
 
 TEST_CASE("Rounds fly along the nose at their calibre's speed plus the plane's, for its life") {
-    Rules r;
+    Rules r = fifty_rules();
     World w = one_plane(r);
     w.bodies[0].pitch_deg = 20.0f;
     run(w, fire(true, false, 127), 1, r); // S held, so the nose stays up
@@ -180,7 +188,7 @@ TEST_CASE("Auto-aim angles rounds toward a target near the nose and near your he
     CHECK(hits_on_drone_ahead(HeightRule::AutoAim, 50.0f) == 0); // outside the height window
     CHECK(hits_on_drone_ahead(HeightRule::Forgiving, 30.0f) == 0);
 
-    Rules r;
+    Rules r = fifty_rules();
     r.height_rule = HeightRule::AutoAim;
     World inside = one_plane(r);
     inside.targets.push_back(drone_at(1440.0f + 150.0f * std::tan(0.15f), 2150.0f, 130.0f)); // ~9°
@@ -194,7 +202,7 @@ TEST_CASE("Auto-aim angles rounds toward a target near the nose and near your he
 }
 
 TEST_CASE("A fast round can't skip past a small target between ticks") {
-    Rules r;
+    Rules r = fifty_rules();
     r.weapon.hit_radius_u = 0.5f; // far less than the 8.5 u a round moves each tick
     World w = one_plane(r);
     w.targets.push_back(drone_at(1440.0f - 1.0f, 2150.0f, 100.0f));
@@ -204,7 +212,7 @@ TEST_CASE("A fast round can't skip past a small target between ticks") {
 }
 
 TEST_CASE("A plane's own rounds never hit it, but they hit other planes") {
-    const Rules r;
+    const Rules r = fifty_rules();
     World w = one_plane(r);
     Body other = w.bodies[0];
     other.y = 2150.0f;
@@ -219,7 +227,7 @@ TEST_CASE("A plane's own rounds never hit it, but they hit other planes") {
 }
 
 TEST_CASE("Rounds that reach the ground make impacts, and strafe ground targets near them") {
-    const Rules r;
+    const Rules r = fifty_rules();
     World miss = one_plane(r, 30.0f);
     miss.bodies[0].pitch_deg = -30.0f;
     Event impact;
@@ -233,7 +241,7 @@ TEST_CASE("Rounds that reach the ground make impacts, and strafe ground targets 
 }
 
 TEST_CASE("A bomb falls from the plane's height and speed: from 120 u at 150 u/s, ~245 u ahead") {
-    const Rules r;
+    const Rules r = fifty_rules();
     World w = one_plane(r, 120.0f);
     run(w, fire(false, true), 1, r);
     const float released_at = w.bodies[0].y;
@@ -245,7 +253,7 @@ TEST_CASE("A bomb falls from the plane's height and speed: from 120 u at 150 u/s
 }
 
 TEST_CASE("Holding Space ripples the bombs, one every 0.3 s") {
-    const Rules r;
+    const Rules r = fifty_rules();
     World w = one_plane(r, 200.0f);
     run(w, fire(false, true), 1, r);
     CHECK(w.bodies[0].loadout.bombs == 1); // the P-26A carries two
@@ -277,7 +285,7 @@ TEST_CASE("A 100 lb bomb's blast falls from 40 at the centre to 0 at 20 u; other
 }
 
 TEST_CASE("Bombing from low catches your own plane; from higher it doesn't") {
-    const Rules r;
+    const Rules r = fifty_rules();
     World low = one_plane(r, 10.0f);
     run(low, fire(false, true), 1, r);
     Event caught;
@@ -294,7 +302,7 @@ TEST_CASE("Bombing from low catches your own plane; from higher it doesn't") {
 
 TEST_CASE(
     "The bomb marker predicts exactly where the bomb lands, and the blast hits targets there") {
-    const Rules r;
+    const Rules r = fifty_rules();
     World w = one_plane(r, 120.0f);
     run(w, fire(false, true), 1, r);
     // The bomb left this tick, with the plane as it is now.
@@ -312,7 +320,7 @@ TEST_CASE(
 }
 
 TEST_CASE("Tab keeps bombs selected: there's nothing else to switch to yet") {
-    const Rules r;
+    const Rules r = fifty_rules();
     World w = one_plane(r);
     InputCommand c;
     c.switch_heavy = true;
@@ -321,7 +329,7 @@ TEST_CASE("Tab keeps bombs selected: there's nothing else to switch to yet") {
 }
 
 TEST_CASE("The same commands give exactly the same rounds, bombs and hits") {
-    Rules r;
+    Rules r = fifty_rules();
     r.height_rule = HeightRule::AutoAim;
     World a = one_plane(r);
     World b = one_plane(r);
@@ -351,7 +359,7 @@ TEST_CASE("Height rules have names for the option and the command line") {
 }
 
 TEST_CASE("A bomb leaves with the plane's real up or down speed; a round keeps the nose angle") {
-    const Rules r;
+    const Rules r = fifty_rules();
     World w = one_plane(r, 300.0f);
     w.bodies[0].pitch_deg = -30.0f;
     run(w, fire(true, true, -127), 1, r); // diving, guns and a bomb
@@ -371,7 +379,7 @@ TEST_CASE("A bomb leaves with the plane's real up or down speed; a round keeps t
 TEST_CASE("Your rounds follow your aim rule, an AI pilot's the enemy's") {
     // A drone 6 u (300 ft) above the line of fire: Forgiving hits it, Strict doesn't.
     for (const bool ai : {false, true}) {
-        Rules r;
+        Rules r = fifty_rules();
         r.height_rule = HeightRule::Strict;
         r.enemy_height_rule = HeightRule::Forgiving;
         World w = one_plane(r);

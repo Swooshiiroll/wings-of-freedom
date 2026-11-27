@@ -1,9 +1,11 @@
 #include "core/waves.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "core/map.hpp"
@@ -30,7 +32,8 @@ World fresh(const Rules& r, int first = 1) {
     World w;
     Body b = new_plane(r, PlaneId::P26A, 1440.0f, 1500.0f, 0.0f);
     w.bodies.push_back(b);
-    w.waves = start_waves(r, PlaneId::He51B, first);
+    // He 51s at every step, unless a test says otherwise.
+    w.waves = start_waves(r, {PlaneId::He51B, PlaneId::He51B, PlaneId::He51B}, first);
     return w;
 }
 
@@ -51,6 +54,53 @@ TEST_CASE("Wave n brings 1 + n/2 fighters") {
     CHECK(wave_size(3) == 2);
     CHECK(wave_size(4) == 3);
     CHECK(wave_size(9) == 5);
+}
+
+TEST_CASE("Enemy fighters move up their tree every four waves, mixing as they go") {
+    const auto span = [](int n) {
+        const TierSpan s = enemy_steps(n, 4);
+        return std::pair{s.lo, s.hi};
+    };
+    CHECK(span(1) == std::pair{0, 0});
+    CHECK(span(4) == std::pair{0, 0});
+    CHECK(span(5) == std::pair{0, 1});
+    CHECK(span(8) == std::pair{0, 1});
+    CHECK(span(9) == std::pair{1, 2});
+    CHECK(span(12) == std::pair{1, 2});
+    CHECK(span(13) == std::pair{2, 2});
+    CHECK(span(40) == std::pair{2, 2});
+}
+
+TEST_CASE("The waves send the enemy's tree: first types early, both in a mix, the last later") {
+    const Rules r = quiet_rules();
+    const FighterTree german = fighter_tree(Nation::Germany);
+    const auto types_at = [&](int first) {
+        std::array<int, 3> seen{};
+        for (std::uint64_t seed = 1; seed <= 20; ++seed) {
+            World w = fresh(r, first);
+            w.rng = Rng{seed};
+            w.waves = start_waves(r, german, first);
+            run(w, r, 10.0f + kTickSeconds);
+            for (const Pilot& p : w.pilots) {
+                const auto type =
+                    static_cast<PlaneId>(w.bodies[static_cast<std::size_t>(p.body)].type);
+                for (std::size_t step = 0; step < german.size(); ++step) {
+                    seen[step] += type == german[step] ? 1 : 0;
+                }
+            }
+        }
+        return seen;
+    };
+    const auto early = types_at(2);
+    CHECK(early[0] > 0);
+    CHECK(early[1] + early[2] == 0);
+    const auto mixed = types_at(6);
+    CHECK(mixed[0] > 0);
+    CHECK(mixed[1] > 0);
+    CHECK(mixed[2] == 0);
+    const auto late = types_at(14);
+    CHECK(late[0] + late[1] == 0);
+    CHECK(late[2] > 0);
 }
 
 TEST_CASE("The first wave comes at 10 s, then one every 40 s, each announced") {

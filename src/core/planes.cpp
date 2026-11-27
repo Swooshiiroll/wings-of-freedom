@@ -9,7 +9,8 @@ namespace {
 // The v0.1 roster (design/planes.md, with its sources). Figures marked (est.) there are
 // estimates.
 constexpr std::array<PlaneType, kPlaneTypes> kRoster = {{
-    // Boeing P-26A "Peashooter", US fighter, 1934: one .30 and one .50 (owner, 2026-11-26).
+    // Boeing P-26A "Peashooter", US fighter, 1934: two .30s (owner, 2026-11-27: the .50 is an
+    // upgrade).
     {"p26a",
      "Boeing P-26A",
      Nation::US,
@@ -23,7 +24,7 @@ constexpr std::array<PlaneType, kPlaneTypes> kRoster = {{
      60.0f,
      1,
      {{{Calibre::Rifle, 1000.0f, 500, -1.0f, Mount::Fixed},
-       {Calibre::Heavy, 600.0f, 200, 1.0f, Mount::Fixed}}},
+       {Calibre::Rifle, 1000.0f, 500, 1.0f, Mount::Fixed}}},
      2,
      100.0f,
      2,
@@ -103,6 +104,98 @@ constexpr std::array<PlaneType, kPlaneTypes> kRoster = {{
      160.0f,
      40.0f,
      ModelId::P26},
+    // Boeing P-12E, US fighter, 1931 (biplane): two .30s. 244 lb of bombs.
+    {"p12e",
+     "Boeing P-12E",
+     Nation::US,
+     Role::Fighter,
+     1931,
+     189.0f,
+     1900.0f,
+     55.0f,
+     12.0f,
+     3.5f,
+     60.0f,
+     1,
+     {{{Calibre::Rifle, 1000.0f, 600, -1.0f, Mount::Fixed},
+       {Calibre::Rifle, 1000.0f, 600, 1.0f, Mount::Fixed}}},
+     2,
+     116.0f,
+     2,
+     40.0f,
+     40.0f,
+     60.0f,
+     20.0f,
+     ModelId::P12},
+    // Arado Ar 65E, German fighter, 1933 (biplane): two 7.92 mm MG 17s, no bombs.
+    {"ar65",
+     "Arado Ar 65E",
+     Nation::Germany,
+     Role::Fighter,
+     1933,
+     186.0f,
+     2086.0f,
+     60.0f,
+     13.0f,
+     2.3f,
+     60.0f,
+     1,
+     {{{Calibre::Rifle, 1000.0f, 500, -1.0f, Mount::Fixed},
+       {Calibre::Rifle, 1000.0f, 500, 1.0f, Mount::Fixed}}},
+     2,
+     0.0f,
+     0,
+     40.0f,
+     40.0f,
+     60.0f,
+     20.0f,
+     ModelId::Ar65},
+    // Curtiss P-36A Hawk, US fighter, 1938: one .30 and one .50, no bombs.
+    {"p36a",
+     "Curtiss P-36A",
+     Nation::US,
+     Role::Fighter,
+     1938,
+     313.0f,
+     3400.0f,
+     74.0f,
+     16.0f,
+     2.3f,
+     60.0f,
+     1,
+     {{{Calibre::Rifle, 1000.0f, 500, -1.0f, Mount::Fixed},
+       {Calibre::Heavy, 600.0f, 200, 1.0f, Mount::Fixed}}},
+     2,
+     0.0f,
+     0,
+     40.0f,
+     40.0f,
+     60.0f,
+     20.0f,
+     ModelId::P36},
+    // Messerschmitt Bf 109B-1, German fighter, 1937: two 7.92 mm MG 17s, no bombs.
+    {"bf109b",
+     "Messerschmitt Bf 109B",
+     Nation::Germany,
+     Role::Fighter,
+     1937,
+     292.0f,
+     2200.0f,
+     75.0f,
+     18.0f,
+     1.5f,
+     60.0f,
+     1,
+     {{{Calibre::Rifle, 1000.0f, 500, -1.0f, Mount::Fixed},
+       {Calibre::Rifle, 1000.0f, 500, 1.0f, Mount::Fixed}}},
+     2,
+     0.0f,
+     0,
+     40.0f,
+     40.0f,
+     60.0f,
+     20.0f,
+     ModelId::Bf109},
 }};
 
 } // namespace
@@ -155,8 +248,9 @@ bool find_plane(std::string_view id, PlaneId& out) noexcept {
     return false;
 }
 
-PlaneId fighter_of(Nation n) noexcept {
-    return n == Nation::Germany ? PlaneId::He51B : PlaneId::P26A;
+FighterTree fighter_tree(Nation n) noexcept {
+    return n == Nation::Germany ? FighterTree{PlaneId::Ar65E, PlaneId::He51B, PlaneId::Bf109B}
+                                : FighterTree{PlaneId::P12E, PlaneId::P26A, PlaneId::P36A};
 }
 
 } // namespace wof

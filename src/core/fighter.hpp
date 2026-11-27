@@ -48,6 +48,14 @@ struct Block {
 // fixed landing gear, all in pre-war light grey. About 28 u across and 22 u long.
 [[nodiscard]] std::vector<Block> he51_model();
 
+// The other fighters of the aircraft tree (design/aircraft_tree.md), blocky original models in
+// pre-war colours with no markings: the P-12E and Ar 65 biplanes, the P-36A and Bf 109B
+// monoplanes.
+[[nodiscard]] std::vector<Block> p12_model();
+[[nodiscard]] std::vector<Block> ar65_model();
+[[nodiscard]] std::vector<Block> p36_model();
+[[nodiscard]] std::vector<Block> bf109_model();
+
 // A plane's model by its id (core/planes.hpp).
 [[nodiscard]] std::vector<Block> plane_model(ModelId id);
 

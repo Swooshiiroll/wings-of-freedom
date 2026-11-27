@@ -35,11 +35,11 @@ struct GunSpec {
 inline constexpr int kMaxGuns = 4;
 
 // Which blocky model a plane is drawn with (core/fighter.hpp).
-enum class ModelId : std::uint8_t { P26, He51 };
+enum class ModelId : std::uint8_t { P26, He51, P12, Ar65, P36, Bf109 };
 
 // The planes in the roster, in order (Body::type).
-enum class PlaneId : std::uint8_t { P26A, He51B, B10B, He111B2 };
-inline constexpr int kPlaneTypes = 4;
+enum class PlaneId : std::uint8_t { P26A, He51B, B10B, He111B2, P12E, Ar65E, P36A, Bf109B };
+inline constexpr int kPlaneTypes = 8;
 
 // One real aircraft: its real stats, and how it's armed, built and drawn.
 struct PlaneType {
@@ -71,8 +71,12 @@ struct PlaneType {
 [[nodiscard]] const PlaneType& plane_type(int index) noexcept; // clamped into the roster
 bool find_plane(std::string_view id, PlaneId& out) noexcept;
 
-// A nation's fighter in v0.1 (US: P-26A, Germany: He 51B).
-[[nodiscard]] PlaneId fighter_of(Nation n) noexcept;
+// A nation's fighters in order of the aircraft tree (design/aircraft_tree.md), the first the one
+// you start with. US: P-12E, P-26A, P-36A. Germany: Ar 65E, He 51B, Bf 109B. Only those two
+// nations are in v0.1.
+inline constexpr int kTreeSteps = 3;
+using FighterTree = std::array<PlaneId, kTreeSteps>;
+[[nodiscard]] FighterTree fighter_tree(Nation n) noexcept;
 
 // The scale from real stats to game values (tuning.txt `scale.*`), all (start) values.
 struct PlaneScale {
