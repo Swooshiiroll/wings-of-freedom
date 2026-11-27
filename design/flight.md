@@ -31,7 +31,13 @@ shop, pilots, saving, other planes and eras, trucks and tanks, sound, gamepad, c
   u**. The player's ceiling is **240 u**, a 96 px gap.
 - **Map:** **2880 u east-west by 4800 u north-south** (about 6 screens across and 10 deep). The
   ground is flat in v0.1, with drawn detail only.
+- **The ground** is a **farmland patchwork** (placeholder look until v0.3's art).
+  - Rectangular fields of wheat, barley, ploughed earth, pasture and meadow, plus woods.
+  - Hedgerows between fields, dirt roads on a grid, and one river winding north to south.
+  - It's made from the seed, the same on every computer.
 - **Edges:**
+  - **Nothing on the ground marks them.** The farmland carries on past every edge, and only the
+    HUD's warning and countdown show where the battle area ends.
   - East, west and north are soft. Within **200 u** of one, a warning shows.
   - Past one of them, a **10 s countdown** starts: "Return to the battle area". Flying back inside
     stops it, and it starts again from 10 s the next time you leave. At 0 the plane
@@ -42,6 +48,8 @@ shop, pilots, saving, other planes and eras, trucks and tanks, sound, gamepad, c
   in the direction of flight.
 - **Screens that 270 doesn't divide evenly:** the largest whole-number scale is used. The space
   left over shows more of the world, and the HUD stays pinned to the screen edges.
+- **The window** opens at the largest whole multiple of 480x270 that fits the screen (1440x810 on
+  a 1080p screen). **F11** toggles fullscreen.
 
 ## Controls
 
@@ -250,7 +258,10 @@ Enemy planes use the same flight and damage model as the player, driven by AI in
 ## Developer tools
 
 - `--seed N`, `--wave N` (start at a wave), `--window WxH`.
-- `--shot FILE`: a screenshot after a set number of ticks, for checking the drawing.
+- `--shot FILE`: fly `--ticks N` ticks (default 120) with no input, save the view as a PNG, and
+  exit, for checking the drawing.
+  - `--heading DEG`, `--height U` and `--at X,Y` set where the plane starts.
+  - `--overlay` starts with the F1 overlay shown.
 - **F1:** an overlay of hitboxes, part HP numbers, and AI styles.
 - **Switches** for the bomb marker and for invulnerability.
 
