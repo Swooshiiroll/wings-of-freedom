@@ -367,3 +367,25 @@ TEST_CASE("A bomb leaves with the plane's real up or down speed; a round keeps t
     const float speed = std::sqrt(round.vx * round.vx + round.vy * round.vy + round.vz * round.vz);
     CHECK(round.vz / speed == doctest::Approx(nose_z).epsilon(0.02));
 }
+
+TEST_CASE("Your rounds follow your aim rule, an AI pilot's the enemy's") {
+    // A drone 6 u (300 ft) above the line of fire: Forgiving hits it, Strict doesn't.
+    for (const bool ai : {false, true}) {
+        Rules r;
+        r.height_rule = HeightRule::Strict;
+        r.enemy_height_rule = HeightRule::Forgiving;
+        World w = one_plane(r);
+        if (ai) {
+            Pilot p;
+            p.body = 0;
+            w.pilots.push_back(p);
+        }
+        w.targets.push_back(drone_at(1440.0f, 2150.0f, 106.0f));
+        fire_weapons(w, 0, fire(true), r);
+        for (int i = 0; i < 50; ++i) {
+            move_projectiles(w, r);
+        }
+        CAPTURE(ai);
+        CHECK((w.targets[0].hits > 0) == ai);
+    }
+}

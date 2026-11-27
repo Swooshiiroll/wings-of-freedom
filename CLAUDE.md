@@ -116,7 +116,8 @@ Logs go to `out/`.
   `--throttle`, `--at`, `--overlay`, `--wave N` and `--targets` set up the shot (the first wave
   arrives at 10 s, so `--ticks 600` or more shows enemies). `--sprite-sheet out/sheet.png` saves every
   baked pose of the `--nation`'s fighter, at `--sprite-scale PCT`. Shots and sheets skip the
-  nation screen.
+  nation screen. `--menu pause|options|controls` shows a menu page over the shot; shots use the
+  default settings, not `settings.txt`.
 - **Depth and pixel-perfect:** everything is sized by its depth from the player's plane
   (`core/view_xf.hpp`). The ground below is drawn at full size into its own target and shrunk
   smoothly (the one exception to pixel-perfect). Planes are never stretched: each size step is

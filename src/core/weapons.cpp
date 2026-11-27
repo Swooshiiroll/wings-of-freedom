@@ -37,6 +37,16 @@ struct Vec {
     return r == HeightRule::Strict ? p.band_strict_u : p.band_forgiving_u;
 }
 
+// The rule that judges a body's rounds: the AI pilots' or the players'.
+[[nodiscard]] HeightRule rule_of(const World& w, const Rules& rules, int owner) noexcept {
+    for (const Pilot& pilot : w.pilots) {
+        if (pilot.body == owner) {
+            return rules.enemy_height_rule;
+        }
+    }
+    return rules.height_rule;
+}
+
 // The closest a path (x0, y0) to (x1, y1) comes to a point on the ground plane: how far along the
 // path (0..1), and the distance there.
 struct Approach {
@@ -270,7 +280,7 @@ void fire_weapons(World& w, std::size_t body, const InputCommand& cmd, const Rul
         r.owner = static_cast<int>(body);
         r.tracer = p.tracer_every > 0 && gun.fired % p.tracer_every == 0;
         r.damage = cal.damage;
-        if (rules.height_rule == HeightRule::AutoAim) {
+        if (rule_of(w, rules, r.owner) == HeightRule::AutoAim) {
             auto_aim(w, body, p, r);
         }
         w.rounds.push_back(r);
@@ -297,11 +307,10 @@ void fire_weapons(World& w, std::size_t body, const InputCommand& cmd, const Rul
 
 void move_projectiles(World& w, const Rules& rules) {
     const WeaponParams& p = rules.weapon;
-    const float band = band_of(p, rules.height_rule);
-
     std::vector<Round> rounds;
     rounds.reserve(w.rounds.size());
     for (Round r : w.rounds) {
+        const float band = band_of(p, rule_of(w, rules, r.owner));
         const float x1 = r.x + r.vx * kTickSeconds;
         const float y1 = r.y + r.vy * kTickSeconds;
         const float z1 = r.z + r.vz * kTickSeconds;

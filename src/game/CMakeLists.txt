@@ -3,7 +3,8 @@ add_executable(wof
   effects.cpp
   ground_view.cpp
   plane_sprites.cpp
-  main.cpp)
+  main.cpp
+  menu_view.cpp)
 set_target_properties(wof PROPERTIES OUTPUT_NAME "WingsOfFreedom")
 target_compile_definitions(wof PRIVATE WOF_VERSION="${PROJECT_VERSION}")
 find_package(Threads REQUIRED) # the sprites bake on a background thread

@@ -96,8 +96,13 @@ The simulation runs at a fixed **60 ticks per second**.
       with it. The best glide below fixes both.
     - The propeller's thrust is full up to **110 u/s**, then falls as 1/speed, scaled by the
       throttle. Its power is set so that full throttle levels off at 150.
-- **Pitch:** W/S changes it at **60°/s** (bombers 30°/s), up to **±40°**. **Let go and the nose
-  eases back to level** at the same rate (owner, 2026-11-26). Height changes at speed × sin(pitch)
+- **Pitch:** W/S changes it at **60°/s** (bombers 30°/s), up to **±40°**. What happens when you let
+  go is your **auto-leveling** setting (owner, 2026-11-27):
+  - **On** (default): the nose eases back to level at the same rate.
+  - **Assisted:** only if you let go within **5°** of level (`flight.assist_zone_deg`); otherwise it
+    stays. A held key passes straight through.
+  - **Off:** the nose stays where you leave it. A stall still drops it.
+  Height changes at speed × sin(pitch)
   × **1/3** (`flight.height_share`; owner, 2026-11-27: climbing should take a while), climbing and
   diving alike. Speed trades with the climb angle as before.
   - **Best sustained climb:** each plane's real climb rate, scaled. For the P-26A that's **15 u/s**
@@ -161,6 +166,8 @@ The simulation runs at a fixed **60 ticks per second**.
 
 ### The height rule for gunnery (options menu)
 
+Your guns and the enemy's have **separate settings** (owner, 2026-11-27), both Forgiving by default.
+
 | Rule | A round hits a plane when | Default |
 |---|---|---|
 | Forgiving band | Within **±10 u** of its height | Yes |
@@ -170,8 +177,8 @@ The simulation runs at a fixed **60 ticks per second**.
 You judge other planes' heights from their **shadows only**. There are no height markers.
 
 Under auto-aim, a round's climb is set when it's fired, toward the nearest plane or drone in the
-cone. Its hit is then tested with the forgiving band. Until PR 7's options menu, **F3** cycles the
-rule (or `--height-rule forgiving|strict|auto`).
+cone. Its hit is then tested with the forgiving band. **F3** cycles your rule (`--height-rule
+forgiving|strict|auto` sets it for one run).
 
 ### Bombs
 
@@ -371,6 +378,8 @@ then flak.
 - **Radar / minimap:** nearby enemy planes, flak guns, and an arrow toward the base (south). It
   shows positions only, never heights.
 - **Edge warning** when near a soft edge, and the **countdown** once past it.
+- **Pitch ladder:** -40° to +40° with your angle marked, and the Assisted zone shaded (owner,
+  2026-11-27).
 
 ## Run end and menus
 
@@ -379,8 +388,13 @@ then flak.
   cause, time flown, kills by type, and bombers that reached base. A key starts a new run.
   - **Until the summary arrives (PR 7):** the view freezes with a banner giving the cause and the
     time flown. Enter or R starts a new run (owner, 2026-11-26).
-- **Pause menu (Esc):** resume, restart, controls (rebinding), options (gunnery height rule),
-  quit.
+- **Pause menu (Esc;** owner, 2026-11-27): also opens when the window loses focus, and from the
+  run-end screen. Resume, restart run, options, quit.
+  - **Options:** controls, auto-leveling, your gun aim, enemy gun aim.
+  - **Controls:** two keys per action. Binding a key already in use moves it here; Delete clears
+    one; reset to defaults. Esc and F1-F12 are reserved.
+  - Keyboard (arrows or W/S, Enter, Esc) and mouse. The nation screen works the same way.
+  - Choices are saved in `settings.txt` next to the game, which the updater keeps.
 - **Before a run, you choose your nation:** the US or Germany in v0.1 (owner, 2026-11-26). You fly
   its fighter, and the other nation is the enemy. A simple screen and `--nation us|de` come in
   PR 5; PR 7's menus make it a proper screen.
@@ -421,6 +435,8 @@ then flak.
     plane starts.
   - `--overlay` starts with the F1 overlay shown.
   - `--fire` and `--bomb` hold the guns or the bomb release throughout.
+  - `--menu pause|options|controls` shows a menu page over the shot (shots use the default
+    settings).
 - `--sprite-sheet FILE`: saves every baked plane pose to a PNG and exits (the `--nation`'s
   fighter); `--sprite-scale PCT` picks the size (25-150, in eighth steps).
 - `--nation us|de`: fly that nation's fighter and skip the nation screen (design/planes.md).
@@ -428,9 +444,8 @@ then flak.
   `tuning-format<N>.txt` (a file with no format line is format 1) and the defaults are written, so
   its old ceiling, tank and zoom numbers don't quietly win. Each plane's speeds, climb, stall, turn, pitch rate and tank
   come from its real stats through the `scale.*` keys, so they're no longer in the file.
-- **F2** practice targets on/off (`--targets` starts with them on), **F3** the height rule
-  (`--height-rule`), **F4**
-  the bomb marker.
+- **F2** practice targets on/off (`--targets` starts with them on), **F3** your gun aim
+  (`--height-rule`), **F4** the bomb marker.
 - **Damage testing** (owner, 2026-11-26, for before enemies; still handy):
   - **F5** takes a 5-round gun burst from a random side;
   - **F6** takes a flak-sized hit (12 damage);
@@ -457,7 +472,8 @@ then flak.
 6. Enemies, in three builds (owner, 2026-11-27): the other nation's fighters (three styles) and
    waves; then bombers with three gunners and the B-10B and He 111B models; then light and heavy
    flak.
-7. HUD, pause and controls menus, rebinding, the nation screen, the run summary.
+7. Pause and options menus (rebinding, auto-leveling, aim; pulled forward, owner 2026-11-27), then
+   the cockpit dashboard (design/dashboard.md), the nation screen and the run summary.
 
 The simulation (`src/core`) has no SDL in it. It's deterministic for a given seed and list of
 input commands, so tests can replay scripted flights.

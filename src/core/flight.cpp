@@ -93,12 +93,16 @@ void fly(Body& b, const InputCommand& in, const FlightParams& p, const Aero& a, 
         }
         const float control = b.stalled ? p.stall_control : 1.0f;
 
-        // Pitch: W/S move it; let go and it eases back to level. A stall pulls the nose down.
+        // Pitch: W/S move it. Let go, and by the player's auto-leveling it eases back to level, or
+        // (Assisted, near level only) or stays. A stall pulls the nose down.
+        const bool levels =
+            cmd.level == AutoLevel::On ||
+            (cmd.level == AutoLevel::Assisted && std::abs(b.pitch_deg) <= p.assist_zone_deg);
         const float pitch_in = axis(cmd.pitch) * control;
         const float pitch_step = p.pitch_rate_deg_s * dt;
         if (pitch_in != 0.0f) {
             b.pitch_deg += pitch_in * pitch_step;
-        } else if (!b.stalled) {
+        } else if (!b.stalled && levels) {
             b.pitch_deg = approach(b.pitch_deg, 0.0f, pitch_step);
         }
         if (b.stalled && b.pitch_deg > p.stall_nose_deg) {

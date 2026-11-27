@@ -26,7 +26,7 @@ struct IntKey {
 };
 
 // Every value, in the file's order. The int ranges match validate(GroundParams&).
-constexpr std::array<FloatKey, 77> kFloats = {{
+constexpr std::array<FloatKey, 78> kFloats = {{
     {"Camera: how far ahead it looks (u), and how fast that swings round after a turn (per s)",
      "camera.lead_u", [](Tuning& t) -> float& { return t.camera.lead_u; }, 0.0f, 400.0f},
     {nullptr, "camera.lead_ease", [](Tuning& t) -> float& { return t.camera.lead_ease; }, 0.1f,
@@ -38,6 +38,8 @@ constexpr std::array<FloatKey, 77> kFloats = {{
      1.0f, 50.0f},
     {nullptr, "flight.pitch_limit_deg",
      [](Tuning& t) -> float& { return t.rules.flight.pitch_limit_deg; }, 0.0f, 89.0f},
+    {nullptr, "flight.assist_zone_deg",
+     [](Tuning& t) -> float& { return t.rules.flight.assist_zone_deg; }, 0.0f, 40.0f},
     {nullptr, "flight.throttle_per_s",
      [](Tuning& t) -> float& { return t.rules.flight.throttle_per_s; }, 0.01f, 10.0f},
     {nullptr, "flight.stall_nose_deg",
