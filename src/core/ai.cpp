@@ -1,0 +1,342 @@
+#include "core/ai.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <numbers>
+
+#include "core/map.hpp"
+#include "core/world.hpp"
+
+namespace wof {
+namespace {
+
+constexpr float kToDeg = 180.0f / std::numbers::pi_v<float>;
+constexpr float kToRad = std::numbers::pi_v<float> / 180.0f;
+constexpr float kBreakS = 1.2f;
+constexpr float kAttackS = 8.0f; // an attack that hasn't closed by now is given up
+
+[[nodiscard]] float wrap180(float deg) noexcept {
+    float w = std::fmod(deg + 180.0f, 360.0f);
+    if (w < 0.0f) {
+        w += 360.0f;
+    }
+    return w - 180.0f;
+}
+
+// The compass bearing of a ground offset.
+[[nodiscard]] float bearing(float dx, float dy) noexcept {
+    return std::atan2(dx, dy) * kToDeg;
+}
+
+[[nodiscard]] std::int8_t to_axis(float v) noexcept {
+    return static_cast<std::int8_t>(
+        std::lround(std::clamp(v, -1.0f, 1.0f) * static_cast<float>(kAxisFull)));
+}
+
+[[nodiscard]] std::int8_t turn_toward(float have, float want) noexcept {
+    return to_axis(wrap180(want - have) / 8.0f);
+}
+
+// Moves the nose to `want` degrees and holds it there (letting go would ease it to level).
+[[nodiscard]] std::int8_t pitch_toward(float have, float want) noexcept {
+    if (have < want - 1.0f) {
+        return to_axis(1.0f);
+    }
+    if (have > want + 1.0f) {
+        return to_axis(-1.0f);
+    }
+    if (std::abs(want) < 1.0f) {
+        return 0;
+    }
+    return static_cast<std::int8_t>(want > 0.0f ? 1 : -1);
+}
+
+// The nose angle for gaining or losing `dz` of height.
+[[nodiscard]] float climb_pitch(float dz) noexcept {
+    return std::clamp(dz * 0.8f, -30.0f, 30.0f);
+}
+
+// What a pilot wants to do this tick.
+struct Wish {
+    float heading = 0.0f;
+    float pitch = 0.0f;
+    bool shoot = false;
+    bool slow = false;
+};
+
+// Another AI's plane close enough in front to be in the way of this one's rounds.
+[[nodiscard]] bool friend_in_line(const World& w, const Pilot& p, const Body& self,
+                                  float range) noexcept {
+    for (const Pilot& other : w.pilots) {
+        if (other.body == p.body) {
+            continue;
+        }
+        const Body& o = w.bodies[static_cast<std::size_t>(other.body)];
+        if (o.outcome != Outcome::Flying) {
+            continue;
+        }
+        const float dx = o.x - self.x;
+        const float dy = o.y - self.y;
+        const float d = std::hypot(dx, dy);
+        if (d < range && std::abs(o.z - self.z) < 12.0f &&
+            std::abs(wrap180(bearing(dx, dy) - self.heading_deg)) < 5.0f) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
+const char* style_name(Style s) noexcept {
+    switch (s) {
+    case Style::Turn:
+        return "turn-fighter";
+    case Style::DiveClimb:
+        return "dive-and-climb";
+    case Style::HeadOn:
+        return "head-on";
+    }
+    return "?";
+}
+
+const char* phase_name(Phase p) noexcept {
+    switch (p) {
+    case Phase::Pursue:
+        return "pursue";
+    case Phase::Climb:
+        return "climb";
+    case Phase::Line:
+        return "line up";
+    case Phase::Attack:
+        return "attack";
+    case Phase::Extend:
+        return "extend";
+    case Phase::Break:
+        return "break";
+    case Phase::Recover:
+        return "pull up";
+    case Phase::Return:
+        return "turn back";
+    }
+    return "?";
+}
+
+Skill skill_of(const AiParams& p, int wave) noexcept {
+    const auto steps = static_cast<float>(std::max(0, wave - 1));
+    return {std::max(p.aim_error_best_deg, p.aim_error_first_deg - p.aim_error_step_deg * steps),
+            std::max(p.reaction_best_s, p.reaction_first_s - p.reaction_step_s * steps)};
+}
+
+Pilot new_pilot(int body, Style style, Skill skill, Rng& rng) noexcept {
+    Pilot p;
+    p.body = body;
+    p.style = style;
+    p.skill = skill;
+    p.phase = style == Style::Turn        ? Phase::Pursue
+              : style == Style::DiveClimb ? Phase::Climb
+                                          : Phase::Line;
+    p.doing = p.phase;
+    p.side = rng.next_below(2) == 0 ? -1.0f : 1.0f;
+    return p;
+}
+
+InputCommand ai_command(Pilot& p, const World& world, const Rules& rules, Rng& rng) noexcept {
+    InputCommand c;
+    const Body& self = world.bodies[static_cast<std::size_t>(p.body)];
+    if (self.outcome != Outcome::Flying || self.damage.going_down) {
+        return c;
+    }
+    const Body& target = world.bodies[static_cast<std::size_t>(p.target)];
+    const PlaneRules& plane = plane_of(rules, self);
+    const AiParams& a = rules.ai;
+    const bool hunting = target.outcome == Outcome::Flying;
+
+    // A look at the target now and then; between looks, it's where it was heading.
+    p.look_s -= kTickSeconds;
+    p.seen_age_s += kTickSeconds;
+    p.phase_s -= kTickSeconds;
+    if (p.look_s <= 0.0f) {
+        p.look_s = p.skill.reaction_s;
+        p.seen_age_s = 0.0f;
+        const float h = target.heading_deg * kToRad;
+        const float pitch = target.pitch_deg * kToRad;
+        const float level = target.speed_u_s * std::cos(pitch);
+        p.seen_x = target.x;
+        p.seen_y = target.y;
+        p.seen_z = target.z;
+        p.seen_vx = std::sin(h) * level;
+        p.seen_vy = std::cos(h) * level;
+        p.seen_vz =
+            target.speed_u_s * std::sin(pitch) * plane_of(rules, target).flight.height_share;
+        p.aim_off_deg = (rng.next_float() * 2.0f - 1.0f) * p.skill.aim_error_deg;
+        p.aim_off_pitch_deg = (rng.next_float() * 2.0f - 1.0f) * p.skill.aim_error_deg * 0.5f;
+    }
+    const float tx = p.seen_x + p.seen_vx * p.seen_age_s;
+    const float ty = p.seen_y + p.seen_vy * p.seen_age_s;
+    const float tz = p.seen_z + p.seen_vz * p.seen_age_s;
+    const float d = std::hypot(tx - self.x, ty - self.y);
+    const float dz = tz - self.z;
+
+    // Lead: where the target will be when a round gets there.
+    const float round_speed =
+        (plane.gun_count > 0
+             ? rules.weapon.calibres[static_cast<std::size_t>(plane.guns[0].calibre)].speed_u_s
+             : 360.0f) +
+        self.speed_u_s;
+    const float flight_s = d / round_speed;
+    const float lx = tx + p.seen_vx * flight_s;
+    const float ly = ty + p.seen_vy * flight_s;
+    const float lz = tz + p.seen_vz * flight_s;
+    const float ld = std::max(1.0f, std::hypot(lx - self.x, ly - self.y));
+    const float to_lead = bearing(lx - self.x, ly - self.y);
+    const float aim_heading = to_lead + p.aim_off_deg;
+    const float aim_pitch = std::atan2(lz - self.z, ld) * kToDeg + p.aim_off_pitch_deg;
+    const float nose_off = std::abs(wrap180(to_lead - self.heading_deg));
+
+    Wish w{self.heading_deg, 0.0f, false, false};
+
+    // Too close, nose on: break away rather than ram.
+    if (hunting && p.phase != Phase::Break && d < a.break_range_u && std::abs(dz) < 15.0f &&
+        nose_off < 60.0f) {
+        p.phase = Phase::Break;
+        p.phase_s = kBreakS;
+        p.side = wrap180(to_lead - self.heading_deg) > 0.0f ? -1.0f : 1.0f;
+    }
+
+    if (!hunting) {
+        w.heading = self.heading_deg + 30.0f; // circle
+    } else if (p.phase == Phase::Break) {
+        w.heading = self.heading_deg + p.side * 90.0f;
+        w.pitch = 10.0f;
+        if (p.phase_s <= 0.0f) {
+            p.phase = p.style == Style::Turn ? Phase::Pursue : Phase::Extend;
+            p.phase_s = a.extend_s;
+        }
+    } else if (p.style == Style::Turn) {
+        p.phase = Phase::Pursue;
+        // How far off its tail this plane is: aim behind it until it's there.
+        const float off_tail =
+            std::abs(wrap180(bearing(self.x - tx, self.y - ty) - (target.heading_deg + 180.0f)));
+        if (off_tail > 70.0f && d > 60.0f) {
+            const float h = target.heading_deg * kToRad;
+            w.heading =
+                bearing(tx - std::sin(h) * 90.0f - self.x, ty - std::cos(h) * 90.0f - self.y);
+        } else {
+            w.heading = aim_heading;
+        }
+        w.pitch = d < a.fire_range_u && std::abs(dz) < 40.0f ? aim_pitch : climb_pitch(dz);
+        w.shoot = true;
+        w.slow = off_tail < 60.0f && d < 100.0f && self.speed_u_s > target.speed_u_s + 5.0f;
+    } else if (p.style == Style::DiveClimb) {
+        if (p.phase == Phase::Climb) {
+            const float goal = std::min(plane.flight.ceiling_u - 10.0f, tz + a.dive_height_u);
+            // Climb at a distance: away if close, back if far, across between.
+            w.heading = d < 220.0f   ? to_lead + 180.0f
+                        : d > 400.0f ? to_lead
+                                     : to_lead + p.side * 90.0f;
+            w.pitch = climb_pitch(goal - self.z);
+            if (self.z >= goal - 15.0f && d < 450.0f) {
+                p.phase = Phase::Attack;
+                p.phase_s = kAttackS;
+            }
+        } else if (p.phase == Phase::Attack) {
+            w.heading = aim_heading;
+            w.pitch = aim_pitch;
+            w.shoot = true;
+            if (d < a.break_range_u || dz > 15.0f || (nose_off > 110.0f && d < 200.0f) ||
+                p.phase_s <= 0.0f) {
+                p.phase = Phase::Extend;
+                p.phase_s = a.extend_s;
+            }
+        } else {
+            p.phase = Phase::Extend;
+            w.pitch = 15.0f;
+            if (p.phase_s <= 0.0f) {
+                p.phase = Phase::Climb;
+            }
+        }
+    } else { // head-on
+        if (p.phase == Phase::Line) {
+            const float h = target.heading_deg * kToRad;
+            const float ax = tx + std::sin(h) * a.head_on_run_u;
+            const float ay = ty + std::cos(h) * a.head_on_run_u;
+            w.heading = bearing(ax - self.x, ay - self.y);
+            w.pitch = climb_pitch(dz);
+            const float off_nose =
+                std::abs(wrap180(bearing(self.x - tx, self.y - ty) - target.heading_deg));
+            if ((off_nose < 35.0f && d > 150.0f && d < a.head_on_run_u * 1.3f) ||
+                std::hypot(ax - self.x, ay - self.y) < 80.0f) {
+                p.phase = Phase::Attack;
+                p.phase_s = kAttackS;
+            }
+        } else if (p.phase == Phase::Attack) {
+            w.heading = aim_heading;
+            w.pitch = d < a.fire_range_u ? aim_pitch : climb_pitch(dz);
+            w.shoot = true;
+            if ((nose_off > 110.0f && d < 200.0f) || p.phase_s <= 0.0f) {
+                p.phase = Phase::Extend;
+                p.phase_s = a.extend_s;
+            }
+        } else {
+            p.phase = Phase::Extend;
+            w.pitch = climb_pitch(dz);
+            if (p.phase_s <= 0.0f) {
+                p.phase = Phase::Line;
+            }
+        }
+    }
+    p.doing = p.phase;
+
+    // Other enemies: don't fly into each other.
+    for (const Pilot& other : world.pilots) {
+        const Body& o = world.bodies[static_cast<std::size_t>(other.body)];
+        if (other.body == p.body || o.outcome != Outcome::Flying) {
+            continue;
+        }
+        if (std::hypot(o.x - self.x, o.y - self.y) < 25.0f && std::abs(o.z - self.z) < 8.0f) {
+            const float away = wrap180(bearing(o.x - self.x, o.y - self.y) - self.heading_deg);
+            w.heading = self.heading_deg + (away > 0.0f ? -60.0f : 60.0f);
+            w.shoot = false;
+            p.doing = Phase::Break;
+            break;
+        }
+    }
+
+    // Stay inside the battle area.
+    const auto width = static_cast<float>(kMapWidthU);
+    const auto depth = static_cast<float>(kMapDepthU);
+    if (self.x < a.edge_margin_u || self.x > width - a.edge_margin_u || self.y < a.edge_margin_u ||
+        self.y > depth - a.edge_margin_u) {
+        w.heading = bearing(width * 0.5f - self.x, depth * 0.5f - self.y);
+        w.shoot = false;
+        p.doing = Phase::Return;
+    }
+
+    // Never into the ground: look a moment ahead.
+    const float sink = std::min(0.0f, self.speed_u_s * std::sin(self.pitch_deg * kToRad)) *
+                       plane.flight.height_share;
+    if (self.z + sink * 1.5f < a.floor_u) {
+        w.pitch = 30.0f;
+        w.shoot = false;
+        p.doing = Phase::Recover;
+    }
+    // Keep flying: no climbing into a stall.
+    if (self.stalled || self.speed_u_s < plane.flight.stall_u_s * 1.2f) {
+        w.pitch = std::min(w.pitch, -5.0f);
+    }
+
+    const float pitch =
+        std::clamp(w.pitch, -plane.flight.pitch_limit_deg, plane.flight.pitch_limit_deg);
+    c.turn = turn_toward(self.heading_deg, w.heading);
+    c.pitch = pitch_toward(self.pitch_deg, pitch);
+    c.throttle = to_axis(w.slow ? -1.0f : 1.0f);
+    c.guns = w.shoot && hunting && d < a.fire_range_u &&
+             std::abs(wrap180(aim_heading - self.heading_deg)) < a.fire_cone_deg &&
+             std::abs(aim_pitch - self.pitch_deg) < a.fire_cone_deg &&
+             !friend_in_line(world, p, self, d);
+    return c;
+}
+
+} // namespace wof

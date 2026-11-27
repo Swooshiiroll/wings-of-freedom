@@ -26,7 +26,7 @@ struct IntKey {
 };
 
 // Every value, in the file's order. The int ranges match validate(GroundParams&).
-constexpr std::array<FloatKey, 58> kFloats = {{
+constexpr std::array<FloatKey, 77> kFloats = {{
     {"Camera: how far ahead it looks (u), and how fast that swings round after a turn (per s)",
      "camera.lead_u", [](Tuning& t) -> float& { return t.camera.lead_u; }, 0.0f, 400.0f},
     {nullptr, "camera.lead_ease", [](Tuning& t) -> float& { return t.camera.lead_ease; }, 0.1f,
@@ -152,9 +152,51 @@ constexpr std::array<FloatKey, 58> kFloats = {{
      [](Tuning& t) -> float& { return t.rules.damage.spin_rate_deg_s; }, 0.0f, 1440.0f},
     {nullptr, "damage.spin_pitch_deg",
      [](Tuning& t) -> float& { return t.rules.damage.spin_pitch_deg; }, -89.0f, 0.0f},
+    {"Enemy pilots: aim error (degrees, wave 1, the best, sharper each wave), reaction (s, "
+     "same), firing range (u) and cone (deg), break-off range, the floor they keep above, how far "
+     "inside the edges they turn back, the dive-and-climb height, the head-on run, extend time (s)",
+     "ai.aim_error_first_deg", [](Tuning& t) -> float& { return t.rules.ai.aim_error_first_deg; },
+     0.0f, 45.0f},
+    {nullptr, "ai.aim_error_best_deg",
+     [](Tuning& t) -> float& { return t.rules.ai.aim_error_best_deg; }, 0.0f, 45.0f},
+    {nullptr, "ai.aim_error_step_deg",
+     [](Tuning& t) -> float& { return t.rules.ai.aim_error_step_deg; }, 0.0f, 45.0f},
+    {nullptr, "ai.reaction_first_s",
+     [](Tuning& t) -> float& { return t.rules.ai.reaction_first_s; }, 0.02f, 5.0f},
+    {nullptr, "ai.reaction_best_s", [](Tuning& t) -> float& { return t.rules.ai.reaction_best_s; },
+     0.02f, 5.0f},
+    {nullptr, "ai.reaction_step_s", [](Tuning& t) -> float& { return t.rules.ai.reaction_step_s; },
+     0.0f, 5.0f},
+    {nullptr, "ai.fire_range_u", [](Tuning& t) -> float& { return t.rules.ai.fire_range_u; }, 10.0f,
+     1000.0f},
+    {nullptr, "ai.fire_cone_deg", [](Tuning& t) -> float& { return t.rules.ai.fire_cone_deg; },
+     0.5f, 45.0f},
+    {nullptr, "ai.break_range_u", [](Tuning& t) -> float& { return t.rules.ai.break_range_u; },
+     0.0f, 500.0f},
+    {nullptr, "ai.floor_u", [](Tuning& t) -> float& { return t.rules.ai.floor_u; }, 0.0f, 500.0f},
+    {nullptr, "ai.edge_margin_u", [](Tuning& t) -> float& { return t.rules.ai.edge_margin_u; },
+     0.0f, 1000.0f},
+    {nullptr, "ai.dive_height_u", [](Tuning& t) -> float& { return t.rules.ai.dive_height_u; },
+     0.0f, 500.0f},
+    {nullptr, "ai.head_on_run_u", [](Tuning& t) -> float& { return t.rules.ai.head_on_run_u; },
+     50.0f, 2000.0f},
+    {nullptr, "ai.extend_s", [](Tuning& t) -> float& { return t.rules.ai.extend_s; }, 0.1f, 30.0f},
+    {"Waves: the first and then every (s), arriving within this of your height (u), spread (u) "
+     "across, and inside the north edge (u); at most wave.max_alive in the air",
+     "wave.first_s", [](Tuning& t) -> float& { return t.rules.wave.first_s; }, 0.0f, 600.0f},
+    {nullptr, "wave.every_s", [](Tuning& t) -> float& { return t.rules.wave.every_s; }, 1.0f,
+     600.0f},
+    {nullptr, "wave.height_spread_u",
+     [](Tuning& t) -> float& { return t.rules.wave.height_spread_u; }, 0.0f, 500.0f},
+    {nullptr, "wave.spread_u", [](Tuning& t) -> float& { return t.rules.wave.spread_u; }, 0.0f,
+     1000.0f},
+    {nullptr, "wave.north_inset_u", [](Tuning& t) -> float& { return t.rules.wave.north_inset_u; },
+     0.0f, 1000.0f},
 }};
 
-constexpr std::array<IntKey, 36> kInts = {{
+constexpr std::array<IntKey, 37> kInts = {{
+    {"Waves: enemy fighters in the air at once, at most", "wave.max_alive",
+     [](Tuning& t) -> int& { return t.rules.wave.max_alive; }, 1, 64},
     {"Weapons: one round in N, per gun, is a tracer", "weapon.tracer_every",
      [](Tuning& t) -> int& { return t.rules.weapon.tracer_every; }, 1, 100},
     {"Damage: the pilot's wounds (the last kills); where hits land, in percent of hits by where "

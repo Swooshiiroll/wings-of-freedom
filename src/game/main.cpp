@@ -5,7 +5,7 @@
 //
 //   WingsOfFreedom [--seed N] [--window WxH] [--shot FILE.png] [--ticks N] [--heading DEG]
 //                  [--height U] [--pitch DEG] [--throttle PCT] [--at X,Y] [--overlay]
-//                  [--height-rule forgiving|strict|auto] [--no-targets] [--fire] [--bomb]
+//                  [--height-rule forgiving|strict|auto] [--targets] [--wave N] [--fire] [--bomb]
 //                  [--nation us|de] [--sprite-sheet FILE.png] [--sprite-scale PCT] [--version]
 //     --seed N        developer tool: the ground from seed N (decimal, or 0x hex)
 //     --window WxH    developer tool: open the window at W x H
@@ -19,7 +19,8 @@
 //                     middle of the battle area's south end, 1440,480)
 //     --overlay       developer tool: start with the F1 overlay shown
 //     --height-rule R the gunnery height rule: forgiving (default), strict or auto
-//     --no-targets    developer tool: start without the practice targets
+//     --targets       developer tool: start with the practice targets (also F2)
+//     --wave N        developer tool: the first wave is wave N
 //     --fire, --bomb  developer tool: with --shot, hold the guns or the bomb release throughout
 //     --sprite-sheet F  developer tool: save every baked plane pose of your nation's fighter to F
 //     (PNG)
@@ -101,7 +102,8 @@ struct Options {
     int at_y = 0;
     bool overlay = false;
     HeightRule height_rule = HeightRule::Forgiving;
-    bool no_targets = false;
+    bool targets = false;         // practice targets (off since the enemies came)
+    int wave = 1;                 // --wave N: the first wave's number
     bool hold_fire = false;       // --shot: hold the guns
     bool hold_bomb = false;       // --shot: hold the bomb release
     const char* damage = nullptr; // --damage engine=10,lwing=0,...
@@ -215,7 +217,16 @@ int parse_options(int argc, char** argv, Options& out) {
                 return 2;
             }
         } else if (std::strcmp(argv[i], "--no-targets") == 0) {
-            out.no_targets = true;
+            out.targets = false;
+        } else if (std::strcmp(argv[i], "--targets") == 0) {
+            out.targets = true;
+        } else if (std::strcmp(argv[i], "--wave") == 0 && has_value) {
+            float n = 0.0f;
+            if (!parse_number(argv[++i], n) || n < 1.0f || n > 99.0f) {
+                std::fprintf(stderr, "--wave takes a wave number, 1-99\n");
+                return 2;
+            }
+            out.wave = static_cast<int>(n);
         } else if (std::strcmp(argv[i], "--fire") == 0) {
             out.hold_fire = true;
         } else if (std::strcmp(argv[i], "--bomb") == 0) {
@@ -231,14 +242,14 @@ int parse_options(int argc, char** argv, Options& out) {
                 return 2;
             }
         } else {
-            std::fprintf(
-                stderr,
-                "usage: WingsOfFreedom [--seed N] [--window WxH] [--shot FILE.png] "
-                "[--ticks N] [--heading DEG] [--height U] [--pitch DEG] [--throttle PCT] "
-                "[--at X,Y] [--overlay] [--height-rule forgiving|strict|auto] "
-                "[--no-targets] [--fire] [--bomb] [--nation us|de] [--sprite-sheet FILE.png] "
-                "[--sprite-scale PCT] "
-                "[--version]\n");
+            std::fprintf(stderr,
+                         "usage: WingsOfFreedom [--seed N] [--window WxH] [--shot FILE.png] "
+                         "[--ticks N] [--heading DEG] [--height U] [--pitch DEG] [--throttle PCT] "
+                         "[--at X,Y] [--overlay] [--height-rule forgiving|strict|auto] "
+                         "[--targets] [--wave N] [--fire] [--bomb] [--nation us|de] "
+                         "[--sprite-sheet FILE.png] "
+                         "[--sprite-scale PCT] "
+                         "[--version]\n");
             return 2;
         }
     }
@@ -487,6 +498,14 @@ std::string format(const char* fmt, ...) {
     return buf;
 }
 
+// A height in feet to the nearest 100, with a thousands comma: "7,000".
+std::string feet_text(float ft) {
+    const int v = static_cast<int>(std::lround(ft / 100.0f)) * 100;
+    const int a = std::abs(v);
+    const char* sign = v < 0 ? "-" : "";
+    return a >= 1000 ? format("%s%d,%03d", sign, a / 1000, a % 1000) : format("%s%d", sign, a);
+}
+
 // Lines of debug-font text on a dark backing, with the block's top-left at (x, y).
 void draw_text_block(SDL_Renderer* r, float x, float y, const std::vector<std::string>& lines,
                      SDL_Color colour) {
@@ -529,6 +548,70 @@ void draw_text_centred(SDL_Renderer* r, int view_w, float y, const std::vector<s
     return {std::round(at.x - sw * 0.5f), std::round(at.y - sh * 0.5f), sw, sh};
 }
 
+// Arrows at the view's edge toward the enemies off screen, each with its height compared with
+// yours (design/flight.md, Enemies). `view_h` leaves out the readout at the bottom. Labels that
+// would cover one another are moved apart.
+void draw_enemy_arrows(SDL_Renderer* r, const ViewXf& xf, const Body& plane,
+                       const std::vector<Body>& enemies, int view_w, int view_h) {
+    std::vector<SDL_FRect> labels;
+    for (const Body& b : enemies) {
+        if (b.outcome != Outcome::Flying) {
+            continue;
+        }
+        const SDL_FPoint at = on_view(xf, b.x, b.y, b.z);
+        const EdgeArrow a = edge_arrow(at.x, at.y, view_w, view_h, 10.0f);
+        if (a.on_screen) {
+            continue;
+        }
+        const float c = std::cos(a.angle_rad);
+        const float s = std::sin(a.angle_rad);
+        const SDL_FColor red{1.0f, 0.38f, 0.25f, 1.0f};
+        const std::array<SDL_Vertex, 3> v{
+            {{{a.x + c * 7.0f, a.y + s * 7.0f}, red, {0.0f, 0.0f}},
+             {{a.x - c * 3.0f - s * 5.0f, a.y - s * 3.0f + c * 5.0f}, red, {0.0f, 0.0f}},
+             {{a.x - c * 3.0f + s * 5.0f, a.y - s * 3.0f - c * 5.0f}, red, {0.0f, 0.0f}}}};
+        SDL_RenderGeometry(r, nullptr, v.data(), 3, nullptr, 0);
+        // Its height against yours, just inside the arrow.
+        const float diff = (b.z - plane.z) * kFeetPerU;
+        const std::string text =
+            std::abs(diff) < 50.0f ? "LEVEL" : (diff > 0.0f ? "+" : "") + feet_text(diff);
+        const float w = static_cast<float>(text.size()) * kGlyph + 4.0f;
+        const float tx =
+            std::clamp(a.x - c * 24.0f - w * 0.5f, 0.0f, static_cast<float>(view_w) - w);
+        const float bottom = static_cast<float>(view_h) - 12.0f;
+        SDL_FRect box{std::round(tx), std::round(std::clamp(a.y - s * 14.0f - 5.0f, 0.0f, bottom)), w,
+                      11.0f};
+        const float step = box.y < static_cast<float>(view_h) * 0.5f ? 12.0f : -12.0f;
+        for (int tries = 0; tries < 6; ++tries) {
+            const bool covered = std::any_of(labels.begin(), labels.end(), [&](const SDL_FRect& o) {
+                return SDL_HasRectIntersectionFloat(&box, &o);
+            });
+            if (!covered) {
+                break;
+            }
+            box.y = std::clamp(box.y + step, 0.0f, bottom);
+        }
+        labels.push_back(box);
+        draw_text_block(r, box.x, box.y, {text}, SDL_Color{255, 190, 160, 255});
+    }
+}
+
+// F1: each enemy's style and what it's doing, above its plane.
+void draw_pilot_labels(SDL_Renderer* r, const ViewXf& xf, const World& world,
+                       const std::vector<Body>& enemies) {
+    for (const Pilot& p : world.pilots) {
+        const auto i = static_cast<std::size_t>(p.body) - 1;
+        if (i >= enemies.size() || enemies[i].outcome != Outcome::Flying) {
+            continue;
+        }
+        const Body& b = enemies[i];
+        const SDL_FPoint at = on_view(xf, b.x, b.y, b.z);
+        const std::string text = format("%s: %s", style_name(p.style), phase_name(p.doing));
+        draw_text_block(r, std::round(at.x - static_cast<float>(text.size()) * kGlyph * 0.5f),
+                        std::round(at.y - 34.0f), {text}, SDL_Color{255, 190, 160, 255});
+    }
+}
+
 // A practice ground target: a white and red bullseye, glowing yellow just after a hit.
 void draw_bullseye(SDL_Renderer* r, const ViewXf& xf, const Target& t, float radius) {
     const SDL_FColor white{0.94f, 0.93f, 0.88f, 1.0f};
@@ -545,10 +628,11 @@ void draw_bullseye(SDL_Renderer* r, const ViewXf& xf, const Target& t, float rad
 
 // Everything above the ground, in order: scorch marks, ground targets, shadows, dust and blasts,
 // bombs, tracers, then the drones and planes from the lowest (the farthest) up. Everything is sized
-// by its depth (core/view_xf.hpp).
+// by its depth (core/view_xf.hpp). `plane` is the player's and `enemies` the others (bodies 1 on),
+// as drawn this frame.
 void draw_scene(SDL_Renderer* r, const ViewXf& xf, const World& world, const Body& plane,
-                game::PlaneSprites& sprites, const game::Effects& effects, const Tuning& tuning,
-                bool marker) {
+                const std::vector<Body>& enemies, game::PlaneSprites& sprites,
+                const game::Effects& effects, const Tuning& tuning, bool marker) {
     effects.draw_ground(r, xf, tuning.look.scorch_fade_s);
     for (const Target& t : world.targets) {
         if (t.kind == TargetKind::Ground) {
@@ -576,6 +660,16 @@ void draw_scene(SDL_Renderer* r, const ViewXf& xf, const World& world, const Bod
         fliers.push_back(Flier{d, true, t.since_hit_s < 0.12f});
     }
     fliers.push_back(Flier{plane, false, false});
+    for (const Body& b : enemies) {
+        // A hit this tick: the plane flashes.
+        const auto index = static_cast<int>(&b - enemies.data()) + 1;
+        const bool hit = std::any_of(world.events.begin(), world.events.end(), [&](const Event& e) {
+            return e.kind == EventKind::RoundHitPlane && e.who == index;
+        });
+        if (b.outcome == Outcome::Flying) {
+            fliers.push_back(Flier{b, false, hit});
+        }
+    }
     for (const Flier& f : fliers) {
         sprites.draw(f.body, xf, true);
     }
@@ -841,7 +935,8 @@ struct Piece {
 using RichLine = std::vector<Piece>;
 
 // Lines of coloured pieces on a dark backing, with the block's bottom-left at (x, bottom).
-void draw_rich_block(SDL_Renderer* r, float x, float bottom, const std::vector<RichLine>& lines) {
+// Returns the block's top.
+float draw_rich_block(SDL_Renderer* r, float x, float bottom, const std::vector<RichLine>& lines) {
     std::size_t widest = 0;
     for (const RichLine& l : lines) {
         std::size_t n = 0;
@@ -864,6 +959,7 @@ void draw_rich_block(SDL_Renderer* r, float x, float bottom, const std::vector<R
         }
         y += 10.0f;
     }
+    return bottom - h;
 }
 
 // The damage line: each part's stage in its colour.
@@ -960,10 +1056,12 @@ int main(int argc, char** argv) {
             SDL_Quit();
             return ok ? 0 : 1;
         }
-        // The player's plane and the practice drones' (the P-26's model): full size now, the other
-        // sizes in the background (in line for a screenshot, so it's exact).
+        // The planes' sprites: full size now, the other sizes in the background (in line for a
+        // screenshot, so it's exact).
         game::PlaneSprites sprites(renderer, shot_mode);
-        if (!sprites.bake(player_model) || !sprites.bake(ModelId::P26)) {
+        // Both nations' fighters: yours, the enemy's, and the practice drones' (the P-26).
+        if (!sprites.bake(player_model) || !sprites.bake(ModelId::P26) ||
+            !sprites.bake(ModelId::He51)) {
             exit_code = 1;
         }
 
@@ -985,7 +1083,10 @@ int main(int argc, char** argv) {
         Camera camera;
         game::Effects effects;
         HeightRule height_rule = opts.height_rule; // a game option (PR 6 puts it in a menu)
-        bool targets_on = !opts.no_targets;
+        bool targets_on = opts.targets;
+        const Nation enemy_nation = nation == Nation::US ? Nation::Germany : Nation::US;
+        std::string banner;       // a wave arriving, or an enemy down
+        float banner_s = 0.0f;    // how long it still shows
         bool marker = false;      // the bomb marker (a developer switch until it's an upgrade)
         float own_blast_s = 0.0f; // how long "OWN BLAST" still shows
         float own_blast_damage = 0.0f;
@@ -1013,6 +1114,8 @@ int main(int argc, char** argv) {
             world = World{};
             world.rng = Rng(splitmix64(seed + runs++)); // where hits land, different each run
             world.bodies.push_back(b);
+            world.waves = start_waves(tuning.rules, fighter_of(enemy_nation), opts.wave);
+            banner_s = 0.0f;
             if (targets_on) {
                 world.targets = practice_targets(tuning.rules.targets);
             }
@@ -1118,6 +1221,18 @@ int main(int argc, char** argv) {
                     }
                 }
                 emit_trails(world, previous, effects, tuning.rules);
+                banner_s = std::max(0.0f, banner_s - kTickSeconds);
+                for (const Event& ev : world.events) {
+                    if (ev.kind == EventKind::WaveArrived) {
+                        const int count = static_cast<int>(ev.damage);
+                        banner = format("WAVE %d: %d ENEMY FIGHTER%s AT %s FT", ev.who, count,
+                                        count == 1 ? "" : "S", feet_text(ev.z * kFeetPerU).c_str());
+                        banner_s = 4.0f;
+                    } else if (ev.kind == EventKind::EnemyDown) {
+                        banner = "ENEMY DOWN";
+                        banner_s = 2.0f;
+                    }
+                }
             }
             if (world.bodies[0].outcome != Outcome::Flying && !shot_mode) {
                 // The run is over and the world waits, but the fire and smoke play out.
@@ -1144,9 +1259,18 @@ int main(int argc, char** argv) {
             SDL_RenderClear(renderer);
             draw_ground(renderer, screen, ground, xf);
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            draw_scene(renderer, xf, world, plane, sprites, effects, tuning, marker);
+            // The enemies (bodies 1 on), partway between ticks like the player.
+            std::vector<Body> enemies;
+            for (std::size_t i = 1; i < world.bodies.size(); ++i) {
+                enemies.push_back(i < previous.size() ? between(previous[i], world.bodies[i], alpha)
+                                                      : world.bodies[i]);
+            }
+            draw_scene(renderer, xf, world, plane, enemies, sprites, effects, tuning, marker);
+            if (overlay) {
+                draw_pilot_labels(renderer, xf, world, enemies);
+            }
 
-            // A temporary readout until PR 6's HUD: throttle, speed, height, fuel, warnings.
+            // A temporary readout until PR 7's HUD: throttle, speed, height, fuel, warnings.
             std::string flags_line;
             if (plane.stalled) {
                 flags_line += "STALL  ";
@@ -1172,16 +1296,24 @@ int main(int argc, char** argv) {
                               static_cast<double>(plane.z * kFeetPerU),
                               static_cast<double>(plane.fuel * 100.0f)),
                        text}},
-                {Piece{format("%s  BOMBS %d  [%s]  RULE %s  HITS %d",
+                {Piece{format("%s  BOMBS %d  [%s]  RULE %s",
                               guns_text(plane, plane_of(tuning.rules, plane)).c_str(),
                               plane.loadout.bombs, heavy_name(plane.loadout.heavy),
-                              height_rule_name(height_rule), hits),
+                              height_rule_name(height_rule)),
+                       text}},
+                {Piece{format("WAVE %d  KILLS %d", world.waves.current, world.waves.kills) +
+                           (world.targets.empty() ? std::string{} : format("  HITS %d", hits)),
                        text}},
                 damage_line(plane, plane_of(tuning.rules, plane).damage)};
             if (!flags_line.empty()) {
                 readout.push_back({Piece{flags_line, SDL_Color{255, 150, 110, 255}}});
             }
-            draw_rich_block(renderer, 2.0f, static_cast<float>(fit.h) - 2.0f, readout);
+            const float readout_top =
+                draw_rich_block(renderer, 2.0f, static_cast<float>(fit.h) - 2.0f, readout);
+            draw_enemy_arrows(renderer, xf, plane, enemies, fit.w, static_cast<int>(readout_top));
+            if (banner_s > 0.0f) {
+                draw_text_centred(renderer, fit.w, 56.0f, {banner}, SDL_Color{255, 200, 120, 255});
+            }
             if (plane.edge_countdown_s >= 0.0f && plane.outcome == Outcome::Flying) {
                 draw_text_centred(renderer, fit.w, 40.0f,
                                   {format("RETURN TO THE BATTLE AREA  %d",
@@ -1196,6 +1328,8 @@ int main(int argc, char** argv) {
                 draw_text_centred(renderer, fit.w, static_cast<float>(fit.h) * 0.5f - 20.0f,
                                   {banner_of(plane.outcome),
                                    format("time flown %ld:%02ld", secs / 60, secs % 60),
+                                   format("wave %d, enemies shot down %d", world.waves.current,
+                                          world.waves.kills),
                                    "ENTER OR R: NEW RUN"},
                                   SDL_Color{255, 236, 170, 255});
             }
@@ -1234,7 +1368,10 @@ int main(int argc, char** argv) {
                             sprites.ready(), sprites.queued()),
                      format("rounds in flight %zu  bombs falling %zu  targets %zu%s",
                             world.rounds.size(), world.bombs.size(), world.targets.size(),
-                            marker ? "  marker on" : "")},
+                            marker ? "  marker on" : ""),
+                     format("enemies %d  wave %d (next in %.0f s)  waiting %d",
+                            enemies_alive(world), world.waves.current,
+                            static_cast<double>(world.waves.timer_s), world.waves.waiting)},
                     SDL_Color{236, 232, 200, 255});
             }
             if (shot_mode && (world.tick >= opts.ticks || plane.outcome != Outcome::Flying)) {

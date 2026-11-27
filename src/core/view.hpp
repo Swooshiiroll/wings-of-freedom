@@ -36,4 +36,16 @@ struct WindowSize {
 // taskbar that's 3x, 1440x810.
 [[nodiscard]] WindowSize start_window(int usable_w, int usable_h, int decor_h = 48) noexcept;
 
+// Where to draw the arrow toward something off screen (design/flight.md, Enemies): on the view's
+// edge, `margin` inside it, on the line from the centre to the thing's view position, pointing
+// along that line. `on_screen` when it's inside the margins and needs no arrow.
+struct EdgeArrow {
+    float x = 0.0f;
+    float y = 0.0f;
+    float angle_rad = 0.0f; // 0 points right, a quarter turn down
+    bool on_screen = true;
+};
+[[nodiscard]] EdgeArrow edge_arrow(float px, float py, int view_w, int view_h,
+                                   float margin) noexcept;
+
 } // namespace wof

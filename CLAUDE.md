@@ -113,7 +113,8 @@ Logs go to `out/`.
   in the same pull request and say why.
 - **Smoke run:** `WingsOfFreedom --shot out/shot.png` flies 120 ticks with no input, saves the view
   as a PNG and exits. `--window`, `--nation us|de`, `--heading`, `--height`, `--pitch`,
-  `--throttle`, `--at` and `--overlay` set up the shot. `--sprite-sheet out/sheet.png` saves every
+  `--throttle`, `--at`, `--overlay`, `--wave N` and `--targets` set up the shot (the first wave
+  arrives at 10 s, so `--ticks 600` or more shows enemies). `--sprite-sheet out/sheet.png` saves every
   baked pose of the `--nation`'s fighter, at `--sprite-scale PCT`. Shots and sheets skip the
   nation screen.
 - **Depth and pixel-perfect:** everything is sized by its depth from the player's plane

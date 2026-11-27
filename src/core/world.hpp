@@ -4,6 +4,7 @@
 #include <span>
 #include <vector>
 
+#include "core/ai.hpp"
 #include "core/body.hpp"
 #include "core/damage.hpp"
 #include "core/flight.hpp"
@@ -12,6 +13,7 @@
 #include "core/planes.hpp"
 #include "core/rng.hpp"
 #include "core/targets.hpp"
+#include "core/waves.hpp"
 #include "core/weapons.hpp"
 
 namespace wof {
@@ -39,6 +41,8 @@ struct Rules {
     TargetParams targets;
     DamageParams damage;
     PlaneScale scale;
+    AiParams ai;
+    WaveParams wave;
     HeightRule height_rule = HeightRule::Forgiving; // a game option, not in tuning.txt
     std::vector<PlaneRules> planes = derive_roster(flight, damage, scale);
 
@@ -58,6 +62,8 @@ struct World {
     std::vector<Bomb> bombs;
     std::vector<Target> targets; // practice targets
     std::vector<Event> events;   // what happened in the last tick
+    std::vector<Pilot> pilots;   // the enemy planes' AI pilots
+    WaveState waves;             // when enemies arrive, and the kill count
     Rng rng{0x5eedu};            // where hits land; seed it per run
     std::int64_t tick = 0;
 };
