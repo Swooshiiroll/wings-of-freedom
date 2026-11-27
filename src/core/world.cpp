@@ -41,16 +41,19 @@ void apply_edges(Body& b, const EdgeParams& e, float dt) noexcept {
 }
 
 void step(World& world, std::span<const InputCommand> commands, const Rules& rules) {
+    world.events.clear();
+    move_targets(world.targets, rules.targets, kTickSeconds);
     const Aero aero = aero_of(rules.flight);
     for (std::size_t i = 0; i < world.bodies.size(); ++i) {
-        Body& b = world.bodies[i];
-        if (b.outcome != Outcome::Flying) {
+        if (world.bodies[i].outcome != Outcome::Flying) {
             continue;
         }
         const InputCommand cmd = i < commands.size() ? commands[i] : InputCommand{};
-        fly(b, cmd, rules.flight, aero, kTickSeconds);
-        apply_edges(b, rules.edge, kTickSeconds);
+        fly(world.bodies[i], cmd, rules.flight, aero, kTickSeconds);
+        fire_weapons(world, i, cmd, rules);
+        apply_edges(world.bodies[i], rules.edge, kTickSeconds);
     }
+    move_projectiles(world, rules);
     ++world.tick;
 }
 

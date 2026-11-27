@@ -31,8 +31,10 @@ class PlaneSprites {
     bool bake();
 
     // Draws a body's plane at its height, or its shadow on the ground below it, for a view whose
-    // top-left is the iso pixel `origin`. Anchored to whole art pixels.
-    void draw(const Body& b, PixelPt origin, bool shadow) const;
+    // top-left is the iso pixel `origin`. Anchored to whole art pixels. `tint` multiplies the
+    // colours (the practice drones are orange-red); `flash` makes it glow (a hit).
+    void draw(const Body& b, PixelPt origin, bool shadow, SDL_Color tint = {255, 255, 255, 255},
+              bool flash = false) const;
 
     // The atlas cell for a body: heading, pitch to the nearest 10°, and bank past ±15°.
     struct Cell {
