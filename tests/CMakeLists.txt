@@ -8,8 +8,10 @@ add_executable(wof_tests
   test_ground.cpp
   test_iso.cpp
   test_rng.cpp
+  test_targets.cpp
   test_tuning.cpp
   test_view.cpp
+  test_weapons.cpp
   test_world.cpp)
 target_link_libraries(wof_tests PRIVATE wof_core doctest::doctest wof_warnings)
 add_test(NAME core COMMAND wof_tests)

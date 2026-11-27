@@ -80,7 +80,8 @@ PlaneSprites::Cell PlaneSprites::cell_of(const Body& b) noexcept {
     return {heading_index(b.heading_deg), std::clamp(pitch, 0, kPitches - 1) * kBanks + bank};
 }
 
-void PlaneSprites::draw(const Body& b, PixelPt origin, bool shadow) const {
+void PlaneSprites::draw(const Body& b, PixelPt origin, bool shadow, SDL_Color tint,
+                        bool flash) const {
     SDL_Texture* atlas = shadow ? shadow_ : plane_;
     if (atlas == nullptr) {
         return;
@@ -93,7 +94,16 @@ void PlaneSprites::draw(const Body& b, PixelPt origin, bool shadow) const {
     const SDL_FRect dst{std::round(at.x) - static_cast<float>(origin.x) - half,
                         std::round(at.y) - static_cast<float>(origin.y) - half,
                         static_cast<float>(kCell), static_cast<float>(kCell)};
+    SDL_SetTextureColorMod(atlas, tint.r, tint.g, tint.b);
     SDL_RenderTexture(renderer_, atlas, &src, &dst);
+    if (flash && !shadow) {
+        // A hit: the same sprite again, added on top, so it glows.
+        SDL_SetTextureBlendMode(atlas, SDL_BLENDMODE_ADD);
+        SDL_SetTextureColorMod(atlas, 255, 255, 255);
+        SDL_RenderTexture(renderer_, atlas, &src, &dst);
+        SDL_SetTextureBlendMode(atlas, SDL_BLENDMODE_BLEND);
+    }
+    SDL_SetTextureColorMod(atlas, 255, 255, 255);
 }
 
 bool PlaneSprites::save_sheet(const char* path) const {

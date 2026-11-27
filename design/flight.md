@@ -120,10 +120,16 @@ The simulation runs at a fixed **60 ticks per second**.
 
 ### Guns
 
-- Fixed, firing forward along the nose, pitch included.
+- Fixed, firing forward along the nose, pitch included. **Two guns** in the cowling (the P-26's
+  layout), 1 u either side of the nose, fire in turn.
 - **12 rounds/s**, **600 rounds** (50 s of fire). Rounds leave at **360 u/s** plus the plane's
   speed and last **0.8 s**. **1 damage** per hit.
-- **Strafing:** rounds that reach the ground damage ground targets they land near.
+- **Every 3rd round is a tracer** (owner, 2026-11-26), drawn as a short streak. The others are
+  invisible but hit all the same.
+- **Hitting a plane:** a round's path passes within **8 u** of it on the ground, and the round is
+  within the height rule's band there. Hits are tested along the whole path each tick, so fast
+  rounds can't skip through.
+- **Strafing:** rounds that reach the ground hit ground targets within **6 u** of their edge.
 
 ### The height rule for gunnery (options menu)
 
@@ -135,17 +141,35 @@ The simulation runs at a fixed **60 ticks per second**.
 
 You judge other planes' heights from their **shadows only**. There are no height markers.
 
+Under auto-aim, a round's climb is set when it's fired, toward the nearest plane or drone in the
+cone. Its hit is then tested with the forgiving band. Until PR 6's options menu, **F3** cycles the
+rule (or `--height-rule forgiving|strict|auto`).
+
 ### Bombs
 
 - **4 bombs.** Each falls from the plane's height and carries its speed, under g. From 120 u at
   150 u/s, a bomb lands about 245 u ahead.
+- **Hold Space to ripple** (owner, 2026-11-26). One bomb drops at once, then one every **0.3 s**
+  until you let go or run out. Tapping faster than that doesn't drop two at once.
+- Each burst leaves a **scorch mark that fades over 30 s** (owner).
 - **Blast radius 20 u**, **40 damage** at the centre, falling to 0 at the edge. The blast reaches
   up as well as across: it hurts any plane within 20 u of the burst, yours included.
 - **Bombing low is dangerous.** A bomb keeps the plane's speed, so a plane flying straight on is
   right above it when it lands. Drop from below 20 u and your own blast hits you: at 10 u, for
   20 damage. Those hits land as a flak burst's do.
 - **No impact marker in v0.1** (it's a v0.2 upgrade). You aim by your shadow. A developer switch
-  turns the marker on for testing.
+  (**F4**) turns the marker on for testing. It works the fall out with the same steps as the
+  simulation, so it's exact.
+
+### Practice targets
+
+Damage (PR 4) and enemies (PR 5) come after weapons, so there are practice targets to shoot at
+(owner, 2026-11-26). They stay afterwards as a developer tool.
+- **4 drones** circle at **40, 90, 140 and 200 u** at **70 u/s**, over the middle of the map. They
+  use the fighter model, tinted orange-red.
+- **8 ground targets** (white and red bullseyes, 10 u across) sit along the way north.
+- Hits don't hurt them. They glow, and their hit count shows for 2 s. The readout shows the total.
+- They're on by default until enemies arrive. **F2** or `--no-targets` turns them off.
 
 ## Damage
 
@@ -290,7 +314,10 @@ Enemy planes use the same flight and damage model as the player, driven by AI in
   - `--heading DEG`, `--height U`, `--pitch DEG`, `--throttle PCT` and `--at X,Y` set how the
     plane starts.
   - `--overlay` starts with the F1 overlay shown.
+  - `--fire` and `--bomb` hold the guns or the bomb release throughout.
 - `--sprite-sheet FILE`: saves every baked plane pose to a PNG and exits.
+- **F2** practice targets on/off (`--no-targets`), **F3** the height rule (`--height-rule`), **F4**
+  the bomb marker.
 - **F1:** an overlay of hitboxes, part HP numbers, and AI styles.
 - **Switches** for the bomb marker and for invulnerability.
 
