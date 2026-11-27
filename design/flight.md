@@ -394,10 +394,9 @@ then flak.
 ## Run end and menus
 
 - **End of a run:** shot down, crashed, pilot killed, left the battle area, or returned to base.
-  A summary shows the
-  cause, time flown, kills by type, and bombers that reached base. A key starts a new run.
-  - **Until the summary arrives (PR 7):** the view freezes with a banner giving the cause and the
-    time flown. Enter or R starts a new run (owner, 2026-11-26).
+  A summary shows the cause, time flown, kills by type, and the points: banked (with the bonuses)
+  or lost (`aircraft_tree.md`). Enter goes to the hangar; R flies again. Bombers that reached base
+  join it with the bombers.
 - **Pause menu (Esc;** owner, 2026-11-27): also opens when the window loses focus, and from the
   run-end screen. Resume, restart run, options, quit.
   - **Options:** controls, auto-leveling, your gun aim, enemy gun aim, dashboard size, units.
@@ -405,7 +404,7 @@ then flak.
     one; reset to defaults. Esc and F1-F12 are reserved.
   - Keyboard (arrows or W/S, Enter, Esc) and mouse. The nation screen works the same way.
   - Choices are saved in `settings.txt` next to the game, which the updater keeps.
-- **Before a run, you choose your plane:** any of the six fighters until the hangar
+- **Before a run, you choose your nation**, then your plane in the **hangar**
   (`aircraft_tree.md`). The other nation is the enemy (owner, 2026-11-26).
 
 ## Look (placeholder art)
@@ -452,11 +451,12 @@ then flak.
   - `--overlay` starts with the F1 overlay shown.
   - `--fire` and `--bomb` hold the guns or the bomb release throughout.
   - `--menu pause|options|controls` shows a menu page over the shot (shots use the default
-    settings); `--menu planes` saves the plane screen.
+    settings); `--menu hangar` saves the hangar.
 - `--sprite-sheet FILE`: saves every baked plane pose to a PNG and exits (your plane's);
   `--sprite-scale PCT` picks the size (25-150, in eighth steps).
-- `--plane ID` (p12e, p26a, p36a, ar65, he51b, bf109b) or `--nation us|de` (its first fighter):
-  fly it and skip the plane screen.
+- `--plane ID` (p12e, p26a, p36a, ar65, he51b, bf109b) flies it at once, without the hangar;
+  `--nation us|de` skips the nation screen.
+- `--upgrades LIST`, `--points N`, `--unlock-all`: see `aircraft_tree.md`. Nothing is saved.
 - **`tuning.txt` format:** the file starts with `format = 4`. A file of an older format is renamed
   `tuning-format<N>.txt` (a file with no format line is format 1) and the defaults are written, so
   its old ceiling, tank and zoom numbers don't quietly win. Each plane's speeds, climb, stall, turn, pitch rate and tank

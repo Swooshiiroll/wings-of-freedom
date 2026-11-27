@@ -18,7 +18,7 @@ void apply_edges(Body& b, const EdgeParams& e, float dt) noexcept {
         b.outcome = b.damage.going_down ? b.damage.cause : Outcome::Crashed;
         return;
     }
-    if (b.y < 0.0f) {
+    if (b.y < 0.0f && !b.damage.going_down) { // falling over the line isn't getting home
         b.outcome = Outcome::ReturnedHome;
         b.edge_warning = false;
         b.edge_countdown_s = -1.0f;
@@ -49,15 +49,24 @@ const PlaneRules& plane_of(const Rules& rules, const Body& b) noexcept {
     if (rules.planes.empty()) {
         return kFallback;
     }
+    if (b.fit >= 0 && static_cast<std::size_t>(b.fit) < rules.fitted.size()) {
+        const PlaneRules& fitted = rules.fitted[static_cast<std::size_t>(b.fit)];
+        if (static_cast<std::uint8_t>(fitted.id) == b.type) {
+            return fitted;
+        }
+    }
     return rules.planes[std::min<std::size_t>(b.type, rules.planes.size() - 1)];
 }
 
-Body new_plane(const Rules& rules, PlaneId type, float x, float y, float heading_deg) noexcept {
+Body new_plane(const Rules& rules, PlaneId type, float x, float y, float heading_deg,
+               int fit) noexcept {
     Body b;
     b.type = static_cast<std::uint8_t>(type);
+    b.fit = static_cast<std::int8_t>(fit);
     const PlaneRules& plane = plane_of(rules, b);
     b = start_body(plane.flight, x, y, heading_deg);
     b.type = static_cast<std::uint8_t>(type);
+    b.fit = static_cast<std::int8_t>(fit);
     arm(b, plane);
     repair(b, plane.damage);
     return b;

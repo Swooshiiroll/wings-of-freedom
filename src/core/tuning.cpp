@@ -26,7 +26,7 @@ struct IntKey {
 };
 
 // Every value, in the file's order. The int ranges match validate(GroundParams&).
-constexpr std::array<FloatKey, 79> kFloats = {{
+constexpr std::array<FloatKey, 89> kFloats = {{
     {"Camera: how far ahead it looks (u), and how fast that swings round after a turn (per s)",
      "camera.lead_u", [](Tuning& t) -> float& { return t.camera.lead_u; }, 0.0f, 400.0f},
     {nullptr, "camera.lead_ease", [](Tuning& t) -> float& { return t.camera.lead_ease; }, 0.1f,
@@ -196,9 +196,33 @@ constexpr std::array<FloatKey, 79> kFloats = {{
      30000.0f},
     {nullptr, "wave.edge_inset_u", [](Tuning& t) -> float& { return t.rules.wave.edge_inset_u; },
      0.0f, 2000.0f},
+    {"Points: a kill within the window keeps the chain, raising the multiplier by the step up to "
+     "the most; getting home adds up to the condition share, plus the wave share per wave",
+     "score.chain_window_s", [](Tuning& t) -> float& { return t.rules.score.chain_window_s; }, 1.0f,
+     600.0f},
+    {nullptr, "score.chain_step", [](Tuning& t) -> float& { return t.rules.score.chain_step; },
+     0.0f, 10.0f},
+    {nullptr, "score.chain_max", [](Tuning& t) -> float& { return t.rules.score.chain_max; }, 1.0f,
+     100.0f},
+    {nullptr, "score.condition_bonus",
+     [](Tuning& t) -> float& { return t.rules.score.condition_bonus; }, 0.0f, 10.0f},
+    {nullptr, "score.wave_bonus", [](Tuning& t) -> float& { return t.rules.score.wave_bonus; },
+     0.0f, 10.0f},
+    {"Upgrades: top speed and climb with the engine, endurance with the tank (each times this); "
+     "the shares of hits on the pilot and of a fuel leak that armour and a sealed tank let through",
+     "upgrade.engine_speed", [](Tuning& t) -> float& { return t.rules.upgrade.engine_speed; }, 0.5f,
+     2.0f},
+    {nullptr, "upgrade.engine_climb",
+     [](Tuning& t) -> float& { return t.rules.upgrade.engine_climb; }, 0.5f, 2.0f},
+    {nullptr, "upgrade.fuel_endurance",
+     [](Tuning& t) -> float& { return t.rules.upgrade.fuel_endurance; }, 0.5f, 4.0f},
+    {nullptr, "upgrade.armour_pilot",
+     [](Tuning& t) -> float& { return t.rules.upgrade.armour_pilot; }, 0.1f, 1.0f},
+    {nullptr, "upgrade.sealed_leak",
+     [](Tuning& t) -> float& { return t.rules.upgrade.sealed_leak; }, 0.1f, 1.0f},
 }};
 
-constexpr std::array<IntKey, 38> kInts = {{
+constexpr std::array<IntKey, 48> kInts = {{
     {"Waves: enemy fighters in the air at once, at most", "wave.max_alive",
      [](Tuning& t) -> int& { return t.rules.wave.max_alive; }, 1, 64},
     {"Waves: the enemy's fighters move up a stage of its aircraft tree every this many waves",
@@ -272,6 +296,19 @@ constexpr std::array<IntKey, 38> kInts = {{
      1000},
     {nullptr, "ground.weight.woods", [](Tuning& t) -> int& { return t.ground.weights[5]; }, 0,
      1000},
+    {"Points for a kill", "score.fighter_points",
+     [](Tuning& t) -> int& { return t.rules.score.fighter_points; }, 0, 100000},
+    {nullptr, "score.bomber_points", [](Tuning& t) -> int& { return t.rules.score.bomber_points; },
+     0, 100000},
+    {"Prices: the second and third fighters of a tree, then the upgrades", "price.step2",
+     [](Tuning& t) -> int& { return t.rules.price.step2; }, 0, 1000000},
+    {nullptr, "price.step3", [](Tuning& t) -> int& { return t.rules.price.step3; }, 0, 1000000},
+    {nullptr, "price.guns", [](Tuning& t) -> int& { return t.rules.price.guns; }, 0, 1000000},
+    {nullptr, "price.engine", [](Tuning& t) -> int& { return t.rules.price.engine; }, 0, 1000000},
+    {nullptr, "price.fuel", [](Tuning& t) -> int& { return t.rules.price.fuel; }, 0, 1000000},
+    {nullptr, "price.bombs", [](Tuning& t) -> int& { return t.rules.price.bombs; }, 0, 1000000},
+    {nullptr, "price.armour", [](Tuning& t) -> int& { return t.rules.price.armour; }, 0, 1000000},
+    {nullptr, "price.sight", [](Tuning& t) -> int& { return t.rules.price.sight; }, 0, 1000000},
 }};
 
 void section(std::string& out, const char* name) {

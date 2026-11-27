@@ -102,6 +102,7 @@ struct Loadout {
 // One plane's state. x east, y north, z height, in u; angles in degrees.
 struct Body {
     std::uint8_t type = 0; // which plane it is: core/planes.hpp's PlaneId
+    std::int8_t fit = -1;  // its upgrades: Rules::fitted[fit], or the stock plane
     float x = 0.0f;
     float y = 0.0f;
     float z = 0.0f;

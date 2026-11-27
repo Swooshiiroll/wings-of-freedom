@@ -9,14 +9,18 @@ add_library(wof_core STATIC
   fixed_step.cpp
   flight.cpp
   ground.cpp
+  hangar.cpp
   menu.cpp
   pixel_font.cpp
   plane_rules.cpp
   planes.cpp
+  progress.cpp
   raster.cpp
+  score.cpp
   settings.cpp
   targets.cpp
   tuning.cpp
+  upgrades.cpp
   view.cpp
   waves.cpp
   weapons.cpp

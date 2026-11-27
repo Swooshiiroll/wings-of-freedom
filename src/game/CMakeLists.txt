@@ -3,6 +3,7 @@ add_executable(wof
   dashboard_view.cpp
   effects.cpp
   ground_view.cpp
+  hangar_view.cpp
   plane_sprites.cpp
   main.cpp
   menu_view.cpp)
