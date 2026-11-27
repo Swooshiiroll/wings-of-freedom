@@ -3,7 +3,7 @@
 You start in an early fighter and earn better ones. Written from the owner's answers of
 2026-11-27 (six question rounds), after the owner called the P-26A a testing stand-in.
 
-Built in two pull requests: **the planes** (this build), then **points, the hangar and upgrades**.
+Built in two pull requests: **the planes**, then **points, the hangar and upgrades**.
 The bombers (`flight.md`, Bombers) come after both. Numbers marked **(start)** are tuning values.
 
 ## The tree
@@ -17,7 +17,7 @@ The bombers (`flight.md`, Bombers) come after both. Numbers marked **(start)** a
 Their real stats, looks and sources are in `planes.md`.
 
 - **The P-26A starts with two .30s.** Its .50 becomes an upgrade.
-- Until the hangar, the plane screen offers all six, for testing. `--plane` picks one.
+- A developer can fly any of them at once with `--plane`, without the hangar.
 
 ## Enemy fighters grow with the waves
 
@@ -32,7 +32,7 @@ The enemy's fighters come from its own tree, whatever you fly (`wave.tier_every`
 
 A starter is much slower than the types it meets from wave 5.
 
-## Points (build 2)
+## Points
 
 - **Kills:** fighters **100**, bombers **250**. Light and heavy types get their own values later.
 - **Chains:** a kill within **20 s** of the last raises the multiplier by **0.5** (x1, x1.5, x2 …
@@ -43,11 +43,13 @@ A starter is much slower than the types it meets from wave 5.
   - up to **+50%** for your plane's condition;
   - **+10%** for each wave you were still flying in.
 - **Separate** US and German points.
+- **Condition** is the share of the airframe's HP left, times the share of the pilot unhurt.
+- **Waves flown** are the waves that arrived while you were flying.
 - The dashboard shows this run's points and the chain.
 - **Prices (start):** a step 2 fighter **3,000** (2-3 good runs), step 3 **8,000**. Upgrades: guns
   and engine 800, fuel and bombs 500, armour 400, bomb sight 300.
 
-## Upgrades (build 2)
+## Upgrades
 
 Per plane, bought once. **R** is a real fit of that type or a close variant, **F** a field mod
 (pilots did refit their own planes).
@@ -74,13 +76,25 @@ a developer switch).
 **Effects (start):** engine about +6% speed and +10% climb; fuel +40-50% endurance; armour halves
 damage to your pilot (the P-36's also halves fuel leaks). Tanks can't be dropped.
 
-## Screens (build 2)
+## Screens
 
 - **Hangar**, after the nation: points, your tree (owned, or its price), the chosen plane's
-  upgrades, **Fly**, and **Reset progress** (asks first). Keyboard and mouse; Esc goes back.
+  upgrades, **Fly**, **Reset progress** and **Back**. Keyboard and mouse; Esc goes back.
+  - Planes are bought **in order**: the third needs the second.
+  - Buying and resetting take **two presses**; moving away cancels.
+  - **Reset progress** erases the nation shown, not the other.
+  - Choosing a plane you own makes it the one you fly.
 - **Run summary:** how it ended, time, kills, points and bonus, then **banked** or **lost**. Enter
   goes to the hangar; R flies again.
-- Progress is saved in `progress.txt` next to the game, which the updater keeps.
+- The **dashboard strip** shows the wave, kills, this run's points and the chain. (The gun aim and
+  auto-leveling words left it to make room; F3 shows the new aim for a moment.)
+- Progress is saved in `progress.txt` next to the game, which the updater keeps. It's saved after
+  every purchase and banked run. The developer options below never save.
+
+## Developer options
+
+`--plane ID` and `--upgrades LIST` fly at once; `--points N`, `--unlock-all` set up the hangar;
+`--menu hangar` with `--shot` saves its screen.
 
 ## Not in this
 

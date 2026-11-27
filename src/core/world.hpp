@@ -11,8 +11,11 @@
 #include "core/input.hpp"
 #include "core/plane_rules.hpp"
 #include "core/planes.hpp"
+#include "core/progress.hpp"
 #include "core/rng.hpp"
+#include "core/score.hpp"
 #include "core/targets.hpp"
+#include "core/upgrades.hpp"
 #include "core/waves.hpp"
 #include "core/weapons.hpp"
 
@@ -29,11 +32,21 @@ struct EdgeParams {
     friend constexpr bool operator==(const EdgeParams&, const EdgeParams&) = default;
 };
 
+// A plane with upgrades: a type and what's fitted to it (design/aircraft_tree.md).
+struct Fit {
+    PlaneId type = PlaneId::P12E;
+    UpgradeSet upgrades = 0;
+
+    friend constexpr bool operator==(const Fit&, const Fit&) = default;
+};
+
 // Everything step() needs to know about the rules.
 // - `flight` and `damage` are the base: what every plane shares (gravity, the ceiling, the hit
 //   table...).
 // - `planes` holds each plane type's own rules, worked out from its real stats with `scale`
 //   (core/plane_rules.hpp). Call rederive() after changing the base or the scale.
+// - `fitted` holds the rules of each plane with upgrades in `fits`, which a body flies by its
+//   `fit` (players' planes; add_fit() adds one).
 struct Rules {
     FlightParams flight;
     EdgeParams edge;
@@ -43,18 +56,35 @@ struct Rules {
     PlaneScale scale;
     AiParams ai;
     WaveParams wave;
+    UpgradeParams upgrade;
+    ScoreParams score;
+    Prices price;
     // Game options (settings.txt), not tuning: how the players' and the AI pilots' rounds judge
     // height.
     HeightRule height_rule = HeightRule::Forgiving;
     HeightRule enemy_height_rule = HeightRule::Forgiving;
     std::vector<PlaneRules> planes = derive_roster(flight, damage, scale);
+    std::vector<Fit> fits;
+    std::vector<PlaneRules> fitted;
 
-    void rederive() { planes = derive_roster(flight, damage, scale); }
+    void rederive() {
+        planes = derive_roster(flight, damage, scale);
+        fitted.clear();
+        for (const Fit& f : fits) {
+            fitted.push_back(fit_plane(f.type, f.upgrades, flight, damage, scale, upgrade));
+        }
+    }
+    // Adds a fitted plane; returns the index bodies fly it by.
+    int add_fit(const Fit& f) {
+        fits.push_back(f);
+        fitted.push_back(fit_plane(f.type, f.upgrades, flight, damage, scale, upgrade));
+        return static_cast<int>(fits.size()) - 1;
+    }
 
     friend bool operator==(const Rules&, const Rules&) = default;
 };
 
-// A plane's own rules, by its type.
+// A plane's own rules: with its upgrades if it flies a fit of its type, else the stock plane's.
 [[nodiscard]] const PlaneRules& plane_of(const Rules& rules, const Body& b) noexcept;
 
 // Everything that flies, and what it fires. Any number of planes; nothing here assumes there is
@@ -71,10 +101,10 @@ struct World {
     std::int64_t tick = 0;
 };
 
-// A plane of a type, ready for a run: in the air with the start values, armed with its real guns
-// and bombs, and undamaged.
-[[nodiscard]] Body new_plane(const Rules& rules, PlaneId type, float x, float y,
-                             float heading_deg) noexcept;
+// A plane of a type, ready for a run: in the air with the start values, armed with its guns and
+// bombs, and undamaged. `fit` is its upgrades (Rules::add_fit), or -1 for the stock plane.
+[[nodiscard]] Body new_plane(const Rules& rules, PlaneId type, float x, float y, float heading_deg,
+                             int fit = -1) noexcept;
 
 // Plane-to-plane collisions (design/flight.md, Collisions): two flying planes within twice the
 // collision radius across and the collision height of each other touch. The one with less total

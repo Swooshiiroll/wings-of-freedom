@@ -15,6 +15,7 @@ add_executable(wof_tests
   test_rng.cpp
   test_settings.cpp
   test_targets.cpp
+  test_tree.cpp
   test_tuning.cpp
   test_view.cpp
   test_waves.cpp
