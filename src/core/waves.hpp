@@ -8,8 +8,8 @@ struct World;
 struct Rules;
 
 // Enemy waves (design/flight.md, Waves): the first after first_s, then one every every_s, each
-// bringing 1 + n/2 fighters from the north edge near the player's height. At most max_alive are in
-// the air; the rest of a wave waits for a place.
+// bringing 1 + n/2 fighters in from the north, east or west edge near the player's height. At most
+// max_alive are in the air; the rest of a wave waits for a place.
 
 // The waves' numbers (tuning.txt `wave.*`), all (start) values.
 struct WaveParams {
@@ -17,8 +17,9 @@ struct WaveParams {
     float every_s = 40.0f;
     int max_alive = 6;
     float height_spread_u = 60.0f; // arrive within this of the player's height (3,000 ft)
-    float spread_u = 120.0f;       // across, between the planes of a wave
-    float north_inset_u = 60.0f;   // how far inside the north edge they appear
+    float spread_u = 120.0f;       // along the edge, between the planes of a wave
+    float along_u = 6000.0f;       // how far along the edge from abreast of you (or north)
+    float edge_inset_u = 300.0f;   // how far inside the edge they appear
 
     friend constexpr bool operator==(const WaveParams&, const WaveParams&) = default;
 };

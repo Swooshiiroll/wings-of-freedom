@@ -5,6 +5,7 @@
 #include <numbers>
 
 #include "core/iso.hpp"
+#include "core/map.hpp"
 
 namespace wof {
 namespace {
@@ -20,6 +21,9 @@ struct DroneSpot {
 };
 
 // North of the start (1440, 480), across the middle of the battle area.
+// The spots below were laid out round the start of a 2880 u wide map; they move with the start.
+constexpr float kEast = static_cast<float>(kMapWidthU) * 0.5f - 1440.0f;
+
 constexpr std::array<DroneSpot, 4> kDrones = {{
     {1440.0f, 1300.0f, 180.0f, 40.0f, true},
     {1000.0f, 1900.0f, 220.0f, 90.0f, false},
@@ -54,7 +58,7 @@ std::vector<Target> practice_targets(const TargetParams& p) {
     for (const DroneSpot& d : kDrones) {
         Target t;
         t.kind = TargetKind::Drone;
-        t.cx = d.cx;
+        t.cx = d.cx + kEast;
         t.cy = d.cy;
         t.orbit_u = d.orbit_u;
         t.z = d.z;
@@ -67,9 +71,9 @@ std::vector<Target> practice_targets(const TargetParams& p) {
     for (const auto& g : kGround) {
         Target t;
         t.kind = TargetKind::Ground;
-        t.cx = g[0];
+        t.cx = g[0] + kEast;
         t.cy = g[1];
-        t.x = g[0];
+        t.x = t.cx;
         t.y = g[1];
         out.push_back(t);
     }

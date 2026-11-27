@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 
 #include "core/ai.hpp"
 #include "core/map.hpp"
@@ -10,18 +11,31 @@
 namespace wof {
 namespace {
 
-// One enemy fighter from the north edge, heading south near the player's height. Returns its
-// height.
-float arrive(World& w, const Rules& rules, int index) {
+// The edges enemies fly in from: never the south, your way home.
+enum class Edge : std::uint8_t { North, East, West };
+
+// One enemy fighter in from an edge, heading in, near the player's height: abreast of the player or
+// north of them (design/flight.md, Waves). Returns its height.
+float arrive(World& w, const Rules& rules, Edge edge, int index) {
     const WaveParams& p = rules.wave;
     const Body& player = w.bodies.front();
     const auto width = static_cast<float>(kMapWidthU);
-    // Near the player's side of the map, spread across.
-    const float x = std::clamp(player.x + (w.rng.next_float() - 0.5f) * 600.0f +
-                                   static_cast<float>(index) * p.spread_u,
-                               rules.edge.warning_u, width - rules.edge.warning_u);
-    const float y = static_cast<float>(kMapDepthU) - p.north_inset_u;
-    Body b = new_plane(rules, w.waves.enemy, x, y, 180.0f);
+    const auto depth = static_cast<float>(kMapDepthU);
+    const float margin = rules.edge.warning_u;
+    const float along = static_cast<float>(index) * p.spread_u;
+    float x = 0.0f;
+    float y = 0.0f;
+    float heading = 180.0f;
+    if (edge == Edge::North) {
+        x = std::clamp(player.x + (w.rng.next_float() - 0.5f) * p.along_u + along, margin,
+                       width - margin);
+        y = depth - p.edge_inset_u;
+    } else {
+        y = std::clamp(player.y + w.rng.next_float() * p.along_u + along, margin, depth - margin);
+        x = edge == Edge::East ? width - p.edge_inset_u : p.edge_inset_u;
+        heading = edge == Edge::East ? 270.0f : 90.0f;
+    }
+    Body b = new_plane(rules, w.waves.enemy, x, y, heading);
     const PlaneRules& plane = plane_of(rules, b);
     const float offset = (w.rng.next_float() * 2.0f - 1.0f) * p.height_spread_u;
     b.z = std::clamp(player.z + offset, rules.ai.floor_u + 20.0f, plane.flight.ceiling_u - 20.0f);
@@ -70,8 +84,12 @@ void update_waves(World& w, const Rules& rules) {
     int arrived = 0;
     float height = w.bodies.front().z;
     int alive = enemies_alive(w);
+    // Those arriving together come in from one edge.
+    const Edge edge = s.waiting > 0 && alive < rules.wave.max_alive
+                          ? static_cast<Edge>(w.rng.next_below(3))
+                          : Edge::North;
     while (s.waiting > 0 && alive < rules.wave.max_alive) {
-        const float z = arrive(w, rules, arrived);
+        const float z = arrive(w, rules, edge, arrived);
         if (arrived == 0) {
             height = z;
         }

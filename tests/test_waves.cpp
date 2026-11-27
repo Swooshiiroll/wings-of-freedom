@@ -1,9 +1,12 @@
 #include "core/waves.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
+#include "core/map.hpp"
 #include "core/tuning.hpp"
 #include "core/world.hpp"
 
@@ -73,20 +76,56 @@ TEST_CASE("The first wave comes at 10 s, then one every 40 s, each announced") {
     CHECK(w.waves.current == 3);
 }
 
-TEST_CASE("Enemies arrive from the north near your height, in the enemy's fighter") {
+TEST_CASE("Enemies fly in from the north, east or west edge, never from behind you to the south") {
     const Rules r = quiet_rules();
-    for (const float height : {150.0f, 400.0f}) {
-        World w = fresh(r, 5); // three of them
-        w.bodies[0].z = height;
+    const auto side = static_cast<float>(kMapWidthU);
+    int north = 0;
+    int east = 0;
+    int west = 0;
+    for (std::uint64_t seed = 1; seed <= 24; ++seed) {
+        World w = fresh(r, 5); // three of them, from one edge
+        w.rng = Rng{seed};
+        w.bodies[0].x = side * 0.5f;
+        w.bodies[0].z = seed % 2 == 0 ? 150.0f : 400.0f;
         run(w, r, 10.0f + kTickSeconds);
         REQUIRE(w.pilots.size() == 3u);
         for (const Pilot& p : w.pilots) {
             const Body& b = w.bodies[static_cast<std::size_t>(p.body)];
+            CAPTURE(seed);
+            CAPTURE(b.x);
+            CAPTURE(b.y);
             CHECK(std::abs(b.z - w.bodies[0].z) <= 65.0f);
-            CHECK(b.y > 4600.0f);
             CHECK(b.type == static_cast<std::uint8_t>(PlaneId::He51B));
+            CHECK(b.y >= w.bodies[0].y - 10.0f);
+            const bool at_north = b.y > side - r.wave.edge_inset_u - 10.0f;
+            const bool at_east = b.x > side - r.wave.edge_inset_u - 10.0f;
+            const bool at_west = b.x < r.wave.edge_inset_u + 10.0f;
+            CHECK((at_north || at_east || at_west));
+            north += at_north ? 1 : 0;
+            east += at_east ? 1 : 0;
+            west += at_west ? 1 : 0;
         }
     }
+    CHECK(north > 0);
+    CHECK(east > 0);
+    CHECK(west > 0);
+}
+
+TEST_CASE("A wave from a far edge comes and finds you") {
+    const Rules r = quiet_rules();
+    World w = fresh(r);
+    w.bodies[0].x = static_cast<float>(kMapWidthU) * 0.5f;
+    float closest = 1.0e9f;
+    InputCommand circle;
+    circle.turn = 127;
+    for (int i = 0; i < 300 * kTicksPerSecond; ++i) {
+        step(w, std::vector<InputCommand>{circle}, r);
+        for (const Pilot& p : w.pilots) {
+            const Body& b = w.bodies[static_cast<std::size_t>(p.body)];
+            closest = std::min(closest, std::hypot(b.x - w.bodies[0].x, b.y - w.bodies[0].y));
+        }
+    }
+    CHECK(closest < 300.0f);
 }
 
 TEST_CASE("No more than six are in the air; the rest wait for a place") {

@@ -33,8 +33,9 @@ shop, pilots, saving, other planes and eras, trucks and tanks, sound, gamepad, c
 ## World and view
 
 - **Units:** distances in world units (u), time in seconds.
-- **Projection:** 2:1 true isometric at 480x270. North points up-right on screen and south (home)
-  down-left. One unit of ground is about one art pixel.
+- **View** (owner, 2026-11-27): at 480x270, **north is straight up** the screen and south (home)
+  straight down, seen from 30° above. The farmland's field axes run diagonally across it, so the
+  fields still look isometric. One unit of ground is about one art pixel.
 - **Height:** 0 is the ground. It is drawn as the gap between a plane and its shadow, **0.4 px per
   u**, sized by depth (design/planes.md, Height).
   - The ceiling is **30,000 ft (600 u) for every plane** (owner, 2026-11-26).
@@ -42,11 +43,13 @@ shop, pilots, saving, other planes and eras, trucks and tanks, sound, gamepad, c
     quarter for the ground from 30,000 ft, up to 1.5× above you. Planes change size in crisp
     eighth steps; the ground is drawn smooth (the one exception to pixel-perfect).
   - **The shadow gap** grows to about 130 px at 30,000 ft.
-- **Map:** **2880 u east-west by 4800 u north-south** (about 6 screens across and 10 deep). The
-  ground is flat in v0.1, with drawn detail only.
+- **Map:** **28,800 u by 28,800 u**, about 12.5 miles square: about 2 minutes at cruising speed
+  from the middle to any side (owner, 2026-11-27). The ground is flat in v0.1, with drawn detail
+  only.
 - **The ground** is a **farmland patchwork** (placeholder look until v0.3's art).
   - Rectangular fields of wheat, barley, ploughed earth, pasture and meadow, plus woods.
-  - Hedgerows between fields, dirt roads on a grid, and one river winding north to south.
+  - Hedgerows between fields, dirt roads on a grid, and a winding river every 6000 u, as
+    landmarks.
   - It's made from the seed, the same on every computer.
 - **Edges:**
   - **Nothing on the ground marks them.** The farmland carries on past every edge, and only the
@@ -121,8 +124,8 @@ The simulation runs at a fixed **60 ticks per second**.
   - Turn and pitch control work at **30%**.
 - **Ceiling:** above **30,000 ft (600 u)** the plane can't climb any further, and the nose is
   pushed back to level.
-- **A run starts** in the air near the south edge, heading north at **120 u** and **110 u/s**,
-  with **80%** throttle.
+- **A run starts** in the air near the middle of the south edge, heading north at **120 u** and
+  **110 u/s**, with **80%** throttle.
 - **The ground:** touching it is a crash, and the run ends.
 
 ### Fuel
@@ -203,7 +206,7 @@ forgiving|strict|auto` sets it for one run).
 
 Damage (PR 4) and enemies (PR 6) come after weapons, so there are practice targets to shoot at
 (owner, 2026-11-26). They stay afterwards as a developer tool.
-- **4 drones** circle at **40, 90, 140 and 200 u** at **70 u/s**, over the middle of the map. They
+- **4 drones** circle at **40, 90, 140 and 200 u** at **70 u/s**, just north of the start. They
   use the fighter model, tinted orange-red.
 - **8 ground targets** (white and red bullseyes, 10 u across) sit along the way north.
 - Hits don't hurt them. They glow, and their hit count shows for 2 s. The dashboard's message strip shows the total.
@@ -317,12 +320,17 @@ then flak.
 ### Bombers
 
 - The enemy nation's bomber (He 111B-2 or B-10B), with its real stats.
-- They fly **south in groups of 2**, at **8,000-15,000 ft** (160-300 u) near cruising speed, to
-  bomb your base.
+- Every 3rd wave brings a formation (owner, 2026-11-27): **a pair** at wave 3, **a V of three**
+  from wave 6, **five** from wave 9.
+- From wave 6 they have **escort fighters**: one for each pair (three bring 1, five bring 2).
+- They come in at the north edge and fly **south at 8,000-15,000 ft** (160-300 u) and their real
+  cruising speed to bomb your base, **holding course** under fire.
+- They're **announced as they enter**: how many, their height and direction.
 - They're tough: **two engines of 60 HP each** (losing one halves the power), each wing **100**,
   fuselage **160**, tail **40**.
 - **Three gunners** (nose, dorsal, ventral), with the bomber's real guns and rate, fire at any
-  plane within **160 u** in their arcs, using the forgiving band.
+  plane within **160 u** in their arcs. They follow your enemy aim setting and sharpen with later
+  waves (owner, 2026-11-27).
   - **Nose:** forward, ±60° of the nose.
   - **Dorsal:** behind and above, ±120° of the tail.
   - **Ventral:** behind and below, ±60° of the tail.
@@ -333,6 +341,7 @@ then flak.
     share.
 - In v0.1 a bomber reaching the south edge shows "Bomber reached base" and adds to a counter in
   the summary. It costs nothing until v0.2.
+- Their off-screen arrows are drawn larger than fighters'.
 
 ### Flak guns
 
@@ -352,15 +361,18 @@ then flak.
 
 ### Waves
 
-- The first wave arrives at **10 s**, then one every **40 s**, from the north edge.
-- **Wave n** brings **1 + n/2 fighters** (rounded down). Every 3rd wave adds **2 bombers**.
+- The first wave sets out at **10 s**, then one every **40 s**. Fighters fly in at the **north,
+  east or west edge**, never the south (owner, 2026-11-27): those arriving together from one
+  edge, abreast of you or north of you. On this map the first fight comes about **2 minutes** in.
+- **Wave n** brings **1 + n/2 fighters** (rounded down). Every 3rd wave adds a bomber formation
+  (above).
 - Fighters arrive **within about 3,000 ft of your height** (owner, 2026-11-27). At most **6** are in
   the air; the rest of a wave waits for a place.
 - **Every wave is announced** with a notice on the dashboard (its size and height), which also counts waves
   and kills (owner).
-- **Off-screen enemies** get an arrow at the screen edge, with their height against yours (owner).
-- **Bombers** (owner, 2026-11-27) stay at 8,000-15,000 ft, fly at their real cruising speed, and
-  are announced with their height about **45 s** before they arrive, so you can climb to them.
+- **Off-screen enemies** get an arrow at the screen edge (owner, 2026-11-27). Enemies in about the
+  same direction share one. A mark beside it says **higher**, **level** (within about 1,000 ft)
+  or **lower**, for the nearest of them. No numbers.
 - **1 more flak gun** is placed every 2 waves, up to **16**.
 
 ## HUD
@@ -503,10 +515,11 @@ input commands, so tests can replay scripted flights.
 - **Edges and waves:**
   - past a soft edge the countdown runs, stops when the plane flies back in, and destroys it at 0;
   - leaving south ends the run;
-  - wave sizes follow the formula.
+  - wave sizes follow the formula, and waves come only from the north, east and west.
+- **View:** north draws straight up and east to the right; planes' noses follow their headings.
 - **Enemies:** pilots turn to their target and only fire close and nose on, pull out of dives, stay
   in the area, get onto a tail, climb before diving, aim better each wave, and never run out; kills
-  are credited; edge arrows point the right way.
+  are credited; edge arrows point the right way and group by direction.
 - **Determinism:** the same seed and inputs give the same result.
 
 **Playtest by the owner:** the CI Windows build. Numbers change in `tuning.txt` from the notes.
@@ -516,9 +529,8 @@ input commands, so tests can replay scripted flights.
 The first draft's eight questions are answered above, and so are the two that came out of them:
 speed shows in mph, and bomber gunners are knocked out as described under Bombers.
 
-From the real-planes rework (and `planes.md`'s own open questions):
-1. **The three gunners' hit shares:** the earlier two-gunner rule, re-cut for three. The nose takes
-   10% from ahead; the dorsal and ventral take 8% each from behind. Right?
-2. **Bomber cruising heights** of 8,000-15,000 ft: right for these pre-war bombers?
-3. **Flak ranges across the ground** (light 240 u, heavy 400 u) and heavy-gun HP (45): start
+The gunners' hit shares (as written under Bombers) and their cruising heights of 8,000-15,000 ft
+are confirmed (owner, 2026-11-27). Still open, from the real-planes rework (and `planes.md`'s own
+open questions):
+1. **Flak ranges across the ground** (light 240 u, heavy 400 u) and heavy-gun HP (45): start
    values to check in play.

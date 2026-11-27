@@ -33,7 +33,7 @@ TEST_CASE("The ground is the same on every compiler (golden hash)") {
     // Pinned on MSVC and GCC. If the generator changes on purpose, update this in the same pull
     // request and say why.
     const GroundParams p;
-    CHECK(hash_area(p, kSeed, 1200, 2200, 512) == 0xc2e7e2e1e70d5dc5ull);
+    CHECK(hash_area(p, kSeed, 2100, 2200, 512) == 0x2e1151cdb513e63bull); // river 0 runs through it
 }
 
 TEST_CASE("The same seed always gives the same ground, and another seed different ground") {
@@ -46,7 +46,7 @@ TEST_CASE("The farmland has every kind of ground") {
     const GroundParams p;
     std::array<int, kGroundKinds> counts{};
     for (int y = 0; y < 2048; y += 2) {
-        for (int x = 0; x < kMapWidthU; x += 2) {
+        for (int x = 0; x < kRiverEveryU; x += 2) {
             ++counts[static_cast<std::size_t>(sample_ground(p, kSeed, x, y).kind)];
         }
     }
@@ -88,20 +88,24 @@ TEST_CASE("Every unit of a field reports the same field") {
     }
 }
 
-TEST_CASE("The river winds through the middle half of the battle area") {
+TEST_CASE("A river winds through the middle of every strip of farmland") {
     const GroundParams p;
-    int lo = kMapWidthU;
-    int hi = 0;
-    for (int y = -1000; y < kMapDepthU + 1000; y += 8) {
-        const int x = river_centre_x(p, kSeed, y);
-        lo = x < lo ? x : lo;
-        hi = x > hi ? x : hi;
-        const Ground g = sample_ground(p, kSeed, x, y).kind;
-        CHECK((g == Ground::River || g == Ground::Road)); // a road there is a bridge
+    for (const int n : {-1, 0, 2, 4}) {
+        CAPTURE(n);
+        const int west = n * kRiverEveryU;
+        int lo = west + kRiverEveryU;
+        int hi = west;
+        for (int y = -1000; y < kMapDepthU + 1000; y += 16) {
+            const int x = river_centre_x(p, kSeed, y, n);
+            lo = x < lo ? x : lo;
+            hi = x > hi ? x : hi;
+            const Ground g = sample_ground(p, kSeed, x, y).kind;
+            REQUIRE((g == Ground::River || g == Ground::Road)); // a road there is a bridge
+        }
+        CHECK(lo >= west + kRiverEveryU / 4 - p.river_swing_u);
+        CHECK(hi <= west + kRiverEveryU * 3 / 4 + p.river_swing_u);
+        CHECK(hi - lo > 40); // it bends
     }
-    CHECK(lo >= kMapWidthU / 4 - p.river_swing_u);
-    CHECK(hi <= kMapWidthU * 3 / 4 + p.river_swing_u);
-    CHECK(hi - lo > 40); // it bends
 }
 
 TEST_CASE("The ground carries on past the battle area's edges") {

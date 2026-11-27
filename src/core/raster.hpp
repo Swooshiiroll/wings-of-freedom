@@ -12,8 +12,8 @@ namespace wof {
 // rasterizer, so the planes are drawn at every heading, pitch and bank without drawing each one by
 // hand. Pure maths: the front end uploads the pixels.
 //
-// The projection is the true 2:1 dimetric view the ground uses (core/iso.hpp): ground axes as
-// there, and the model's own height at 1.22 px per u, so the plane looks solid. (Altitude is drawn
+// The projection is the view the ground uses (core/iso.hpp): north up, looked at from 30° above,
+// and the model's own height at 1.22 px per u, so the plane looks solid. (Altitude is drawn
 // squeezed, at 0.4 px per u, as the gap to the shadow.)
 
 inline constexpr float kModelHeightPxPerU = 1.2247449f; // sqrt(2) x cos(30°)

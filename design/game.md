@@ -17,9 +17,9 @@ from it: all art, sound and code are original.
 
 ## View and look
 
-- **True isometric.** The ground grid is turned 45°.
-  - North, toward enemy territory, is up-right on screen.
-  - South, toward home base, is down-left.
+- **Isometric look, north up** (owner, 2026-11-27). The ground grid is turned 45°.
+  - North, toward enemy territory, is straight up the screen.
+  - South, toward home base, is straight down.
 - **Pixel art at 480x270**, scaled by whole numbers to the window (4x on a 1080p screen). On
   screens that 270 doesn't divide evenly (1440p, Steam Deck), the largest whole-number scale is used
   and the space left over shows more of the world. The HUD stays pinned to the edges.

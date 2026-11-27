@@ -3,6 +3,9 @@
 #include "core/camera.hpp"
 #include "core/view_xf.hpp"
 
+#include <numbers>
+#include <vector>
+
 #include <doctest/doctest.h>
 
 using namespace wof;
@@ -68,7 +71,7 @@ TEST_CASE("The view scales the world about its centre, by each point's depth") {
     CHECK(xf.at(1100.0f, 2000.0f, 600.0f).x - xf.cx == doctest::Approx(s2.x - xf.focus.x));
     // A length at a height scales with that height's depth.
     CHECK(xf.at(1010.0f, 2000.0f, 300.0f).x - xf.at(1000.0f, 2000.0f, 300.0f).x ==
-          doctest::Approx(10.0f * 0.625f));
+          doctest::Approx(10.0f * std::numbers::sqrt2_v<float> * 0.625f));
 }
 
 TEST_CASE("Edge arrows: none for what's on screen, else on the edge toward it") {
@@ -86,4 +89,22 @@ TEST_CASE("Edge arrows: none for what's on screen, else on the edge toward it") 
     CHECK(corner.y == doctest::Approx(10.0f));
     CHECK(corner.x < 240.0f);
     CHECK(corner.x > 10.0f);
+}
+
+TEST_CASE("Enemies in about the same direction share one arrow, marked higher, level or lower") {
+    // angle (rad), distance, height less yours
+    const std::vector<Sighting> seen = {{0.0f, 900.0f, 100.0f},
+                                        {0.3f, 400.0f, -80.0f}, // nearest: its mark counts
+                                        {3.1f, 700.0f, 10.0f},
+                                        {-3.1f, 800.0f, 200.0f}, // the same direction, wrapped
+                                        {1.6f, 500.0f, 90.0f}};
+    const std::vector<ArrowGroup> groups = group_arrows(seen, 0.45f, 20.0f);
+    REQUIRE(groups.size() == 3u);
+    CHECK(groups[0].nearest == 1u);
+    CHECK(groups[0].mark == HeightMark::Lower);
+    CHECK(groups[1].nearest == 4u);
+    CHECK(groups[1].mark == HeightMark::Higher);
+    CHECK(groups[2].nearest == 2u);
+    CHECK(groups[2].mark == HeightMark::Level);
+    CHECK(group_arrows({}, 0.45f, 20.0f).empty());
 }

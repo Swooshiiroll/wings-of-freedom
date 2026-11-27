@@ -107,6 +107,9 @@ Logs go to `out/`.
 - **Pixel-perfect view:** the world is drawn 1:1 in art pixels into a render target the size of the
   view, and shown at a whole-number scale (`core/view.hpp`). Never draw at a fractional scale.
   The pure maths (projection, view fit, camera) stays in `src/core`.
+- **World and farmland coordinates differ.** The world is x east, y north, and the view looks
+  north (`core/iso.hpp`); the farmland has its own axes at 45° to that, so its fields look
+  isometric. Look up the ground under a world point with `farmland_of`, never with world x and y.
 - **Ground generation is integer-only** (hashes, no floats), so a seed gives the same farmland on
   MSVC and GCC, as co-op clients will generate it themselves. The golden hash in
   `tests/test_ground.cpp` pins it on both. If you change the generator on purpose, update the hash
