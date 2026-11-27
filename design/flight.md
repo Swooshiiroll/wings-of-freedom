@@ -1,10 +1,18 @@
 # Fly and fight (v0.1)
 
-The spec for the first playable build. It covers one World War II fighter that flies with full
-altitude control and burns fuel. It fights enemy fighters, bombers and flak with guns and bombs,
-and takes damage part by part. Written from the owner's answers of 2026-11-26 (flight rounds 1-5,
-then the first draft's open questions).
-The whole game is in `game.md`.
+The spec for the first playable build. You fly a real pre-war fighter (the US's Boeing P-26A or
+Germany's Heinkel He 51) with full altitude control, burning fuel. You fight the other nation's
+fighters, bombers and flak with guns and bombs, and take damage part by part. Written from the
+owner's answers of 2026-11-26 (flight rounds 1-5, the first draft's open questions, and the
+real-planes rounds).
+The whole game is in `game.md`; the planes, their real stats and the scale are in `planes.md`.
+
+**Real planes (2026-11-26):**
+- Flight, gun and bomb numbers are now **per plane**: each plane's real stats, scaled as
+  `planes.md` sets out.
+- Where this doc gives single numbers (speeds, turn rate, climb, guns), they're the **P-26A's**
+  game values.
+- The sim works in units (u). The HUD shows real mph and feet.
 
 Every number here is a **(start)** value. They all live in `tuning.txt`, which the game reloads
 while it runs, and are changed by playtest, not settled here.
@@ -28,7 +36,11 @@ shop, pilots, saving, other planes and eras, trucks and tanks, sound, gamepad, c
 - **Projection:** 2:1 true isometric at 480x270. North points up-right on screen and south (home)
   down-left. One unit of ground is about one art pixel.
 - **Height:** 0 is the ground. It is drawn as the gap between a plane and its shadow, **0.4 px per
-  u**. The player's ceiling is **240 u**, a 96 px gap.
+  u** × the ground zoom.
+  - The ceiling is **30,000 ft (600 u) for every plane** (owner, 2026-11-26).
+  - **The ground zooms out as you climb:** its scale is 1 − 0.5 × height / ceiling (half size at
+    30,000 ft), so at the ceiling the gap is 120 px. Plane sprites stay full size.
+  - The zoomed ground is drawn smooth. That's the one exception to pixel-perfect.
 - **Map:** **2880 u east-west by 4800 u north-south** (about 6 screens across and 10 deep). The
   ground is flat in v0.1, with drawn detail only.
 - **The ground** is a **farmland patchwork** (placeholder look until v0.3's art).
@@ -83,10 +95,11 @@ The simulation runs at a fixed **60 ticks per second**.
       with it. The best glide below fixes both.
     - The propeller's thrust is full up to **110 u/s**, then falls as 1/speed, scaled by the
       throttle. Its power is set so that full throttle levels off at 150.
-- **Pitch:** W/S changes it at **60°/s**, up to **±40°**. **Let go and the nose eases back to
-  level** at the same rate (owner, 2026-11-26). The climb rate is speed × sin(pitch).
-  - The best sustained climb comes out at about **19 u/s**, near 110 u/s, so deck to ceiling
-    takes about 13 s.
+- **Pitch:** W/S changes it at **60°/s** (bombers 30°/s), up to **±40°**. **Let go and the nose
+  eases back to level** at the same rate (owner, 2026-11-26). The climb rate is speed × sin(pitch).
+  - **Best sustained climb:** each plane's real climb rate, scaled. For the P-26A that's
+    **15 u/s** (2,360 ft/min real), so deck to 30,000 ft takes about 40 s. Its thrust is worked
+    out to hit both its top speed and this climb.
   - Holding S climbs at up to 40° and loses speed fast: from 110 u/s to a stall in about 2 s.
 - **Turning:** **100°/s** at the best turn speed of **110 u/s**.
   - Below that speed the rate falls with speed (50°/s at 55); above it, with 1/speed (73°/s at
@@ -94,11 +107,12 @@ The simulation runs at a fixed **60 ticks per second**.
   - At best speed, a full circle takes about 3.6 s.
 - **Bank:** the plane banks **30°** into a turn and levels its wings after. It's for looks only.
 - **Throttle:** 0-100% in steps while Shift/Ctrl is held, at **50% per second**.
-- **Stall:** below **55 u/s**, until speed is back above **63 u/s**. Height is the safety margin.
+- **Stall:** below each plane's scaled real stall speed (the P-26A's **45 u/s**, about 70 mph)
+  until speed is 8 u/s above it again. Height is the safety margin.
   - The nose drops on its own toward **-30°**, at **40°/s**.
   - Turn and pitch control work at **30%**.
-- **Ceiling:** above **240 u** the plane can't climb any further, and the nose is pushed back to
-  level.
+- **Ceiling:** above **30,000 ft (600 u)** the plane can't climb any further, and the nose is
+  pushed back to level.
 - **A run starts** in the air near the south edge, heading north at **120 u** and **110 u/s**,
   with **80%** throttle.
 - **The ground:** touching it is a crash, and the run ends.
@@ -120,11 +134,17 @@ The simulation runs at a fixed **60 ticks per second**.
 
 ### Guns
 
-- Fixed, firing forward along the nose, pitch included. **Two guns** in the cowling (the P-26's
-  layout), 1 u either side of the nose, fire in turn.
-- **12 rounds/s**, **600 rounds** (50 s of fire). Rounds leave at **360 u/s** plus the plane's
-  speed and last **0.8 s**. **2 damage** per hit (owner, 2026-11-26, with the pilot's wounds
-  below, so every part matters).
+- Fixed, firing forward along the nose, pitch included.
+- **Each plane carries its real guns** (owner, 2026-11-26), with their real rate of fire and ammo.
+  Damage depends on calibre (`planes.md`): rifle calibre 1, .50 cal 2.5, 20 mm 8.
+- **The P-26A:** two .30 cal guns in the cowling, 1 u either side of the nose, each at about
+  1,000 rounds/min with 500 rounds. That's about 33 rounds a second together, for about 30 s of
+  fire.
+- **The He 51:** two 7.92 mm MG 17s, the same way.
+- Rifle-calibre rounds leave at **360 u/s** plus the plane's speed and last **0.8 s**. That's a
+  game value, not the real muzzle velocity.
+- *(PR 3-4 had 12 rounds/s doing 2 damage each. Real guns replace that, with damage by calibre in
+  its place.)*
 - **Every 3rd round is a tracer** (owner, 2026-11-26), drawn as a short streak. The others are
   invisible but hit all the same.
 - **Hitting a plane:** a round's path passes within **8 u** of it on the ground, and the round is
@@ -143,13 +163,16 @@ The simulation runs at a fixed **60 ticks per second**.
 You judge other planes' heights from their **shadows only**. There are no height markers.
 
 Under auto-aim, a round's climb is set when it's fired, toward the nearest plane or drone in the
-cone. Its hit is then tested with the forgiving band. Until PR 6's options menu, **F3** cycles the
+cone. Its hit is then tested with the forgiving band. Until PR 7's options menu, **F3** cycles the
 rule (or `--height-rule forgiving|strict|auto`).
 
 ### Bombs
 
-- **4 bombs.** Each falls from the plane's height and carries its speed, under g. From 120 u at
-  150 u/s, a bomb lands about 245 u ahead.
+- **Each plane carries its real bombs** (`planes.md`): the P-26A **2 × 100 lb**, the He 51
+  **6 × 10 kg**. The blast scales with the bomb's weight (a 100 lb bomb is the 20 u / 40 damage
+  below).
+- Each bomb falls from the plane's height and carries its speed, under g. From 120 u at 150 u/s,
+  a bomb lands about 245 u ahead.
 - **Hold Space to ripple** (owner, 2026-11-26). One bomb drops at once, then one every **0.3 s**
   until you let go or run out. Tapping faster than that doesn't drop two at once.
 - Each burst leaves a **scorch mark that fades over 30 s** (owner).
@@ -164,7 +187,7 @@ rule (or `--height-rule forgiving|strict|auto`).
 
 ### Practice targets
 
-Damage (PR 4) and enemies (PR 5) come after weapons, so there are practice targets to shoot at
+Damage (PR 4) and enemies (PR 6) come after weapons, so there are practice targets to shoot at
 (owner, 2026-11-26). They stay afterwards as a developer tool.
 - **4 drones** circle at **40, 90, 140 and 200 u** at **70 u/s**, over the middle of the map. They
   use the fighter model, tinted orange-red.
@@ -203,7 +226,7 @@ Damage (PR 4) and enemies (PR 5) come after weapons, so there are practice targe
   - a lost wing or tail is missing from the sprite. Those sprites are baked the first time they're
     needed.
 
-  Until PR 6's damage diagram, the readout shows each part's stage in colour.
+  Until PR 7's damage diagram, the readout shows each part's stage in colour.
 - **The display is stepped.** The HUD and the damage diagram show each part in one of four stages,
   plus destroyed:
 
@@ -251,11 +274,14 @@ Flying so the enemy is behind you protects the engine and pilot, at the cost of 
 
 Enemy planes use the same flight and damage model as the player, driven by AI input commands.
 
+The enemy is the **other nation** (`planes.md`): fly the US and you fight Germany's He 51s and He
+111Bs over German flak; fly Germany and you fight US P-26As and B-10Bs over US flak.
+
 ### Fighters
 
 | | |
 |---|---|
-| Plane | Same as the player's |
+| Plane | The enemy nation's fighter (He 51 or P-26A), with its real stats |
 | Style | Each fighter gets one of three, at random |
 | Turn-fighter | Gets on your tail and stays there |
 | Dive-and-climb | Climbs above you, dives through, climbs away |
@@ -263,25 +289,39 @@ Enemy planes use the same flight and damage model as the player, driven by AI in
 
 ### Bombers
 
-- They fly **south in groups of 2**, at **120-180 u** of height and **90 u/s**, to bomb your base.
-- They're tough: engine **120**, each wing **100**, fuselage **160**, tail **40**.
-- **Gunners** (tail and top) fire at any plane within **160 u**, using the forgiving band.
-- **Each gunner can be knocked out on its own.** It takes **3 hits**, like a pilot, and then
-  stops firing; the bomber flies on.
-  - The tail gunner takes **15%** of hits from behind, out of the fuselage's share.
-  - The top gunner takes **10%** of hits from any direction, out of the wings' share.
+- The enemy nation's bomber (He 111B-2 or B-10B), with its real stats.
+- They fly **south in groups of 2**, at **8,000-15,000 ft** (160-300 u) near cruising speed, to
+  bomb your base.
+- They're tough: **two engines of 60 HP each** (losing one halves the power), each wing **100**,
+  fuselage **160**, tail **40**.
+- **Three gunners** (nose, dorsal, ventral), with the bomber's real guns and rate, fire at any
+  plane within **160 u** in their arcs, using the forgiving band.
+  - **Nose:** forward, ±60° of the nose.
+  - **Dorsal:** behind and above, ±120° of the tail.
+  - **Ventral:** behind and below, ±60° of the tail.
+- **Each gunner can be knocked out on its own.** It takes **3 wounds** (5 damage each), like a
+  pilot, and then stops firing; the bomber flies on.
+  - The nose gunner takes **10%** of hits from ahead, out of the engines' share.
+  - The dorsal and ventral gunners each take **8%** of hits from behind, out of the fuselage's
+    share.
 - In v0.1 a bomber reaching the south edge shows "Bomber reached base" and adds to a counter in
   the summary. It costs nothing until v0.2.
 
 ### Flak guns
 
-- On the ground, **8 at the start**, in clusters across the middle and north of the map.
-- They fire a burst every **2.5 s** at where a plane in range is heading. Range is **320 u**
-  across the ground; they can't reach above **200 u**.
-- **Less accurate the higher you are:** burst scatter is **4 u** plus **0.15 u** per unit of the
-  target's height, so about 34 u at 200 u.
-- Each burst has a blast radius of **14 u** and does **12 damage** at the centre.
-- **30 HP.** Bombs and strafing destroy them.
+- On the ground, **8 at the start**, in clusters across the middle and north of the map. They're
+  the enemy nation's **real light and heavy guns** (`planes.md`), half of each.
+- **Light flak** (2 cm Flak 30, or the US 37 mm M1) fires aimed streams of shells at its real
+  rate, like guns leading the target.
+  - Deadly low; out of reach above about 3,500 ft (German) or 10,500 ft (US).
+  - Range across the ground is **240 u**.
+- **Heavy flak** (8.8 cm Flak 18, or the US 3-inch M3) fires timed bursts at its real rate (one
+  every 3-4 s) at where a plane is heading.
+  - It reaches about 26,000-28,000 ft, with a range of **400 u** across the ground.
+  - **Less accurate the higher you are:** burst scatter is **4 u** plus **0.15 u** per unit of
+    the target's height.
+  - Each burst has a blast radius of about **15 u** and does about **13 damage** at the centre.
+- **30 HP** (heavy guns 45). Bombs and strafing destroy them.
 
 ### Waves
 
@@ -297,11 +337,10 @@ Enemy planes use the same flight and damage model as the player, driven by AI in
   WARNING yellow, DANGER orange, CRITICAL red), and a destroyed part is drawn missing. The pilot
   has a marker.
 - **Height and speed**, with a **STALL** warning.
-  - Height is shown in **feet**, at **50 ft per u**. The ceiling reads 12,000 ft, and flak can't
-    reach above 10,000 ft. The simulation itself works in u.
-  - Speed is shown in **mph**, at **2.4 mph per u/s**: top level speed reads 360 mph, the dive
-    limit 576 mph and the stall 132 mph. The map is squeezed to fit the screen, so this scale is
-    set for the feel of a WWII fighter, not from the ground distances.
+  - Height is shown in **feet**, at **50 ft per u**; the ceiling reads 30,000 ft. The simulation
+    itself works in u.
+  - Speed is shown in **real mph**, at **1.56 mph per u/s** (`planes.md`'s scale): the P-26A's
+    top level speed reads its real 234 mph, the He 51's 205 mph.
 - **Radar / minimap:** nearby enemy planes, flak guns, and an arrow toward the base (south). It
   shows positions only, never heights.
 - **Edge warning** when near a soft edge, and the **countdown** once past it.
@@ -311,10 +350,13 @@ Enemy planes use the same flight and damage model as the player, driven by AI in
 - **End of a run:** shot down, crashed, pilot killed, left the battle area, or returned to base.
   A summary shows the
   cause, time flown, kills by type, and bombers that reached base. A key starts a new run.
-  - **Until the summary arrives (PR 6):** the view freezes with a banner giving the cause and the
+  - **Until the summary arrives (PR 7):** the view freezes with a banner giving the cause and the
     time flown. Enter or R starts a new run (owner, 2026-11-26).
 - **Pause menu (Esc):** resume, restart, controls (rebinding), options (gunnery height rule),
   quit.
+- **Before a run, you choose your nation:** the US or Germany in v0.1 (owner, 2026-11-26). You fly
+  its fighter, and the other nation is the enemy. A simple screen and `--nation us|de` come in
+  PR 5; PR 7's menus make it a proper screen.
 
 ## Look (placeholder art)
 
@@ -324,11 +366,18 @@ Enemy planes use the same flight and damage model as the player, driven by AI in
     rises and drops;
   - **3 banks** (left, level, right).
 - That's 864 poses, in 48x48 cells, baked in about 0.1 s.
-- **The player's fighter** is a blocky original model in the shape of the **Boeing P-26
-  "Peashooter"** (owner, 2026-11-26).
-  - Its shape: low wing, big round radial cowling, wheel spats, open cockpit with headrest.
-  - Its colours: olive drab fuselage, yellow wings and tail, a red spinner. No national markings.
-  - The flight numbers above are the game's, not the real P-26's (about 234 mph top speed).
+- **Every plane is a blocky original model of the real aircraft,** in its nation's pre-war colours
+  and with no national markings (`planes.md`).
+  - **Boeing P-26A** (owner, 2026-11-26): low wing, big round radial cowling, wheel spats, open
+    cockpit with headrest. Olive drab fuselage, yellow wings and tail, red spinner.
+  - **Heinkel He 51:** biplane (upper and lower wings with struts), inline engine, fixed gear.
+    Light grey.
+  - **Martin B-10B:** twin-engine, glazed nose turret, enclosed cockpits. True blue fuselage,
+    yellow wings.
+  - **Heinkel He 111B:** twin-engine, rounded wings, stepped cockpit, dorsal and ventral guns.
+    Green and brown splinter over pale blue.
+  - Twin-engined planes are 7 parts: each engine is its own part, so a lost engine can smoke on
+    its own.
 - The models are drawn in the true 2:1 view, flat-shaded by a sun from the upper left. A 1 px
   dark outline makes them read on any field.
 - Lost wings and the tail are left off the model, so damage shows at every angle without
@@ -363,8 +412,17 @@ Enemy planes use the same flight and damage model as the player, driven by AI in
 2. Flight: physics, fuel, glide, stall, edges, shadow, the baked plane sprites.
 3. Weapons: guns, bombs, the three height rules, heavy-weapon switching.
 4. Damage: parts, hit location, effects, stages, breakage, crashes, collisions.
-5. Enemies: fighter styles, bombers with gunners, flak, waves.
-6. HUD, pause and controls menus, rebinding, the run summary.
+5. **Real planes** (owner, 2026-11-26):
+   - the roster and scale from `planes.md`, so each plane flies, climbs, turns and stalls by its
+     real stats;
+   - guns by calibre with real rates and ammo, and bombs by weight;
+   - twin engines;
+   - the 30,000 ft ceiling with the ground zoom, and real mph and feet;
+   - the He 51 model;
+   - choosing the US or Germany.
+6. Enemies: the other nation's fighters (three styles), bombers with three gunners, light and heavy
+   flak, waves. The B-10B and He 111B models.
+7. HUD, pause and controls menus, rebinding, the nation screen, the run summary.
 
 The simulation (`src/core`) has no SDL in it. It's deterministic for a given seed and list of
 input commands, so tests can replay scripted flights.
@@ -372,6 +430,9 @@ input commands, so tests can replay scripted flights.
 ## Acceptance
 
 **Unit tests** (core only):
+- **Real planes:** each plane's worked-out flight hits its scaled top speed, best climb and stall
+  (within 3%), and its turn rate; guns fire at their real rates with their real ammo; damage
+  follows calibre; a twin loses half its power with one engine; the ceiling is 30,000 ft.
 - **Flight:**
   - climbing loses speed and diving gains it, up to the dive limit;
   - stall below 55 u/s drops the nose;
@@ -403,6 +464,12 @@ input commands, so tests can replay scripted flights.
 
 ## Open questions
 
-None. The first draft's eight questions are answered above, and so are the two that came out of
-them: speed shows in mph, and bomber gunners are knocked out as described under Bombers. New
-questions that come up while building go to the owner and are added here.
+The first draft's eight questions are answered above, and so are the two that came out of them:
+speed shows in mph, and bomber gunners are knocked out as described under Bombers.
+
+From the real-planes rework (and `planes.md`'s own open questions):
+1. **The three gunners' hit shares:** the earlier two-gunner rule, re-cut for three. The nose takes
+   10% from ahead; the dorsal and ventral take 8% each from behind. Right?
+2. **Bomber cruising heights** of 8,000-15,000 ft: right for these pre-war bombers?
+3. **Flak ranges across the ground** (light 240 u, heavy 400 u) and heavy-gun HP (45): start
+   values to check in play.

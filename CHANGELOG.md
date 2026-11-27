@@ -8,6 +8,7 @@ them under its version (see CLAUDE.md, "Releasing").
 ### Design
 - `design/game.md`: the game overview, rules agreed so far, and open questions.
 - `design/flight.md`: the v0.1 Fly and fight spec.
+- `design/planes.md`: real planes, nations and eras; the v0.1 roster (P-26A, He 51B, B-10B, He 111B-2) with sources and the scale; `game.md` and `flight.md` reworked to match (30,000 ft ceiling with the ground zooming out, guns by calibre, twin engines, choosing your nation).
 
 ### Added
 - Updater: `update-game.cmd` / `update-game.ps1` (Windows) and `update-game.sh` (Linux, Steam Deck) install or update the game to the newest build on GitHub, keeping `tuning.txt`; they ship inside every build.

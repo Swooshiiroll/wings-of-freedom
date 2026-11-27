@@ -25,7 +25,9 @@ from it: all art, sound and code are original.
   and the space left over shows more of the world. The HUD stays pinned to the edges.
 - **Planes are drawn at 32 headings** (one every 11.25°). Flight itself is smooth; only the
   sprite steps.
-- **Height** shows as the gap between a plane and its shadow on the ground.
+- **Height** shows as the gap between a plane and its shadow on the ground. Every plane can climb
+  to **30,000 ft**, and **the ground zooms out as you climb** (to half size at the top), so the
+  plane and its shadow stay in view (owner, 2026-11-26).
 
 ## Flying
 
@@ -53,7 +55,9 @@ The details for v0.1 are in `flight.md`.
 
 ## Weapons
 
-- The first plane carries **guns and bombs**, each with limited ammunition.
+- Each plane carries **its real guns and bombs**, with their real rate of fire and ammunition.
+  Damage depends on calibre: rifle-calibre machine guns are light, .50 cal heavier, and cannon
+  much heavier (`planes.md`).
 - **Hitting other planes at different heights** is a game option, with three rules:
   - **Forgiving band** (the default): guns hit if the target is roughly at your height.
   - **Strict:** you must match its height closely.
@@ -112,19 +116,31 @@ Flying off the south edge mid-round takes you to base. **The battle goes on** wh
 - Losing the last pilot ends the campaign.
 - **The campaign is saved** between rounds: planes, upgrades, points, pilots and the round number.
 
-## Eras and planes
+## Real planes, nations and eras
 
-- The planes progress **through eras**, from World War II propeller planes up to jets, bought
-  between rounds.
-- The first plane, and the whole first era, is World War II.
+Every plane is a **real aircraft** (owner, 2026-11-26), with its real stats kept in proportion. The
+full design, with sources, is in `planes.md`.
+- **Real readouts, scaled action:** the HUD shows the real mph, feet and rounds per minute, and
+  fixed scale factors keep the dogfights arcade-paced.
+- **Eras, 1930s to 1990s:** pre-war, WWII, Korea, Vietnam and the Cold War. The campaign moves
+  through them.
+- **Six nations:** the US, the UK, Germany, Italy, Japan and the USSR.
+  - **You choose your country (Axis or Allied) before a mission** and fly its planes.
+  - Each mission is against **one nation of the other side**.
+  - Sides follow history: Allies against the Axis through WWII, then West against East.
+- **Maps by theatre:** the European farmland first, and a Pacific map for Japan.
+- **v0.1 is the pre-war US against Germany:**
+  - US: the Boeing P-26A fighter and the Martin B-10B bomber;
+  - Germany: the Heinkel He 51 fighter and the He 111B bomber.
 
 ## Enemies
 
-The first set, for v0.1:
+The first set, for v0.1, all real types of the enemy nation:
 - **Enemy fighters** that chase and shoot you;
-- **Enemy bombers**, bigger and tougher, with defensive gunners;
-- **Flak guns** on the ground, less accurate the higher you fly and out of reach above a ceiling.
-  They are also the first ground targets to bomb.
+- **Enemy bombers**, bigger and tougher, with nose, dorsal and ventral gunners;
+- **Flak guns** on the ground, real light and heavy types. Light flak is deadly low and can't reach
+  high. Heavy flak reaches most of the way up and is less accurate the higher you fly. They are
+  also the first ground targets to bomb.
 
 Enemy bombers head south to bomb your base, so you have to intercept them.
 
@@ -152,11 +168,11 @@ How the code is shaped for this from the start:
 
 | Milestone | Holds |
 |---|---|
-| v0.1 Fly and fight | One WWII fighter; flight with altitude, fuel, guns, bombs, the damage model; enemy fighters, bombers and flak; HUD; controls menu; the height-rule option. Crashing or flying home restarts. |
+| v0.1 Fly and fight | The pre-war US and Germany (P-26A, B-10B, He 51, He 111B) with real stats; choosing your nation; flight to 30,000 ft, fuel, guns by calibre, bombs, the damage model; enemy fighters, bombers and real flak; HUD; controls menu; the height-rule option. Crashing or flying home restarts. |
 | v0.2 Strike loop | Objectives, base visits and services, runway grace period, SOS and escort, points, kill chains, the shop, pilots, saving |
-| v0.3 WWII era and art | More WWII planes and enemies, real art replacing the placeholders, sound |
+| v0.3 Pre-war nations and art | The UK, Italy, Japan and the USSR's pre-war planes, the Pacific map, real art replacing the placeholders, sound |
 | v0.4 Co-op | Two or more players, friendly fire, direct IP and a hosted server |
-| Backlog | Later eras, one-monitor-per-player, gamepad, Android, Steam |
+| Backlog | WWII, Korea, Vietnam and Cold War eras; one-monitor-per-player, gamepad, Android, Steam |
 
 ## Open questions
 
@@ -164,8 +180,8 @@ How the code is shaped for this from the start:
    at base.
 2. **The Strike map:** terrain, objectives, and where the base sits (v0.1's test field is in
    `flight.md`).
-3. **Eras and the plane roster:** which eras, how many planes each, and what jets add (missiles,
-   radar?).
+3. **The plane roster beyond v0.1** (an open list in `planes.md`), and what jets add (missiles,
+   radar?). Jets are 2-3 times faster, so the maps or the scale will need to grow for them.
 4. **Points:** values per kill, the kill-chain rule, and prices of upgrades, planes and pilots.
 5. **What a bomber reaching base costs** in v0.2.
 6. **One-monitor-per-player:** how players provide input (two keyboards, gamepads?).
