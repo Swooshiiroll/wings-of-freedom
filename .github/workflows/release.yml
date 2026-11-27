@@ -59,7 +59,7 @@ jobs:
       - name: Notes artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-notes
+          name: notes # not release-*: those are the builds the publish step attaches
           path: out-notes.md
 
       - name: Checks and tests
@@ -110,4 +110,4 @@ jobs:
           shopt -s nullglob
           files=(dist/release-*/*)
           gh release create "$GITHUB_REF_NAME" "${files[@]}" \
-            --title "Wings of Freedom $GITHUB_REF_NAME" --notes-file dist/release-notes/out-notes.md --verify-tag $flags
+            --title "Wings of Freedom $GITHUB_REF_NAME" --notes-file dist/notes/out-notes.md --verify-tag $flags
