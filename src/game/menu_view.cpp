@@ -49,6 +49,30 @@ void centred(SDL_Renderer* r, int view_w, float y, const std::string& s, SDL_Col
     return "?";
 }
 
+[[nodiscard]] const char* panel_label(PanelSize p) noexcept {
+    switch (p) {
+    case PanelSize::Large:
+        return "Large";
+    case PanelSize::Medium:
+        return "Medium";
+    case PanelSize::Small:
+        return "Small";
+    }
+    return "?";
+}
+
+[[nodiscard]] const char* units_label(Units u) noexcept {
+    switch (u) {
+    case Units::Nation:
+        return "Nation";
+    case Units::Imperial:
+        return "Imperial";
+    case Units::Metric:
+        return "Metric";
+    }
+    return "?";
+}
+
 [[nodiscard]] std::string aim_hint(HeightRule h, const WeaponParams& w) {
     const float band = h == HeightRule::Strict ? w.band_strict_u : w.band_forgiving_u;
     if (h == HeightRule::AutoAim) {
@@ -74,6 +98,10 @@ void centred(SDL_Renderer* r, int view_w, float y, const std::string& s, SDL_Col
             return aim_hint(s.your_aim, w);
         case kOptionsEnemyAim:
             return aim_hint(s.enemy_aim, w);
+        case kOptionsPanel:
+            return "The instrument panel's height";
+        case kOptionsUnits:
+            return "Arrows and banners (gauges keep theirs)";
         default:
             break;
         }
@@ -157,10 +185,14 @@ void draw_menu(SDL_Renderer* r, const Menu& m, const Settings& s, const WeaponPa
                     : i == kOptionsAutoLevel ? "Auto-leveling"
                     : i == kOptionsYourAim   ? "Your gun aim"
                     : i == kOptionsEnemyAim  ? "Enemy gun aim"
+                    : i == kOptionsPanel     ? "Dashboard size"
+                    : i == kOptionsUnits     ? "Units"
                                              : "Back";
             value = i == kOptionsAutoLevel  ? level_label(s.auto_level)
                     : i == kOptionsYourAim  ? aim_label(s.your_aim)
                     : i == kOptionsEnemyAim ? aim_label(s.enemy_aim)
+                    : i == kOptionsPanel    ? panel_label(s.panel)
+                    : i == kOptionsUnits    ? units_label(s.units)
                                             : "";
         } else {
             label = action                ? action_name(static_cast<Action>(i))

@@ -6,7 +6,9 @@
 #include <string>
 #include <string_view>
 
+#include "core/dashboard.hpp"
 #include "core/input.hpp"
+#include "core/units.hpp"
 #include "core/weapons.hpp"
 
 namespace wof {
@@ -58,11 +60,14 @@ void clear_key(KeyBindings& keys, Action a, int slot) noexcept;
 
 [[nodiscard]] const char* auto_level_name(AutoLevel level) noexcept; // "on", "assisted", "off"
 bool parse_auto_level(std::string_view text, AutoLevel& out) noexcept;
+[[nodiscard]] const char* units_name(Units u) noexcept; // "nation", "imperial", "metric"
 
 struct Settings {
     AutoLevel auto_level = AutoLevel::On;
     HeightRule your_aim = HeightRule::Forgiving;
     HeightRule enemy_aim = HeightRule::Forgiving;
+    PanelSize panel = PanelSize::Large; // the dashboard's height
+    Units units = Units::Nation;        // for arrows and banners
     KeyBindings keys = default_keys();
 
     friend constexpr bool operator==(const Settings&, const Settings&) = default;

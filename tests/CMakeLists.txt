@@ -5,6 +5,7 @@ add_executable(wof_tests
   test_ai.cpp
   test_planes.cpp
   test_camera.cpp
+  test_dashboard.cpp
   test_damage.cpp
   test_fighter.cpp
   test_fixed_step.cpp

@@ -206,7 +206,7 @@ Damage (PR 4) and enemies (PR 6) come after weapons, so there are practice targe
 - **4 drones** circle at **40, 90, 140 and 200 u** at **70 u/s**, over the middle of the map. They
   use the fighter model, tinted orange-red.
 - **8 ground targets** (white and red bullseyes, 10 u across) sit along the way north.
-- Hits don't hurt them. They glow, and their hit count shows for 2 s. The readout shows the total.
+- Hits don't hurt them. They glow, and their hit count shows for 2 s. The dashboard's message strip shows the total.
 - Off at the start since enemies arrived. **F2** or `--targets` turns them on.
 
 ## Damage
@@ -240,7 +240,7 @@ Damage (PR 4) and enemies (PR 6) come after weapons, so there are practice targe
   - a lost wing or tail is missing from the sprite. Those sprites are baked the first time they're
     needed.
 
-  Until PR 7's damage diagram, the readout shows each part's stage in colour.
+  The dashboard's wireframe shows each part's stage in colour (dashboard.md).
 - **The display is stepped.** The HUD and the damage diagram show each part in one of four stages,
   plus destroyed:
 
@@ -356,7 +356,7 @@ then flak.
 - **Wave n** brings **1 + n/2 fighters** (rounded down). Every 3rd wave adds **2 bombers**.
 - Fighters arrive **within about 3,000 ft of your height** (owner, 2026-11-27). At most **6** are in
   the air; the rest of a wave waits for a place.
-- **Every wave is announced** with a banner (its size and height), and the readout counts waves
+- **Every wave is announced** with a notice on the dashboard (its size and height), which also counts waves
   and kills (owner).
 - **Off-screen enemies** get an arrow at the screen edge, with their height against yours (owner).
 - **Bombers** (owner, 2026-11-27) stay at 8,000-15,000 ft, fly at their real cruising speed, and
@@ -365,21 +365,14 @@ then flak.
 
 ## HUD
 
-- **Fuel** gauge.
-- **Weapons:** rounds left, bombs left, and the selected heavy weapon.
-- **Damage diagram:** a small outline of the plane. Each part is coloured by stage (OK green,
-  WARNING yellow, DANGER orange, CRITICAL red), and a destroyed part is drawn missing. The pilot
-  has a marker.
-- **Height and speed**, with a **STALL** warning.
-  - Height is shown in **feet**, at **50 ft per u**; the ceiling reads 30,000 ft. The simulation
-    itself works in u.
-  - Speed is shown in **real mph**, at **1.56 mph per u/s** (`planes.md`'s scale): the P-26A's
-    top level speed reads its real 234 mph, the He 51's 205 mph.
-- **Radar / minimap:** nearby enemy planes, flak guns, and an arrow toward the base (south). It
-  shows positions only, never heights.
-- **Edge warning** when near a soft edge, and the **countdown** once past it.
-- **Pitch ladder:** -40° to +40° with your angle marked, and the Assisted zone shaded (owner,
-  2026-11-27).
+- **The cockpit dashboard** (owner, 2026-11-27): an instrument panel across the bottom, with every
+  gauge and warning. See `dashboard.md`.
+- **Height and speed** read in the nation's units on the gauges:
+  - Height at **50 ft per u**; the ceiling reads 30,000 ft. The simulation itself works in u.
+  - Speed as **real mph**, at **1.56 mph per u/s** (`planes.md`'s scale): the P-26A's top level
+    speed reads its real 234 mph, the He 51's 205 mph.
+- **Radar / minimap:** nearby enemy planes, flak guns, and an arrow toward the base (south), for
+  eras that had radar (not the pre-war one). It shows positions only, never heights.
 
 ## Run end and menus
 
@@ -390,7 +383,7 @@ then flak.
     time flown. Enter or R starts a new run (owner, 2026-11-26).
 - **Pause menu (Esc;** owner, 2026-11-27): also opens when the window loses focus, and from the
   run-end screen. Resume, restart run, options, quit.
-  - **Options:** controls, auto-leveling, your gun aim, enemy gun aim.
+  - **Options:** controls, auto-leveling, your gun aim, enemy gun aim, dashboard size, units.
   - **Controls:** two keys per action. Binding a key already in use moves it here; Delete clears
     one; reset to defaults. Esc and F1-F12 are reserved.
   - Keyboard (arrows or W/S, Enter, Esc) and mouse. The nation screen works the same way.

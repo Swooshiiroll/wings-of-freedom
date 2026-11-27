@@ -29,6 +29,8 @@ TEST_CASE("The settings file round-trips") {
     s.auto_level = AutoLevel::Assisted;
     s.your_aim = HeightRule::Strict;
     s.enemy_aim = HeightRule::AutoAim;
+    s.panel = PanelSize::Small;
+    s.units = Units::Metric;
     CHECK(bind_key(s.keys, Action::Guns, 1, 13));
     clear_key(s.keys, Action::ThrottleUp, 1);
     Settings back;
