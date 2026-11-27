@@ -271,7 +271,7 @@ int parse_options(int argc, char** argv, Options& out) {
                 if (name == "all") {
                     out.upgrades = kAllUpgrades;
                 } else if (parse_upgrade(name, u)) {
-                    out.upgrades |= upgrade_bit(u);
+                    out.upgrades = static_cast<UpgradeSet>(out.upgrades | upgrade_bit(u));
                 } else {
                     std::fprintf(stderr, "--upgrades takes all, or guns,engine,fuel,armour,"
                                          "bombs,sight\n");
@@ -995,24 +995,6 @@ std::optional<Nation> choose_nation(SDL_Renderer* r) {
         SDL_SetRenderScale(r, 1.0f, 1.0f);
         SDL_RenderPresent(r);
     }
-}
-
-const char* banner_of(Outcome o) {
-    switch (o) {
-    case Outcome::Crashed:
-        return "CRASHED";
-    case Outcome::LeftArea:
-        return "LEFT THE BATTLE AREA";
-    case Outcome::ReturnedHome:
-        return "RETURNED TO BASE";
-    case Outcome::ShotDown:
-        return "SHOT DOWN";
-    case Outcome::PilotKilled:
-        return "PILOT KILLED";
-    case Outcome::Flying:
-        break;
-    }
-    return "";
 }
 
 // Developer tool (--damage): sets parts' HP (and the pilot's damage) from "engine=10,lwing=0,...",

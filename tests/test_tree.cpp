@@ -123,9 +123,9 @@ TEST_CASE("Each upgrade changes what it says, on every fighter") {
             CHECK(stock.flight == r.planes[static_cast<std::size_t>(id)].flight);
 
             const PlaneRules guns = fit(upgrade_bit(Upgrade::Guns));
-            const bool better_gun =
-                guns.gun_count > stock.gun_count ||
+            const bool new_fifty =
                 guns.guns[1].calibre == Calibre::Heavy && stock.guns[1].calibre == Calibre::Rifle;
+            const bool better_gun = guns.gun_count > stock.gun_count || new_fifty;
             CHECK(better_gun);
 
             const PlaneRules engine = fit(upgrade_bit(Upgrade::Engine));
@@ -194,7 +194,8 @@ TEST_CASE("progress.txt keeps points, planes and upgrades for both nations") {
     g.nations[0].points = 450;
     g.nations[0].planes[1].owned = true;
     g.nations[0].flying = 1;
-    g.nations[0].planes[1].upgrades = upgrade_bit(Upgrade::Guns) | upgrade_bit(Upgrade::Sight);
+    g.nations[0].planes[1].upgrades =
+        static_cast<UpgradeSet>(upgrade_bit(Upgrade::Guns) | upgrade_bit(Upgrade::Sight));
     g.nations[1].points = 12;
     g.nations[1].planes[0].upgrades = upgrade_bit(Upgrade::Fuel);
     Progress back;

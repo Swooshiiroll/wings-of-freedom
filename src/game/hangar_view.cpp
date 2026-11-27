@@ -1,9 +1,11 @@
 #include "game/hangar_view.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/plane_rules.hpp"

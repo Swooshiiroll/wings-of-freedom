@@ -80,7 +80,8 @@ bool buy_upgrade(NationProgress& n, int step, Upgrade u, const Prices& p) noexce
         return false;
     }
     n.points -= upgrade_price(u, p);
-    n.planes[static_cast<std::size_t>(step)].upgrades |= upgrade_bit(u);
+    PlaneProgress& plane = n.planes[static_cast<std::size_t>(step)];
+    plane.upgrades = static_cast<UpgradeSet>(plane.upgrades | upgrade_bit(u));
     return true;
 }
 
@@ -153,7 +154,7 @@ bool from_progress(std::string_view text, Progress& g, std::string& errors) {
                         const auto space = rest.find(' ');
                         Upgrade u{};
                         if (parse_upgrade(rest.substr(0, space), u)) {
-                            set |= upgrade_bit(u);
+                            set = static_cast<UpgradeSet>(set | upgrade_bit(u));
                         } else {
                             known = false;
                         }
