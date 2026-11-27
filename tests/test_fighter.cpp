@@ -304,7 +304,8 @@ TEST_CASE("Seen from any heading, every part of the tail is drawn") {
                 const float heading = static_cast<float>(step) * 11.25f;
                 CAPTURE(heading);
                 const Sprite s = plane(one, heading, 0.0f, 0.0f);
-                CHECK(std::any_of(s.block.begin(), s.block.end(), [](auto id) { return id >= 0; }));
+                CHECK(std::any_of(s.block.begin(), s.block.end(),
+                                  [](auto block) { return block >= 0; }));
             }
         }
     }
@@ -322,7 +323,8 @@ TEST_CASE("Heading north or south, the spinner shows too") {
         }
         for (const float heading : {0.0f, 180.0f}) {
             const Sprite s = plane(spinner, heading, 0.0f, 0.0f);
-            CHECK(std::any_of(s.block.begin(), s.block.end(), [](auto id) { return id >= 0; }));
+            CHECK(
+                std::any_of(s.block.begin(), s.block.end(), [](auto block) { return block >= 0; }));
         }
     }
 }
