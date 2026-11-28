@@ -8,7 +8,7 @@ namespace {
 // The actions' names in the file, in Action order.
 constexpr std::array<const char*, kActions> kFileNames = {
     "turn_left",     "turn_right", "dive",  "climb",        "throttle_up",
-    "throttle_down", "guns",       "heavy", "switch_heavy",
+    "throttle_down", "guns",       "heavy", "switch_heavy", "next_wave",
 };
 
 constexpr int kMaxScancode = 511;
@@ -57,6 +57,8 @@ const char* action_name(Action a) noexcept {
         return "Heavy weapon";
     case Action::SwitchHeavy:
         return "Switch heavy";
+    case Action::NextWave:
+        return "Next wave";
     }
     return "?";
 }
@@ -72,6 +74,7 @@ KeyBindings default_keys() noexcept {
     k[static_cast<std::size_t>(Action::Guns)] = {9, kNoKey};         // F
     k[static_cast<std::size_t>(Action::Heavy)] = {44, kNoKey};       // Space
     k[static_cast<std::size_t>(Action::SwitchHeavy)] = {43, kNoKey}; // Tab
+    k[static_cast<std::size_t>(Action::NextWave)] = {17, kNoKey};    // N
     return k;
 }
 
@@ -151,6 +154,7 @@ std::string to_settings(const Settings& s) {
 
 bool from_settings(std::string_view text, Settings& s, std::string& errors) {
     const std::size_t errors_before = errors.size();
+    std::array<bool, kActions> given{}; // actions the text sets
     KeyValueLines lines(text);
     while (lines.next()) {
         if (lines.bad()) {
@@ -192,6 +196,7 @@ bool from_settings(std::string_view text, Settings& s, std::string& errors) {
                 continue;
             }
             ok = parse_pair(value, s.keys[i]);
+            given[i] = given[i] || ok;
         } else {
             report_line(errors, lines.line(), "unknown key " + std::string(key));
             continue;
@@ -199,6 +204,23 @@ bool from_settings(std::string_view text, Settings& s, std::string& errors) {
         if (!ok) {
             report_line(errors, lines.line(),
                         std::string(key) + ": bad value " + std::string(value));
+        }
+    }
+    // A key the text gives to one action doesn't stay on another it says nothing about.
+    const auto taken = [&](int code) {
+        for (std::size_t j = 0; j < kActions; ++j) {
+            if (given[j] && (s.keys[j].main == code || s.keys[j].alt == code)) {
+                return true;
+            }
+        }
+        return false;
+    };
+    for (std::size_t i = 0; i < kActions; ++i) {
+        for (int slot = 0; slot < kKeySlots; ++slot) {
+            int& code = slot_of(s.keys[i], slot);
+            if (!given[i] && code != kNoKey && taken(code)) {
+                code = kNoKey;
+            }
         }
     }
     return errors.size() == errors_before;

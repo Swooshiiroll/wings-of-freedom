@@ -26,7 +26,7 @@ struct IntKey {
 };
 
 // Every value, in the file's order. The int ranges match validate(GroundParams&).
-constexpr std::array<FloatKey, 108> kFloats = {{
+constexpr std::array<FloatKey, 109> kFloats = {{
     {"Camera: how far ahead it looks (u), and how fast that swings round after a turn (per s)",
      "camera.lead_u", [](Tuning& t) -> float& { return t.camera.lead_u; }, 0.0f, 400.0f},
     {nullptr, "camera.lead_ease", [](Tuning& t) -> float& { return t.camera.lead_ease; }, 0.1f,
@@ -183,17 +183,21 @@ constexpr std::array<FloatKey, 108> kFloats = {{
     {nullptr, "ai.head_on_run_u", [](Tuning& t) -> float& { return t.rules.ai.head_on_run_u; },
      50.0f, 2000.0f},
     {nullptr, "ai.extend_s", [](Tuning& t) -> float& { return t.rules.ai.extend_s; }, 0.1f, 30.0f},
-    {"Waves: the first and then every (s), arriving within this of your height (u), spread (u) "
-     "along the edge, how far along it (u) and inside it (u); at most wave.max_alive in the air",
+    {"Waves: the first after (s); once everything's down the next after a break (s), or call it "
+     "once a wave has been up this long (s). Fighters appear this far from you (u), within this of "
+     "your height (u), this far apart (u); raids come in this far inside the north edge (u); at "
+     "most wave.max_alive fighters in the air",
      "wave.first_s", [](Tuning& t) -> float& { return t.rules.wave.first_s; }, 0.0f, 600.0f},
-    {nullptr, "wave.every_s", [](Tuning& t) -> float& { return t.rules.wave.every_s; }, 1.0f,
+    {nullptr, "wave.break_s", [](Tuning& t) -> float& { return t.rules.wave.break_s; }, 0.0f,
      600.0f},
+    {nullptr, "wave.call_after_s", [](Tuning& t) -> float& { return t.rules.wave.call_after_s; },
+     1.0f, 3600.0f},
+    {nullptr, "wave.out_u", [](Tuning& t) -> float& { return t.rules.wave.out_u; }, 500.0f,
+     20000.0f},
     {nullptr, "wave.height_spread_u",
      [](Tuning& t) -> float& { return t.rules.wave.height_spread_u; }, 0.0f, 500.0f},
     {nullptr, "wave.spread_u", [](Tuning& t) -> float& { return t.rules.wave.spread_u; }, 0.0f,
      1000.0f},
-    {nullptr, "wave.along_u", [](Tuning& t) -> float& { return t.rules.wave.along_u; }, 0.0f,
-     30000.0f},
     {nullptr, "wave.edge_inset_u", [](Tuning& t) -> float& { return t.rules.wave.edge_inset_u; },
      0.0f, 2000.0f},
     {"Points: a kill within the window keeps the chain, raising the multiplier by the step up to "

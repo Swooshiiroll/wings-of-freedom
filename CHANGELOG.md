@@ -14,14 +14,15 @@ square of farmland, north straight up.
   with their real stats. You start in the first and earn the others, and six upgrades for each.
 - **Points** from kills and destroyed flak count only if you get home off the south edge, with
   bonuses for your plane's condition and the waves you flew.
-- **Enemy fighters** in waves, growing up their own tree.
+- **Enemy fighters** in waves, growing up their own tree. The next waits until you've dealt with
+  the last (or call it after 3 minutes).
 - **Enemy bombers** every 3rd wave, heading for your base, with gunners and later escorts.
 - **Flak** along a front line halfway up the map, and at sites beyond it.
 - **Flying:** throttle, climb and dive, stalls, fuel, a 30,000 ft ceiling, damage part by part.
 - **A cockpit dashboard**, and a pause menu with key rebinding and aim options.
 
 **Keys:** A/D turn, W dive, S climb, Shift/Ctrl throttle, F guns, Space bombs, Tab switch heavy
-weapon, Esc menu. **Updating:** run `update-game.cmd` (Windows) or `update-game.sh` (Linux, Steam
+weapon, N next wave (when offered), Esc menu. **Updating:** run `update-game.cmd` (Windows) or `update-game.sh` (Linux, Steam
 Deck) in the game's folder.
 
 The lines below are in the order built; later ones replace earlier ones.
@@ -32,6 +33,7 @@ The lines below are in the order built; later ones replace earlier ones.
 - `design/planes.md`: real planes, nations and eras; the v0.1 roster (P-26A, He 51B, B-10B, He 111B-2) with sources and the scale; `game.md` and `flight.md` reworked to match (30,000 ft ceiling with the ground zooming out, guns by calibre, twin engines, choosing your nation).
 
 ### Added
+- Waves wait for you: the next sets out 10 s after everything is down (fighters, bombers, escorts), with a "wave cleared" notice; after 3 minutes a popup lets you call it with N (rebindable); fighters appear about a minute out. Runs start at 8,000 ft. Your plane stays near the middle of the view, with the shadow gap holding at its widest from about 17,000 ft. `tuning.txt` is format 5: an older one is kept as `tuning-format4.txt`.
 - Releases no longer attach their own notes file as a download.
 - Enemy flak: a front line of gun groups with trenches and shell holes halfway up the map and sites beyond; machine guns, then light cannon from wave 5 and heavy guns from wave 9, with reinforcements; destroyed by strafing or bombs for 50 or 150 points.
 - Enemy bombers: the Keystone B-6A and Dornier Do 23G in the first raids, the B-10B and He 111B-2 from wave 9; formations every 3rd wave flying to your base, warned as they enter; nose, dorsal and ventral gunners in bursts that can be knocked out; escorts from wave 6; a counter for bombers that reach your base; larger bomber arrows.

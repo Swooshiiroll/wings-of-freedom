@@ -27,6 +27,7 @@ struct InputCommand {
     bool guns = false;         // held: fire the guns
     bool heavy = false;        // held: release the selected heavy weapon
     bool switch_heavy = false; // pressed this tick: select the next heavy weapon
+    bool next_wave = false;    // pressed this tick: call the next wave (design/flight.md, Waves)
     AutoLevel level = AutoLevel::On;
 
     friend constexpr bool operator==(const InputCommand&, const InputCommand&) = default;

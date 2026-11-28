@@ -198,9 +198,9 @@ TEST_CASE("With each panel size, the camera keeps your plane and shadow in view 
                 b.z = z;
                 b.heading_deg = heading;
                 Camera cam;
-                cam.snap_to(b, p, view_h);
-                const ViewXf xf =
-                    make_view(cam.focus(), z, 600.0f, 0.25f, 480, static_cast<int>(view_h));
+                cam.snap_to(b, p, view_h, ground_zoom(z, 600.0f, 0.25f));
+                const ViewXf xf = make_view(cam.focus(), z, 600.0f, 0.25f, 480,
+                                            static_cast<int>(view_h), cam.drop());
                 const ScreenPt plane = xf.at(b.x, b.y, z);
                 const ScreenPt shadow = xf.at(b.x, b.y, 0.0f);
                 CAPTURE(size);

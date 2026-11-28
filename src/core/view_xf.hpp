@@ -40,12 +40,12 @@ inline constexpr int kMaxSizeStep = 12;
 // scaled about the focus: a point lands at centre + (iso(x, y, z) − focus) × depth_scale(z).
 // Your plane's height is drawn full size, the ground (and everything else) by its depth.
 struct ViewXf {
-    ScreenPt focus;           // the iso pixel at the view's centre
+    ScreenPt focus;           // the iso pixel the world is scaled about
     float eye_z = 0.0f;       // the player's height: drawn full size
     float ceiling = 600.0f;   // where the ground is smallest
     float at_ceiling = 0.25f; // the ground's size seen from the ceiling
-    float cx = 0.0f;          // the view's centre, in view pixels
-    float cy = 0.0f;
+    float cx = 0.0f;          // where the focus is drawn, in view pixels: the view's middle,
+    float cy = 0.0f;          // or a little above or below it (core/camera.hpp, framing_of)
 
     [[nodiscard]] float scale_at(float z) const noexcept {
         return depth_scale(z, eye_z, ceiling, at_ceiling);
@@ -62,10 +62,10 @@ struct ViewXf {
 // The view for a focus, the player's height and a view size. The focus is snapped so that the
 // player's height lands on whole pixels (crisp pixel art at full size).
 [[nodiscard]] inline ViewXf make_view(ScreenPt focus, float eye_z, float ceiling, float at_ceiling,
-                                      int view_w, int view_h) noexcept {
+                                      int view_w, int view_h, float drop = 0.0f) noexcept {
     ViewXf v;
     v.cx = static_cast<float>(view_w) * 0.5f;
-    v.cy = static_cast<float>(view_h) * 0.5f;
+    v.cy = static_cast<float>(view_h) * 0.5f + drop;
     v.focus = {std::round(focus.x - v.cx) + v.cx, std::round(focus.y - v.cy) + v.cy};
     v.eye_z = eye_z;
     v.ceiling = ceiling;

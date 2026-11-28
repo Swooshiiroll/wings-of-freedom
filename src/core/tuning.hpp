@@ -31,9 +31,10 @@ struct Tuning {
 // The tuning file's format. 2 (alpha.5, real planes): each plane's flight comes from its real
 // stats, so the old per-plane flight keys are gone and the ceiling is 30,000 ft. 3 (alpha.6): the
 // tanks are doubled and the ground is a quarter size from the ceiling. 4 (alpha.10): the bigger
-// map, with waves from its edges (wave.north_inset_u replaced). A file of an older format is set
-// aside rather than read, so its old numbers don't quietly win.
-inline constexpr int kTuningFormat = 4;
+// map, with waves from its edges (wave.north_inset_u replaced). 5 (v0.1.0-pre.2): waves wait until
+// cleared (wave.every_s and along_u replaced), a higher start and a steadier camera. A file of an
+// older format is set aside rather than read, so its old numbers don't quietly win.
+inline constexpr int kTuningFormat = 5;
 
 // The format a tuning text says it is (its `format = N` line), or 1 if it doesn't say: files from
 // before the line existed.

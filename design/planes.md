@@ -201,9 +201,10 @@ Blast radius and damage scale with the cube root of the bomb's weight. A 100 lb 
     pixel art. The zoomed ground is drawn smooth, the one exception to pixel-perfect.
   - **Speed is the same at every height** (owner): the slower-looking ground up high is
     perspective.
-- **The shadow gap** grows with height to about 130 px at 30,000 ft. The camera aims 0.6 of the way
-  up from the shadow to the plane, so the plane rides higher on screen as you climb. Up high the
-  shadow also sits a little toward the screen's centre (perspective, as the camera looks ahead).
+- **The shadow gap** grows with height to **100 px** by about 17,000 ft and then holds (owner,
+  2026-11-27: it was about 130 px at 30,000 ft, with the plane riding high up the screen). The
+  plane now stays near the middle, at most 30 px above it; the world is scaled about a point below
+  the plane to keep the gap (`core/camera.hpp`, `framing_of`).
 
 ### The early bombers (the first raids)
 

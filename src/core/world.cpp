@@ -217,7 +217,10 @@ void count_through(World& w) {
 
 void step(World& world, std::span<const InputCommand> commands, const Rules& rules) {
     world.events.clear();
-    update_waves(world, rules);
+    // Only players' commands come in here, so any of them can call the next wave.
+    const bool called = std::any_of(commands.begin(), commands.end(),
+                                    [](const InputCommand& c) { return c.next_wave; });
+    update_waves(world, rules, called);
     update_flak(world, rules);
     move_targets(world.targets, rules.targets, kTickSeconds);
     for (std::size_t i = 0; i < world.bodies.size(); ++i) {

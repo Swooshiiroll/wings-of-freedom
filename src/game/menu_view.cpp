@@ -136,6 +136,17 @@ std::string key_label(int scancode) {
     return name.substr(0, kKeyChars);
 }
 
+void draw_prompt(SDL_Renderer* r, const std::string& line, int view_w) {
+    const float w = static_cast<float>(line.size()) * kGlyph + 16.0f;
+    const SDL_FRect box{std::floor((static_cast<float>(view_w) - w) * 0.5f), 20.0f, w, 18.0f};
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    colour(r, SDL_Color{18, 24, 32, 220});
+    SDL_RenderFillRect(r, &box);
+    colour(r, SDL_Color{200, 150, 70, 255});
+    SDL_RenderRect(r, &box);
+    text(r, box.x + 8.0f, box.y + 5.0f, line, SDL_Color{255, 236, 170, 255});
+}
+
 void draw_menu(SDL_Renderer* r, const Menu& m, const Settings& s, const WeaponParams& weapons,
                int view_w, int view_h) {
     if (m.page == MenuPage::Closed) {
