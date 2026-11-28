@@ -142,6 +142,7 @@ std::string to_settings(const Settings& s) {
     out += std::string("auto_level = ") + auto_level_name(s.auto_level) + "\n";
     out += std::string("your_aim = ") + height_rule_name(s.your_aim) + "\n";
     out += std::string("enemy_aim = ") + height_rule_name(s.enemy_aim) + "\n";
+    out += std::string("mid_air_collisions = ") + (s.collisions ? "on" : "off") + "\n";
     out += "panel_size = " + std::to_string(panel_height(s.panel)) + "\n";
     out += std::string("units = ") + units_name(s.units) + "\n";
     out += "# Keys: SDL scancode numbers, main and second (0 = none)\n";
@@ -170,6 +171,11 @@ bool from_settings(std::string_view text, Settings& s, std::string& errors) {
             ok = parse_height_rule(value, s.your_aim);
         } else if (key == "enemy_aim") {
             ok = parse_height_rule(value, s.enemy_aim);
+        } else if (key == "mid_air_collisions") {
+            ok = value == "on" || value == "off";
+            if (ok) {
+                s.collisions = value == "on";
+            }
         } else if (key == "panel_size") {
             for (int i = 0; i < kPanelSizes; ++i) {
                 const auto size = static_cast<PanelSize>(i);

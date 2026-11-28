@@ -307,6 +307,28 @@ TEST_CASE("Equal planes destroy each other; planes apart in height or across don
     CHECK(wide.bodies[1].outcome == Outcome::Flying);
 }
 
+TEST_CASE("With your collisions off, nothing collides with you, but enemies still do") {
+    Rules r;
+    r.player_collisions = false;
+    World w = with_plane(r, 100.0f);
+    // Two enemies on top of each other and of you.
+    for (int i = 1; i <= 2; ++i) {
+        w.bodies.push_back(w.bodies[0]);
+        w.pilots.push_back(new_pilot(i, Style::Turn, Skill{}, w.rng));
+    }
+    collide(w, r);
+    CHECK(w.bodies[0].outcome == Outcome::Flying);
+    CHECK(total_hp(w.bodies[0]) == doctest::Approx(200.0f));
+    CHECK(w.bodies[1].outcome == Outcome::ShotDown);
+    CHECK(w.bodies[2].outcome == Outcome::ShotDown);
+    REQUIRE(w.events.size() == 1u);
+    // Switched back on, an enemy on you hits again.
+    r.player_collisions = true;
+    w.bodies[1] = w.bodies[0];
+    collide(w, r);
+    CHECK(w.bodies[0].outcome == Outcome::ShotDown);
+}
+
 TEST_CASE("Repair mends everything and restarts the engine if there's fuel") {
     const DamageParams d;
     Body b;

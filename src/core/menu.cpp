@@ -29,6 +29,9 @@ void show(Menu& m, MenuPage page, int row) noexcept {
     case kOptionsEnemyAim:
         s.enemy_aim = cycled(s.enemy_aim, kHeightRules, dir);
         return true;
+    case kOptionsCollisions:
+        s.collisions = !s.collisions;
+        return true;
     case kOptionsPanel:
         s.panel = cycled(s.panel, kPanelSizes, dir);
         return true;

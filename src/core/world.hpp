@@ -67,6 +67,7 @@ struct Rules {
     // height.
     HeightRule height_rule = HeightRule::Forgiving;
     HeightRule enemy_height_rule = HeightRule::Forgiving;
+    bool player_collisions = true; // off: nothing collides with a player's plane in mid-air
     std::vector<PlaneRules> planes = derive_roster(flight, damage, scale);
     std::vector<Fit> fits;
     std::vector<PlaneRules> fitted;
@@ -114,7 +115,8 @@ struct World {
 // Plane-to-plane collisions (design/flight.md, Collisions): two flying planes within twice the
 // collision radius across and the collision height of each other touch. The one with less total
 // HP is destroyed (ShotDown); the other takes damage equal to what it had left, spread evenly over
-// its parts. Equal totals destroy both. Practice drones don't collide.
+// its parts. Equal totals destroy both. Practice drones don't collide. With player_collisions off,
+// pairs with a player's plane in them pass through each other; enemies still collide.
 void collide(World& w, const Rules& rules);
 
 // Developer tool (F5, F6): `count` hits of `damage` on a plane from `from`, placed by the hit

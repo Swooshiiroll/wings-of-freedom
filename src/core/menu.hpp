@@ -32,6 +32,7 @@ enum OptionsRow : int {
     kOptionsAutoLevel,
     kOptionsYourAim,
     kOptionsEnemyAim,
+    kOptionsCollisions,
     kOptionsPanel,
     kOptionsUnits,
     kOptionsBack,
