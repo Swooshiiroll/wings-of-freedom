@@ -290,6 +290,9 @@ Flying so the enemy is behind you protects the engine and pilot, at the cost of 
     five parts.
   - If the totals are equal, both are destroyed.
   - Practice drones don't collide.
+- **Mid-air collisions option** (owner, 2026-11-27; options menu, On by default): switched Off,
+  nothing collides with your plane. Enemy planes can still collide with each other, and the ground
+  is unchanged.
 - **Friendly fire** is always on. In v0.1 that only matters for bombers' gunners and the flak,
   whose shots can hit their own side.
 
@@ -435,7 +438,8 @@ The enemy nation's real guns (`planes.md`; owner, 2026-11-27).
   join it with the bombers.
 - **Pause menu (Esc;** owner, 2026-11-27): also opens when the window loses focus, and from the
   run-end screen. Resume, restart run, options, quit.
-  - **Options:** controls, auto-leveling, your gun aim, enemy gun aim, dashboard size, units.
+  - **Options:** controls, auto-leveling, your gun aim, enemy gun aim, mid-air collisions,
+    dashboard size, units.
   - **Controls:** two keys per action. Binding a key already in use moves it here; Delete clears
     one; reset to defaults. Esc and F1-F12 are reserved.
   - Keyboard (arrows or W/S, Enter, Esc) and mouse. The nation screen works the same way.

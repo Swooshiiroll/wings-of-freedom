@@ -53,7 +53,12 @@ TEST_CASE("Options: values change with left, right and select, and Back returns"
     press(m, s, MenuInput::Right);
     CHECK(s.enemy_aim == HeightRule::Strict);
     CHECK(s.your_aim == HeightRule::AutoAim); // separate
-    press(m, s, MenuInput::Down);             // the dashboard's size
+    press(m, s, MenuInput::Down);             // mid-air collisions
+    press(m, s, MenuInput::Right);
+    CHECK_FALSE(s.collisions);
+    CHECK(menu_input(m, MenuInput::Select, s) == MenuAction::SettingsChanged);
+    CHECK(s.collisions);
+    press(m, s, MenuInput::Down); // the dashboard's size
     press(m, s, MenuInput::Right);
     CHECK(s.panel == PanelSize::Medium);
     press(m, s, MenuInput::Down); // units

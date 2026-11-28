@@ -1735,6 +1735,7 @@ int main(int argc, char** argv) {
             }
             tuning.rules.height_rule = settings.your_aim;
             tuning.rules.enemy_height_rule = settings.enemy_aim;
+            tuning.rules.player_collisions = settings.collisions;
             InputCommand scripted;
             scripted.guns = opts.hold_fire;
             scripted.heavy = opts.hold_bomb;

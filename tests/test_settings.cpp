@@ -23,12 +23,14 @@ TEST_CASE("The default keys are the design's, auto-leveling On and both aims For
     CHECK(s.auto_level == AutoLevel::On);
     CHECK(s.your_aim == HeightRule::Forgiving);
     CHECK(s.enemy_aim == HeightRule::Forgiving);
+    CHECK(s.collisions);
 }
 
 TEST_CASE("The settings file round-trips") {
     Settings s;
     s.auto_level = AutoLevel::Assisted;
     s.your_aim = HeightRule::Strict;
+    s.collisions = false;
     s.enemy_aim = HeightRule::AutoAim;
     s.panel = PanelSize::Small;
     s.units = Units::Metric;

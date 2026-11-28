@@ -98,6 +98,9 @@ void centred(SDL_Renderer* r, int view_w, float y, const std::string& s, SDL_Col
             return aim_hint(s.your_aim, w);
         case kOptionsEnemyAim:
             return aim_hint(s.enemy_aim, w);
+        case kOptionsCollisions:
+            return s.collisions ? "Planes that touch yours collide with it"
+                                : "Enemies pass through you (not each other)";
         case kOptionsPanel:
             return "The instrument panel's height";
         case kOptionsUnits:
@@ -192,19 +195,21 @@ void draw_menu(SDL_Renderer* r, const Menu& m, const Settings& s, const WeaponPa
                     : i == kPauseOptions ? "Options"
                                          : "Quit game";
         } else if (m.page == MenuPage::Options) {
-            label = i == kOptionsControls    ? "Controls"
-                    : i == kOptionsAutoLevel ? "Auto-leveling"
-                    : i == kOptionsYourAim   ? "Your gun aim"
-                    : i == kOptionsEnemyAim  ? "Enemy gun aim"
-                    : i == kOptionsPanel     ? "Dashboard size"
-                    : i == kOptionsUnits     ? "Units"
-                                             : "Back";
-            value = i == kOptionsAutoLevel  ? level_label(s.auto_level)
-                    : i == kOptionsYourAim  ? aim_label(s.your_aim)
-                    : i == kOptionsEnemyAim ? aim_label(s.enemy_aim)
-                    : i == kOptionsPanel    ? panel_label(s.panel)
-                    : i == kOptionsUnits    ? units_label(s.units)
-                                            : "";
+            label = i == kOptionsControls     ? "Controls"
+                    : i == kOptionsAutoLevel  ? "Auto-leveling"
+                    : i == kOptionsYourAim    ? "Your gun aim"
+                    : i == kOptionsEnemyAim   ? "Enemy gun aim"
+                    : i == kOptionsCollisions ? "Mid-air collisions"
+                    : i == kOptionsPanel      ? "Dashboard size"
+                    : i == kOptionsUnits      ? "Units"
+                                              : "Back";
+            value = i == kOptionsAutoLevel    ? level_label(s.auto_level)
+                    : i == kOptionsYourAim    ? aim_label(s.your_aim)
+                    : i == kOptionsEnemyAim   ? aim_label(s.enemy_aim)
+                    : i == kOptionsCollisions ? (s.collisions ? "On" : "Off")
+                    : i == kOptionsPanel      ? panel_label(s.panel)
+                    : i == kOptionsUnits      ? units_label(s.units)
+                                              : "";
         } else {
             label = action                ? action_name(static_cast<Action>(i))
                     : i == kControlsReset ? "Reset to defaults"

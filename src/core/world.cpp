@@ -96,11 +96,19 @@ void destroy(Body& b) noexcept {
 
 void collide(World& w, const Rules& rules) {
     const DamageParams& d = rules.damage; // the shared collision numbers
+    // A player's plane is one with no AI pilot.
+    const auto player = [&w](std::size_t body) {
+        return std::none_of(w.pilots.begin(), w.pilots.end(),
+                            [body](const Pilot& p) { return p.body == static_cast<int>(body); });
+    };
     for (std::size_t i = 0; i < w.bodies.size(); ++i) {
         for (std::size_t j = i + 1; j < w.bodies.size(); ++j) {
             Body& a = w.bodies[i];
             Body& b = w.bodies[j];
             if (a.outcome != Outcome::Flying || b.outcome != Outcome::Flying) {
+                continue;
+            }
+            if (!rules.player_collisions && (player(i) || player(j))) {
                 continue;
             }
             const float across = std::hypot(a.x - b.x, a.y - b.y);

@@ -68,6 +68,7 @@ struct Settings {
     AutoLevel auto_level = AutoLevel::On;
     HeightRule your_aim = HeightRule::Forgiving;
     HeightRule enemy_aim = HeightRule::Forgiving;
+    bool collisions = true;             // whether planes can collide with yours in mid-air
     PanelSize panel = PanelSize::Large; // the dashboard's height
     Units units = Units::Nation;        // for arrows and banners
     KeyBindings keys = default_keys();
