@@ -116,6 +116,7 @@ enum class EventKind : std::uint8_t {
     BomberThrough,  // who: a bomber that reached your base
     FlakBurst,      // a heavy shell bursting at (x, y, z); damage: its radius
     FlakDown,       // who: the gun destroyed; by: the player; damage: 1 if heavy
+    WaveCleared,    // who: the wave's number: everything of it is down or gone
 };
 
 struct Event {

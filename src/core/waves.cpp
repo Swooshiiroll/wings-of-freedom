@@ -1,6 +1,7 @@
 #include "core/waves.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -14,8 +15,9 @@
 namespace wof {
 namespace {
 
-// The edges enemies fly in from: never the south, your way home.
-enum class Edge : std::uint8_t { North, East, West };
+// The sides enemies come from: never the south, your way home.
+enum class Side : std::uint8_t { North, East, West };
+constexpr std::uint32_t kSides = 3;
 
 constexpr float kToRad = std::numbers::pi_v<float> / 180.0f;
 
@@ -26,27 +28,45 @@ PlaneId fighter_for(World& w, const Rules& rules, int n) {
     return w.waves.enemy[static_cast<std::size_t>(step)];
 }
 
-// One enemy fighter in from an edge, heading in, near the player's height: abreast of the player or
-// north of them (design/flight.md, Waves). Returns its height.
-float arrive(World& w, const Rules& rules, Edge edge, int index) {
+// A side with room on the map for fighters to appear out_u from the player, at random.
+Side pick_side(World& w, const Rules& rules) {
+    const Body& player = w.bodies.front();
+    const float out = rules.wave.out_u;
+    const float margin = rules.edge.warning_u;
+    std::array<Side, kSides> room{};
+    std::uint32_t n = 0;
+    if (player.y + out <= static_cast<float>(kMapDepthU) - margin) {
+        room[n++] = Side::North;
+    }
+    if (player.x + out <= static_cast<float>(kMapWidthU) - margin) {
+        room[n++] = Side::East;
+    }
+    if (player.x - out >= margin) {
+        room[n++] = Side::West;
+    }
+    // Nowhere (only with a huge out_u): any side, as far as the map goes.
+    return n > 0 ? room[w.rng.next_below(n)] : static_cast<Side>(w.rng.next_below(kSides));
+}
+
+// One enemy fighter in from a side, out_u from the player and heading for them, near their height:
+// abreast of the player or north of them (design/flight.md, Waves). Returns its height.
+float arrive(World& w, const Rules& rules, Side side, int index) {
     const WaveParams& p = rules.wave;
     const Body& player = w.bodies.front();
-    const auto width = static_cast<float>(kMapWidthU);
-    const auto depth = static_cast<float>(kMapDepthU);
     const float margin = rules.edge.warning_u;
     const float along = static_cast<float>(index) * p.spread_u;
-    float x = 0.0f;
-    float y = 0.0f;
-    float heading = 180.0f;
-    if (edge == Edge::North) {
-        x = std::clamp(player.x + (w.rng.next_float() - 0.5f) * p.along_u + along, margin,
-                       width - margin);
-        y = depth - p.edge_inset_u;
-    } else {
-        y = std::clamp(player.y + w.rng.next_float() * p.along_u + along, margin, depth - margin);
-        x = edge == Edge::East ? width - p.edge_inset_u : p.edge_inset_u;
-        heading = edge == Edge::East ? 270.0f : 90.0f;
-    }
+    // North: within 40 degrees either way. East and west: up to 30 degrees north of abreast.
+    const float r = w.rng.next_float();
+    const float from = side == Side::North  ? (r - 0.5f) * 80.0f
+                       : side == Side::East ? 90.0f - r * 30.0f
+                                            : 270.0f + r * 30.0f;
+    float x = player.x + std::sin(from * kToRad) * p.out_u;
+    float y = player.y + std::cos(from * kToRad) * p.out_u;
+    (side == Side::North ? x : y) += along;
+    x = std::clamp(x, margin, static_cast<float>(kMapWidthU) - margin);
+    y = std::clamp(y, margin, static_cast<float>(kMapDepthU) - margin);
+    const float toward = std::atan2(player.x - x, player.y - y) / kToRad;
+    const float heading = toward < 0.0f ? toward + 360.0f : toward;
     Body b = new_plane(rules, fighter_for(w, rules, w.waves.current), x, y, heading);
     const PlaneRules& plane = plane_of(rules, b);
     const float offset = (w.rng.next_float() * 2.0f - 1.0f) * p.height_spread_u;
@@ -163,28 +183,58 @@ int enemies_alive(const World& w) noexcept {
     return n;
 }
 
-void update_waves(World& w, const Rules& rules) {
+bool wave_up(const World& w) noexcept {
+    if (w.waves.waiting > 0) {
+        return true;
+    }
+    return std::any_of(w.pilots.begin(), w.pilots.end(), [&w](const Pilot& p) {
+        const Body& b = w.bodies[static_cast<std::size_t>(p.body)];
+        return b.outcome == Outcome::Flying && !b.damage.going_down;
+    });
+}
+
+bool can_call_wave(const World& w, const Rules& rules) noexcept {
+    const WaveState& s = w.waves;
+    return s.enabled && s.current > 0 && !w.bodies.empty() &&
+           w.bodies.front().outcome == Outcome::Flying && s.since_s >= rules.wave.call_after_s &&
+           wave_up(w);
+}
+
+void update_waves(World& w, const Rules& rules, bool called) {
     WaveState& s = w.waves;
     if (!s.enabled || w.bodies.empty() || w.bodies.front().outcome != Outcome::Flying) {
         return;
     }
     bool new_wave = false;
-    s.timer_s -= kTickSeconds;
-    if (s.timer_s <= 0.0f) {
+    if (s.current == 0 || !wave_up(w)) {
+        // The first wave's delay, or the break after everything's down.
+        if (s.current > 0 && !s.cleared) {
+            s.cleared = true;
+            s.timer_s = rules.wave.break_s;
+            const Body& player = w.bodies.front();
+            w.events.push_back(
+                Event{EventKind::WaveCleared, s.current, -1, player.x, player.y, player.z, 0.0f});
+        }
+        s.timer_s -= kTickSeconds;
+        new_wave = s.timer_s <= 0.0f;
+    } else {
+        new_wave = called && can_call_wave(w, rules);
+        s.since_s += kTickSeconds;
+    }
+    if (new_wave) {
         s.current = s.next++;
         s.waiting += wave_size(s.current);
-        s.timer_s += std::max(1.0f, rules.wave.every_s);
-        new_wave = true;
+        s.since_s = 0.0f;
+        s.cleared = false;
     }
     int arrived = 0;
     float height = w.bodies.front().z;
     int alive = enemies_alive(w);
-    // Those arriving together come in from one edge.
-    const Edge edge = s.waiting > 0 && alive < rules.wave.max_alive
-                          ? static_cast<Edge>(w.rng.next_below(3))
-                          : Edge::North;
+    // Those arriving together come in from one side.
+    const Side side =
+        s.waiting > 0 && alive < rules.wave.max_alive ? pick_side(w, rules) : Side::North;
     while (s.waiting > 0 && alive < rules.wave.max_alive) {
-        const float z = arrive(w, rules, edge, arrived);
+        const float z = arrive(w, rules, side, arrived);
         if (arrived == 0) {
             height = z;
         }

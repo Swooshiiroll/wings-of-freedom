@@ -23,7 +23,6 @@ Rules quiet_rules() {
     r.ai.fire_range_u = 0.0f;
     r.damage.collision_radius_u = 0.0f;
     r.wave.first_s = 0.0f;
-    r.wave.every_s = 10000.0f; // only the first wave
     r.rederive();
     return r;
 }

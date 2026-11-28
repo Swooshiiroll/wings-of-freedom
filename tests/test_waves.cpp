@@ -104,57 +104,150 @@ TEST_CASE("The waves send the enemy's tree: first types early, both in a mix, th
     CHECK(late[2] > 0);
 }
 
-TEST_CASE("The first wave comes at 10 s, then one every 40 s, each announced") {
+// Everything the waves have sent goes down at once.
+void down_all(World& w) {
+    for (std::size_t i = 1; i < w.bodies.size(); ++i) {
+        w.bodies[i].damage.going_down = true;
+    }
+}
+
+// Steps with the player circling, calling the next wave or not; counts events of a kind.
+int count_events(World& w, const Rules& r, float seconds, EventKind kind, bool call = false) {
+    InputCommand c;
+    c.turn = 127;
+    c.next_wave = call;
+    int n = 0;
+    const int ticks = static_cast<int>(std::lround(seconds * kTicksPerSecond));
+    for (int i = 0; i < ticks; ++i) {
+        step(w, std::vector<InputCommand>{c}, r);
+        for (const Event& e : w.events) {
+            n += e.kind == kind ? 1 : 0;
+        }
+    }
+    return n;
+}
+
+TEST_CASE("The first wave comes at 10 s, and no other while any of it is up") {
     const Rules r = quiet_rules();
     World w = fresh(r);
     run(w, r, 9.9f);
     CHECK(w.pilots.empty());
-    int announced = 0;
-    InputCommand circle;
-    circle.turn = 127;
-    for (int i = 0; i < 82 * kTicksPerSecond; ++i) {
-        step(w, std::vector<InputCommand>{circle}, r);
-        for (const Event& e : w.events) {
-            if (e.kind == EventKind::WaveArrived) {
-                ++announced;
-                CHECK(e.who == announced);
-                CHECK(static_cast<int>(e.damage) == wave_size(announced));
-            }
-        }
-    }
-    CHECK(announced == 3);        // 10, 50 and 90 s
-    CHECK(w.pilots.size() == 5u); // 1 + 2 + 2
-    CHECK(w.waves.current == 3);
+    CHECK(count_events(w, r, 100.0f, EventKind::WaveArrived) == 1);
+    CHECK(w.waves.current == 1);
+    CHECK(w.pilots.size() == 1u);
 }
 
-TEST_CASE("Enemies fly in from the north, east or west edge, never from behind you to the south") {
+TEST_CASE("Once everything is down the wave is cleared, and the next sets out 10 s later") {
+    const Rules r = quiet_rules();
+    World w = fresh(r);
+    run(w, r, 11.0f);
+    REQUIRE(w.waves.current == 1);
+    down_all(w);
+    CHECK_FALSE(wave_up(w));
+    InputCommand circle;
+    circle.turn = 127;
+    step(w, std::vector<InputCommand>{circle}, r);
+    REQUIRE(std::count_if(w.events.begin(), w.events.end(), [](const Event& e) {
+                return e.kind == EventKind::WaveCleared && e.who == 1;
+            }) == 1);
+    CHECK(count_events(w, r, 9.8f, EventKind::WaveCleared) == 0); // announced once
+    CHECK(w.waves.current == 1);
+    CHECK(count_events(w, r, 0.3f, EventKind::WaveArrived) == 1);
+    CHECK(w.waves.current == 2);
+    CHECK(w.pilots.size() == 3u); // 1, then 2
+}
+
+TEST_CASE("A wave up for 3 minutes can be followed by the next, only when a player calls it") {
+    const Rules r = quiet_rules();
+    World w = fresh(r);
+    run(w, r, 11.0f);
+    CHECK(count_events(w, r, 170.0f, EventKind::WaveArrived, true) == 0); // too soon to call
+    CHECK_FALSE(can_call_wave(w, r));
+    run(w, r, 10.0f);
+    CHECK(can_call_wave(w, r));
+    CHECK(count_events(w, r, 60.0f, EventKind::WaveArrived) == 0); // never forced
+    CHECK(count_events(w, r, 1.0f, EventKind::WaveArrived, true) == 1);
+    CHECK(w.waves.current == 2);
+    CHECK(w.pilots.size() == 3u); // the first wave's fighter is still about
+    CHECK_FALSE(can_call_wave(w, r));
+}
+
+TEST_CASE("There's nothing to call before the first wave or once all is down") {
+    Rules r = quiet_rules();
+    r.wave.call_after_s = 1.0f;
+    World w = fresh(r);
+    run(w, r, 5.0f);
+    CHECK_FALSE(can_call_wave(w, r));
+    run(w, r, 8.0f);
+    CHECK(can_call_wave(w, r));
+    down_all(w);
+    CHECK_FALSE(can_call_wave(w, r));
+}
+
+TEST_CASE("Bombers and escorts hold the next wave until they're down or gone") {
+    Rules r = quiet_rules();
+    r.wave.raid_every = 3;
+    World w = fresh(r, 6); // 4 fighters, 3 bombers, 1 escort
+    run(w, r, 10.0f + kTickSeconds);
+    const auto set = [&w](Duty duty, Outcome outcome) {
+        for (const Pilot& p : w.pilots) {
+            if (p.duty == duty) {
+                w.bodies[static_cast<std::size_t>(p.body)].outcome = outcome;
+            }
+        }
+    };
+    set(Duty::Hunt, Outcome::ShotDown);
+    CHECK(wave_up(w));
+    set(Duty::Bomb, Outcome::ReturnedHome); // reached your base
+    CHECK(wave_up(w));                      // the escort is still about
+    set(Duty::Escort, Outcome::ShotDown);
+    CHECK_FALSE(wave_up(w));
+}
+
+TEST_CASE("Fighters appear about a minute out, from the north, east or west, never the south") {
     const Rules r = quiet_rules();
     const auto side = static_cast<float>(kMapWidthU);
+    struct Spot {
+        float x;
+        float y;
+    };
+    // The middle, the start by the south edge, the north-east corner and the west edge.
+    const std::array<Spot, 4> spots = {Spot{side * 0.5f, side * 0.5f}, Spot{side * 0.5f, 480.0f},
+                                       Spot{side - 500.0f, side - 500.0f}, Spot{300.0f, 9000.0f}};
     int north = 0;
     int east = 0;
     int west = 0;
-    for (std::uint64_t seed = 1; seed <= 24; ++seed) {
-        World w = fresh(r, 5); // three of them, from one edge
-        w.rng = Rng{seed};
-        w.bodies[0].x = side * 0.5f;
-        w.bodies[0].z = seed % 2 == 0 ? 150.0f : 400.0f;
-        run(w, r, 10.0f + kTickSeconds);
-        REQUIRE(w.pilots.size() == 3u);
-        for (const Pilot& p : w.pilots) {
-            const Body& b = w.bodies[static_cast<std::size_t>(p.body)];
-            CAPTURE(seed);
-            CAPTURE(b.x);
-            CAPTURE(b.y);
-            CHECK(std::abs(b.z - w.bodies[0].z) <= 65.0f);
-            CHECK(b.type == static_cast<std::uint8_t>(PlaneId::He51B));
-            CHECK(b.y >= w.bodies[0].y - 10.0f);
-            const bool at_north = b.y > side - r.wave.edge_inset_u - 10.0f;
-            const bool at_east = b.x > side - r.wave.edge_inset_u - 10.0f;
-            const bool at_west = b.x < r.wave.edge_inset_u + 10.0f;
-            CHECK((at_north || at_east || at_west));
-            north += at_north ? 1 : 0;
-            east += at_east ? 1 : 0;
-            west += at_west ? 1 : 0;
+    for (std::size_t s = 0; s < spots.size(); ++s) {
+        for (std::uint64_t seed = 1; seed <= 24; ++seed) {
+            World w = fresh(r, 5); // three of them, from one side
+            w.rng = Rng{seed};
+            w.bodies[0].x = spots[s].x;
+            w.bodies[0].y = spots[s].y;
+            w.bodies[0].z = seed % 2 == 0 ? 150.0f : 400.0f;
+            w.bodies[0].speed_u_s = 0.0f;
+            w.waves.timer_s = 0.0f; // at once, before the player moves
+            run(w, r, kTickSeconds);
+            REQUIRE(w.pilots.size() == 3u);
+            for (const Pilot& p : w.pilots) {
+                const Body& b = w.bodies[static_cast<std::size_t>(p.body)];
+                const float dx = b.x - w.bodies[0].x;
+                const float dy = b.y - w.bodies[0].y;
+                CAPTURE(s);
+                CAPTURE(seed);
+                CAPTURE(dx);
+                CAPTURE(dy);
+                CHECK(std::abs(b.z - w.bodies[0].z) <= 65.0f);
+                CHECK(b.type == static_cast<std::uint8_t>(PlaneId::He51B));
+                CHECK(std::hypot(dx, dy) > 4800.0f);
+                CHECK(std::hypot(dx, dy) < 6500.0f);
+                CHECK(dy >= -10.0f);
+                CHECK(b.x >= 0.0f);
+                CHECK(b.x <= side);
+                CHECK(b.y <= side);
+                if (s == 0) {
+                    (std::abs(dx) < dy ? north : dx > 0.0f ? east : west) += 1;
+                }
+            }
         }
     }
     CHECK(north > 0);
@@ -162,7 +255,7 @@ TEST_CASE("Enemies fly in from the north, east or west edge, never from behind y
     CHECK(west > 0);
 }
 
-TEST_CASE("A wave from a far edge comes and finds you") {
+TEST_CASE("A wave from a minute out comes and finds you") {
     const Rules r = quiet_rules();
     World w = fresh(r);
     w.bodies[0].x = static_cast<float>(kMapWidthU) * 0.5f;
@@ -180,13 +273,13 @@ TEST_CASE("A wave from a far edge comes and finds you") {
 }
 
 TEST_CASE("No more than six are in the air; the rest wait for a place") {
-    Rules r = quiet_rules();
-    r.wave.every_s = 5.0f;
-    World w = fresh(r);
-    run(w, r, 40.0f); // seven waves: 18 fighters in all
+    const Rules r = quiet_rules();
+    World w = fresh(r, 13); // seven fighters
+    run(w, r, 12.0f);
     CHECK(enemies_alive(w) == 6);
-    CHECK(w.waves.waiting > 0);
-    // One goes down: a waiting one takes its place.
+    CHECK(w.waves.waiting == 1);
+    CHECK(wave_up(w));
+    // One goes down: the waiting one takes its place.
     w.bodies[1].damage.going_down = true;
     const std::size_t before = w.pilots.size();
     run(w, r, kTickSeconds);
@@ -220,11 +313,15 @@ TEST_CASE("The same seed gives the same fight") {
 TEST_CASE("The ai and wave numbers are in the tuning file") {
     Tuning t;
     std::string errors;
-    CHECK(from_tuning("ai.aim_error_first_deg = 12\nwave.max_alive = 3\nwave.first_s = 2\n", t,
-                      errors));
+    CHECK(from_tuning("ai.aim_error_first_deg = 12\nwave.max_alive = 3\nwave.first_s = 2\n"
+                      "wave.break_s = 4\nwave.call_after_s = 90\nwave.out_u = 3000\n",
+                      t, errors));
     CHECK(t.rules.ai.aim_error_first_deg == doctest::Approx(12.0f));
     CHECK(t.rules.wave.max_alive == 3);
     CHECK(t.rules.wave.first_s == doctest::Approx(2.0f));
+    CHECK(t.rules.wave.break_s == doctest::Approx(4.0f));
+    CHECK(t.rules.wave.call_after_s == doctest::Approx(90.0f));
+    CHECK(t.rules.wave.out_u == doctest::Approx(3000.0f));
     Tuning back;
     CHECK(from_tuning(to_tuning(t), back, errors));
     CHECK(back == t);

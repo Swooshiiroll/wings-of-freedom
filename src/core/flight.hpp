@@ -33,7 +33,7 @@ struct FlightParams {
     float idle_burn = 0.3f;              // fuel burn at idle, as a share of full-throttle burn
     float bank_deg = 30.0f;              // looks only: how far the plane banks into a turn
     float bank_rate_deg_s = 120.0f;
-    float start_height_u = 120.0f; // a new run starts in the air at this height and speed,
+    float start_height_u = 160.0f; // a new run starts in the air at this height and speed,
     float start_speed_u_s = 110.0f;
     float start_throttle = 0.8f; // with this throttle
 

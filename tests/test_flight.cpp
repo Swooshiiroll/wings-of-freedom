@@ -192,7 +192,7 @@ TEST_CASE("The plane banks into turns and levels its wings after") {
 TEST_CASE("A new run starts in the air with the start values") {
     const FlightParams p;
     const Body b = start_body(p, 1440.0f, 480.0f, 370.0f);
-    CHECK(b.z == doctest::Approx(120.0f));
+    CHECK(b.z == doctest::Approx(160.0f)); // 8,000 ft
     CHECK(b.speed_u_s == doctest::Approx(110.0f));
     CHECK(b.throttle == doctest::Approx(0.8f));
     CHECK(b.heading_deg == doctest::Approx(10.0f));

@@ -42,7 +42,8 @@ shop, pilots, saving, other planes and eras, trucks and tanks, sound, gamepad, c
   - **Everything is sized by its depth** from your plane: full size at your height, down to a
     quarter for the ground from 30,000 ft, up to 1.5× above you. Planes change size in crisp
     eighth steps; the ground is drawn smooth (the one exception to pixel-perfect).
-  - **The shadow gap** grows to about 130 px at 30,000 ft.
+  - **The shadow gap** grows to **100 px** by about 17,000 ft, then holds (owner, 2026-11-27, so
+    your plane can stay near the middle).
 - **Map:** **28,800 u by 28,800 u**, about 12.5 miles square: about 2 minutes at cruising speed
   from the middle to any side (owner, 2026-11-27). The ground is flat in v0.1, with drawn detail
   only.
@@ -60,8 +61,9 @@ shop, pilots, saving, other planes and eras, trucks and tanks, sound, gamepad, c
     **self-destructs**, and the run ends as "left the battle area".
   - South is the way home. Leaving the south edge ends the run as "returned to base".
   - Enemy AI keeps its planes inside the map, except bombers, which leave by the south edge.
-- **Camera:** it follows the player, centred between the plane and its shadow, and leads a little
-  in the direction of flight.
+- **Camera** (owner, 2026-11-27): your plane **stays near the middle** of the view above the
+  dashboard. As you climb it rides up, at most **30 px** above the middle, while the shadow gap
+  widens. The view looks a little ahead along your heading (**10 u**, at most about 15 px).
 - **Screens that 270 doesn't divide evenly:** the largest whole-number scale is used. The space
   left over shows more of the world, and the HUD stays pinned to the screen edges.
 - **The window** opens at the largest whole multiple of 480x270 that fits the screen (1440x810 on
@@ -79,11 +81,15 @@ Keyboard first. Every action can be rebound in the controls menu, and bindings a
 | Fire guns | F |
 | Release the selected heavy weapon (bombs; rockets and missiles on later planes) | Space |
 | Switch heavy weapon | Tab |
+| Next wave (once it's offered; see Waves) | N |
 | Pause menu | Esc |
 
 The front end turns keys into one **input command per tick** for the player's plane: turn, pitch,
-throttle change, fire guns, release heavy weapon, switch heavy weapon. AI planes produce the same commands, so every plane flies by the
-same rules.
+throttle change, fire guns, release heavy weapon, switch heavy weapon, call the next wave. AI
+planes produce the same commands (but never call a wave), so every plane flies by the same rules.
+
+If your settings already give a new action's default key to something else, the new action starts
+unbound.
 
 ## Flight (light physics)
 
@@ -124,8 +130,8 @@ The simulation runs at a fixed **60 ticks per second**.
   - Turn and pitch control work at **30%**.
 - **Ceiling:** above **30,000 ft (600 u)** the plane can't climb any further, and the nose is
   pushed back to level.
-- **A run starts** in the air near the middle of the south edge, heading north at **120 u** and
-  **110 u/s**, with **80%** throttle.
+- **A run starts** in the air near the middle of the south edge, heading north at **160 u**
+  (8,000 ft; owner, 2026-11-27) and **110 u/s**, with **80%** throttle.
 - **The ground:** touching it is a crash, and the run ends.
 
 ### Fuel
@@ -385,9 +391,19 @@ The enemy nation's real guns (`planes.md`; owner, 2026-11-27).
 
 ### Waves
 
-- The first wave sets out at **10 s**, then one every **40 s**. Fighters fly in at the **north,
-  east or west edge**, never the south (owner, 2026-11-27): those arriving together from one
-  edge, abreast of you or north of you. On this map the first fight comes about **2 minutes** in.
+- The first wave sets out at **10 s**.
+- **The next waits until everything is down** (owner, 2026-11-27): fighters, bombers and escorts,
+  shot down or gone (a bomber that reaches your base is gone). Fighters still waiting for room
+  count as up. Then a "wave cleared" notice and a **10 s** break (`wave.break_s`).
+- **Calling the next wave:** if a wave is still up **3 minutes** after it set out
+  (`wave.call_after_s`), a popup offers the next: press **N**. Nothing is forced. The old planes
+  stay, and the following wave needs them all down too (or another 3 minutes).
+- Fighters appear **6,000 u** from you (`wave.out_u`, about a minute of their flying), from the
+  **north, east or west**, never the south: those arriving together from one side with room on
+  the map, abreast of you or north of you. Flying to meet them, the fight starts in about half a
+  minute.
+- Bomber raids still come in at the north edge, so an un-met raid takes several minutes to reach
+  your base.
 - **Wave n** brings **1 + n/2 fighters** (rounded down). Every 3rd wave adds a bomber formation
   (above), outside the 6 at most.
 - The fighters **grow up the enemy's aircraft tree**: step 1 in waves 1-4, mixed with step 2 in

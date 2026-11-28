@@ -51,6 +51,7 @@ from it: all art, sound and code are original.
   | F | Guns |
   | Space | Release the selected heavy weapon (bombs, rockets, missiles) |
   | Tab | Switch heavy weapon |
+  | N | Next wave, once it's offered (a wave still up after 3 minutes) |
 
 The details for v0.1 are in `flight.md`.
 

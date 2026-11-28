@@ -26,8 +26,9 @@ enum class Action : std::uint8_t {
     Guns,
     Heavy,
     SwitchHeavy,
+    NextWave, // call the next wave, once it can be
 };
-inline constexpr std::size_t kActions = 9;
+inline constexpr std::size_t kActions = 10;
 [[nodiscard]] const char* action_name(Action a) noexcept; // "Turn left"
 
 inline constexpr int kNoKey = 0;
@@ -47,7 +48,8 @@ struct KeyPair {
 using KeyBindings = std::array<KeyPair, kActions>;
 inline constexpr int kKeySlots = 2;
 
-// A/D turn, W dive, S climb, Shift/Ctrl throttle (left and right), F guns, Space heavy, Tab switch.
+// A/D turn, W dive, S climb, Shift/Ctrl throttle (left and right), F guns, Space heavy, Tab switch,
+// N next wave.
 [[nodiscard]] KeyBindings default_keys() noexcept;
 
 // Esc and F1-F12 belong to the menus and developer tools.
@@ -75,8 +77,9 @@ struct Settings {
 
 // settings.txt: `key = value` lines.
 [[nodiscard]] std::string to_settings(const Settings& s);
-// Reads a settings text over `s`: what it doesn't mention keeps its value. Each unknown line or
-// bad value adds a line to `errors`. True if there were none.
+// Reads a settings text over `s`: what it doesn't mention keeps its value, except a key the text
+// gives to another action (a new action whose default key was already in use starts unbound).
+// Each unknown line or bad value adds a line to `errors`. True if there were none.
 bool from_settings(std::string_view text, Settings& s, std::string& errors);
 
 } // namespace wof

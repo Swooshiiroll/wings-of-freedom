@@ -441,8 +441,9 @@ void draw_ground(SDL_Renderer* r, const Screen& s, game::GroundView& ground, con
     };
     const int w = span(view_w, s.ground_w);
     const int h = span(view_h, s.ground_h);
-    const PixelPt origin{static_cast<int>(std::floor(xf.focus.x - static_cast<float>(w) * 0.5f)),
-                         static_cast<int>(std::floor(xf.focus.y - static_cast<float>(h) * 0.5f))};
+    // From the view's top-left: the focus needn't be drawn in the middle (core/camera.hpp).
+    const PixelPt origin{static_cast<int>(std::floor(xf.focus.x - xf.cx / k)) - 4,
+                         static_cast<int>(std::floor(xf.focus.y - xf.cy / k)) - 4};
     SDL_SetRenderTarget(r, s.ground);
     ground.draw(origin, w, h);
     SDL_Texture* source = s.ground;
@@ -1394,6 +1395,10 @@ int main(int argc, char** argv) {
         const auto world_height = [&]() {
             return std::max(60, screen.fit.h - panel_height(settings.panel));
         };
+        // The ground's size seen from a height, for the camera.
+        const auto ground_size = [&](float z) {
+            return ground_zoom(z, tuning.rules.flight.ceiling_u, tuning.look.zoom_at_ceiling);
+        };
         int closed_by = 0; // the key that closed the menu: not a flight key until let go
         bool targets_on = opts.targets;
         std::string banner;    // a wave arriving, or an enemy down
@@ -1462,7 +1467,8 @@ int main(int argc, char** argv) {
                 world.targets = practice_targets(tuning.rules.targets);
             }
             previous = world.bodies;
-            camera.snap_to(world.bodies[0], tuning.camera, static_cast<float>(world_height()));
+            camera.snap_to(world.bodies[0], tuning.camera, static_cast<float>(world_height()),
+                           ground_size(world.bodies[0].z));
             effects.clear();
             own_blast_s = 0.0f;
         };
@@ -1472,6 +1478,7 @@ int main(int argc, char** argv) {
         new_run();
 
         bool switch_pressed = false;
+        bool next_pressed = false; // the next-wave key, until a tick takes it
         bool overlay = opts.overlay;
         game::DashboardView dashboard(renderer);
 
@@ -1670,6 +1677,8 @@ int main(int argc, char** argv) {
                         new_run();
                     } else if (game::is_key(settings.keys, Action::SwitchHeavy, e.key.scancode)) {
                         switch_pressed = true;
+                    } else if (game::is_key(settings.keys, Action::NextWave, e.key.scancode)) {
+                        next_pressed = true;
                     }
                 }
             }
@@ -1722,6 +1731,7 @@ int main(int argc, char** argv) {
             }
             if (paused) {
                 switch_pressed = false;
+                next_pressed = false;
             }
             tuning.rules.height_rule = settings.your_aim;
             tuning.rules.enemy_height_rule = settings.enemy_aim;
@@ -1731,11 +1741,14 @@ int main(int argc, char** argv) {
             for (int t = 0; t < ticks && world.bodies[0].outcome == Outcome::Flying; ++t) {
                 previous = world.bodies;
                 const std::array<InputCommand, 1> commands = {
-                    shot_mode ? scripted
-                              : game::read_command(settings, keys.data(), switch_pressed)};
+                    shot_mode
+                        ? scripted
+                        : game::read_command(settings, keys.data(), switch_pressed, next_pressed)};
                 switch_pressed = false;
+                next_pressed = false;
                 wof::step(world, commands, tuning.rules);
-                camera.follow(world.bodies[0], tuning.camera, static_cast<float>(world_height()));
+                camera.follow(world.bodies[0], tuning.camera, static_cast<float>(world_height()),
+                              ground_size(world.bodies[0].z));
                 const int points_before = score.points;
                 score_tick(score, world, tuning.rules.score, kTickSeconds);
                 effects.add(world.events, tuning.rules.weapon.blast_radius_u);
@@ -1786,6 +1799,11 @@ int main(int argc, char** argv) {
                     } else if (ev.kind == EventKind::EnemyDown) {
                         banner = format("ENEMY DOWN  +%d", score.points - points_before);
                         banner_s = 2.0f;
+                    } else if (ev.kind == EventKind::WaveCleared) {
+                        // After whatever finished it off, if that notice is still up.
+                        const std::string done = format("WAVE %d CLEARED", ev.who);
+                        banner = banner_s > 0.0f ? banner + "   " + done : done;
+                        banner_s = 4.0f;
                     }
                 }
                 if (!run_ended && world.bodies[0].outcome != Outcome::Flying) {
@@ -1811,8 +1829,9 @@ int main(int argc, char** argv) {
             const ViewFit& fit = screen.fit;
             const int world_h = world_height();
             const Body plane = between(previous[0], world.bodies[0], alpha);
-            const ViewXf xf = make_view(camera.focus(alpha), plane.z, tuning.rules.flight.ceiling_u,
-                                        tuning.look.zoom_at_ceiling, fit.w, world_h);
+            const ViewXf xf =
+                make_view(camera.focus(alpha), plane.z, tuning.rules.flight.ceiling_u,
+                          tuning.look.zoom_at_ceiling, fit.w, world_h, camera.drop(alpha));
             sprites.pump();
             SDL_SetRenderTarget(renderer, screen.target);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -1865,6 +1884,17 @@ int main(int argc, char** argv) {
             gauges.tone = message.tone;
             dashboard.draw(gauges, settings.panel, fit.w, fit.h);
 
+            // A wave that's gone on too long: the next is yours to call.
+            if (can_call_wave(world, tuning.rules)) {
+                const KeyPair& keys_for = settings.keys[static_cast<std::size_t>(Action::NextWave)];
+                const int code = keys_for.main != kNoKey ? keys_for.main : keys_for.alt;
+                game::draw_prompt(renderer,
+                                  code != kNoKey
+                                      ? "PRESS " + game::key_label(code) + " FOR THE NEXT WAVE"
+                                      : std::string("BIND A NEXT WAVE KEY (ESC, CONTROLS)"),
+                                  fit.w);
+            }
+
             if (plane.outcome != Outcome::Flying && run_ended) {
                 game::draw_summary(renderer, summary, fit.w, world_h);
             }
@@ -1904,9 +1934,11 @@ int main(int argc, char** argv) {
                      format("rounds in flight %zu  bombs falling %zu  targets %zu%s",
                             world.rounds.size(), world.bombs.size(), world.targets.size(),
                             marker ? "  marker on" : ""),
-                     format("enemies %d  wave %d (next in %.0f s)  waiting %d",
-                            enemies_alive(world), world.waves.current,
-                            static_cast<double>(world.waves.timer_s), world.waves.waiting),
+                     format("enemies %d  wave %d (%s %.0f s)  waiting %d", enemies_alive(world),
+                            world.waves.current, wave_up(world) ? "up for" : "next in",
+                            static_cast<double>(wave_up(world) ? world.waves.since_s
+                                                               : world.waves.timer_s),
+                            world.waves.waiting),
                      flak_line(world, plane)},
                     SDL_Color{236, 232, 200, 255});
             }

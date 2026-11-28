@@ -14,9 +14,9 @@ namespace wof::game {
 [[nodiscard]] bool is_key(const KeyBindings& b, Action action, SDL_Scancode key) noexcept;
 
 // One tick's command from the keys held now (SDL_GetKeyboardState), with the player's
-// auto-leveling. `switch_pressed`: the switch key went down since the last tick (it's a press, not
-// a hold).
-[[nodiscard]] InputCommand read_command(const Settings& s, const bool* keys,
-                                        bool switch_pressed) noexcept;
+// auto-leveling. `switch_pressed` and `next_pressed`: the switch-weapon or next-wave key went down
+// since the last tick (they're presses, not holds).
+[[nodiscard]] InputCommand read_command(const Settings& s, const bool* keys, bool switch_pressed,
+                                        bool next_pressed) noexcept;
 
 } // namespace wof::game

@@ -7,22 +7,25 @@ namespace wof {
 struct World;
 struct Rules;
 
-// Enemy waves (design/flight.md, Waves): the first after first_s, then one every every_s, each
-// bringing 1 + n/2 fighters in from the north, east or west edge near the player's height. At most
-// max_alive are in the air; the rest of a wave waits for a place. Their fighters grow with the
-// waves up the enemy's aircraft tree (design/aircraft_tree.md). Every raid_every-th wave also
-// brings a formation of bombers for your base, with escorts from the second; neither counts
-// toward max_alive (design/flight.md, Bombers).
+// Enemy waves (design/flight.md, Waves): the first after first_s; the next only once everything is
+// down or gone (fighters, bombers and escorts), after a break of break_s. A wave still up
+// call_after_s after it set out can be followed by the next when a player calls it. Each wave
+// brings 1 + n/2 fighters in from the north, east or west, out_u from the player and near their
+// height. At most max_alive are in the air; the rest of a wave waits for a place. Their fighters
+// grow with the waves up the enemy's aircraft tree (design/aircraft_tree.md). Every raid_every-th
+// wave also brings a formation of bombers for your base, with escorts from the second; neither
+// counts toward max_alive (design/flight.md, Bombers).
 
 // The waves' numbers (tuning.txt `wave.*`), all (start) values.
 struct WaveParams {
     float first_s = 10.0f;
-    float every_s = 40.0f;
+    float break_s = 10.0f;       // everything down: the next wave sets out after this
+    float call_after_s = 180.0f; // a wave still up this long: the next can be called
     int max_alive = 6;
     float height_spread_u = 60.0f; // arrive within this of the player's height (3,000 ft)
-    float spread_u = 120.0f;       // along the edge, between the planes of a wave
-    float along_u = 6000.0f;       // how far along the edge from abreast of you (or north)
-    float edge_inset_u = 300.0f;   // how far inside the edge they appear
+    float spread_u = 120.0f;       // between the planes of a wave
+    float out_u = 6000.0f;         // how far from the player fighters appear (about a minute)
+    float edge_inset_u = 300.0f;   // how far inside the north edge raids come in
     int tier_every = 4;            // the enemy moves a stage up its tree every this many waves
     int raid_every = 3;            // a bomber raid every this many waves (0: none)
     int raid_later = 9;            // the later bombers raid from this wave
@@ -73,7 +76,9 @@ struct WaveState {
     bool enabled = false; // off: no enemies (practice, tests)
     FighterTree enemy{PlaneId::Ar65E, PlaneId::He51B, PlaneId::Bf109B};
     int next = 1;         // the next wave's number
-    float timer_s = 0.0f; // until it comes
+    float timer_s = 0.0f; // until it sets out: the first wave's delay, or the break once clear
+    float since_s = 0.0f; // since the last wave set out, while it's still up
+    bool cleared = false; // the last wave is all down: the break is running
     int current = 0;      // the last wave's number: its pilots' skill
     int waiting = 0;      // planes of the waves so far still to arrive
     int kills = 0;
@@ -87,9 +92,17 @@ struct WaveState {
 [[nodiscard]] WaveState start_waves(const Rules& rules, const FighterTree& enemy,
                                     int first) noexcept;
 
-// One tick: the clock, and any planes arriving (new bodies and their pilots in the world). An
-// EventKind::WaveArrived marks each new wave.
-void update_waves(World& w, const Rules& rules);
+// One tick: the clock, and any planes arriving (new bodies and their pilots in the world).
+// `called`: a player asked for the next wave this tick (InputCommand::next_wave). An
+// EventKind::WaveArrived marks each new wave, and WaveCleared each one dealt with.
+void update_waves(World& w, const Rules& rules, bool called = false);
+
+// True while any enemy plane (fighter, bomber or escort) is still in the air and not going down,
+// or waiting for a place: what holds back the next wave.
+[[nodiscard]] bool wave_up(const World& w) noexcept;
+
+// True once the next wave can be called: the last one is still up, call_after_s after it set out.
+[[nodiscard]] bool can_call_wave(const World& w, const Rules& rules) noexcept;
 
 // Enemy wave fighters in the air and not going down: what max_alive limits (not bombers or their
 // escorts).

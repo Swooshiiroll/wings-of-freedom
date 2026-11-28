@@ -18,7 +18,8 @@ TEST_CASE("The default keys are the design's, auto-leveling On and both aims For
     CHECK(keys_of(s, Action::TurnLeft) == KeyPair{4, 0}); // A
     CHECK(keys_of(s, Action::Dive) == KeyPair{26, 0});    // W
     CHECK(keys_of(s, Action::ThrottleUp) == KeyPair{225, 229});
-    CHECK(keys_of(s, Action::Heavy) == KeyPair{44, 0}); // Space
+    CHECK(keys_of(s, Action::Heavy) == KeyPair{44, 0});    // Space
+    CHECK(keys_of(s, Action::NextWave) == KeyPair{17, 0}); // N
     CHECK(s.auto_level == AutoLevel::On);
     CHECK(s.your_aim == HeightRule::Forgiving);
     CHECK(s.enemy_aim == HeightRule::Forgiving);
@@ -38,6 +39,18 @@ TEST_CASE("The settings file round-trips") {
     CHECK(from_settings(to_settings(s), back, errors));
     CHECK(errors.empty());
     CHECK(back == s);
+}
+
+TEST_CASE("A new action starts unbound if the settings already use its key") {
+    Settings s;
+    std::string errors;
+    CHECK(from_settings("key.guns = 17 0\n", s, errors)); // N, from before Next wave existed
+    CHECK(keys_of(s, Action::Guns) == KeyPair{17, 0});
+    CHECK(keys_of(s, Action::NextWave) == KeyPair{0, 0});
+    Settings chosen;
+    CHECK(from_settings("key.guns = 9 17\nkey.next_wave = 8 0\n", chosen, errors));
+    CHECK(keys_of(chosen, Action::NextWave) == KeyPair{8, 0});
+    CHECK(keys_of(chosen, Action::Guns) == KeyPair{9, 17});
 }
 
 TEST_CASE("Bad settings lines are reported and the rest still load") {
