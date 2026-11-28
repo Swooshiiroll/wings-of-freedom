@@ -33,6 +33,7 @@ The lines below are in the order built; later ones replace earlier ones.
 - `design/planes.md`: real planes, nations and eras; the v0.1 roster (P-26A, He 51B, B-10B, He 111B-2) with sources and the scale; `game.md` and `flight.md` reworked to match (30,000 ft ceiling with the ground zooming out, guns by calibre, twin engines, choosing your nation).
 
 ### Added
+- Enemy pilots: they dodge instead of ramming you (collisions should only happen if you steer into them), and attack rather than evade: no climbing back out of a dogfight, dive-and-climb climbs only on the way in (to a fixed height, 8 s at most), shorter level break-offs after a pass, and a shot taken whenever there is one. `tuning.txt` is format 6: an older one is kept as `tuning-format5.txt`.
 - A "Mid-air collisions" option (On by default): switched Off, nothing collides with your plane; enemies can still collide with each other.
 - Waves wait for you: the next sets out 10 s after everything is down (fighters, bombers, escorts), with a "wave cleared" notice; after 3 minutes a popup lets you call it with N (rebindable); fighters appear about a minute out. Runs start at 8,000 ft. Your plane stays near the middle of the view, with the shadow gap holding at its widest from about 17,000 ft. `tuning.txt` is format 5: an older one is kept as `tuning-format4.txt`.
 - Releases no longer attach their own notes file as a download.

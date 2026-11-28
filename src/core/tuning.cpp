@@ -26,7 +26,7 @@ struct IntKey {
 };
 
 // Every value, in the file's order. The int ranges match validate(GroundParams&).
-constexpr std::array<FloatKey, 109> kFloats = {{
+constexpr std::array<FloatKey, 112> kFloats = {{
     {"Camera: how far ahead it looks (u), and how fast that swings round after a turn (per s)",
      "camera.lead_u", [](Tuning& t) -> float& { return t.camera.lead_u; }, 0.0f, 400.0f},
     {nullptr, "camera.lead_ease", [](Tuning& t) -> float& { return t.camera.lead_ease; }, 0.1f,
@@ -155,8 +155,9 @@ constexpr std::array<FloatKey, 109> kFloats = {{
     {nullptr, "damage.spin_pitch_deg",
      [](Tuning& t) -> float& { return t.rules.damage.spin_pitch_deg; }, -89.0f, 0.0f},
     {"Enemy pilots: aim error (degrees, wave 1, the best, sharper each wave), reaction (s, "
-     "same), firing range (u) and cone (deg), break-off range, the floor they keep above, how far "
-     "inside the edges they turn back, the dive-and-climb height, the head-on run, extend time (s)",
+     "same), firing range (u) and cone (deg), the dodge look-ahead (s) and width (u), the dogfight "
+     "range (u), the longest climb or line-up (s), the floor they keep above, how far inside the "
+     "edges they turn back, the dive-and-climb height, the head-on run, extend time (s)",
      "ai.aim_error_first_deg", [](Tuning& t) -> float& { return t.rules.ai.aim_error_first_deg; },
      0.0f, 45.0f},
     {nullptr, "ai.aim_error_best_deg",
@@ -173,8 +174,12 @@ constexpr std::array<FloatKey, 109> kFloats = {{
      1000.0f},
     {nullptr, "ai.fire_cone_deg", [](Tuning& t) -> float& { return t.rules.ai.fire_cone_deg; },
      0.5f, 45.0f},
-    {nullptr, "ai.break_range_u", [](Tuning& t) -> float& { return t.rules.ai.break_range_u; },
-     0.0f, 500.0f},
+    {nullptr, "ai.avoid_s", [](Tuning& t) -> float& { return t.rules.ai.avoid_s; }, 0.0f, 3.0f},
+    {nullptr, "ai.avoid_u", [](Tuning& t) -> float& { return t.rules.ai.avoid_u; }, 0.0f, 200.0f},
+    {nullptr, "ai.dogfight_u", [](Tuning& t) -> float& { return t.rules.ai.dogfight_u; }, 0.0f,
+     2000.0f},
+    {nullptr, "ai.climb_max_s", [](Tuning& t) -> float& { return t.rules.ai.climb_max_s; }, 0.5f,
+     60.0f},
     {nullptr, "ai.floor_u", [](Tuning& t) -> float& { return t.rules.ai.floor_u; }, 0.0f, 500.0f},
     {nullptr, "ai.edge_margin_u", [](Tuning& t) -> float& { return t.rules.ai.edge_margin_u; },
      0.0f, 1000.0f},
