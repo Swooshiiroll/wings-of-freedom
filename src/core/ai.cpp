@@ -13,8 +13,9 @@ namespace {
 
 constexpr float kToDeg = 180.0f / std::numbers::pi_v<float>;
 constexpr float kToRad = std::numbers::pi_v<float> / 180.0f;
-constexpr float kBreakS = 1.2f;
-constexpr float kAttackS = 8.0f; // an attack that hasn't closed by now is given up
+constexpr float kDodgeS = 0.35f;  // a dodge holds this long past the last sight of the danger
+constexpr float kAttackS = 8.0f;  // an attack that hasn't closed by now is given up
+constexpr float kPartedAt = 3.0f; // a fight is over this many times dogfight_u apart
 
 [[nodiscard]] float wrap180(float deg) noexcept {
     float w = std::fmod(deg + 180.0f, 360.0f);
@@ -82,6 +83,72 @@ void keep_flying(Pilot& p, const Body& self, const PlaneRules& plane, const AiPa
     }
     if (self.stalled || self.speed_u_s < plane.flight.stall_u_s * 1.2f) {
         w.pitch = std::min(w.pitch, -5.0f);
+    }
+}
+
+// A body's velocity: across the ground and in height (which moves at its share, core/flight).
+struct Velocity {
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+};
+[[nodiscard]] Velocity velocity_of(const Rules& rules, const Body& b) noexcept {
+    const float h = b.heading_deg * kToRad;
+    const float p = b.pitch_deg * kToRad;
+    const float level = b.speed_u_s * std::cos(p);
+    return {std::sin(h) * level, std::cos(h) * level,
+            b.speed_u_s * std::sin(p) * plane_of(rules, b).flight.height_share};
+}
+
+// Never ram a player (design/flight.md, Enemies): if this plane and a player's will pass too close
+// within avoid_s, turn away from where they'll be. The turn is level: tipping over or under as
+// well walks a dogfight up or down the sky, as each follows the other's height.
+void dodge(Pilot& p, const World& world, const Rules& rules, const Body& self, Wish& w) noexcept {
+    const AiParams& a = rules.ai;
+    p.dodge_s = std::max(0.0f, p.dodge_s - kTickSeconds);
+    const Velocity mine = velocity_of(rules, self);
+    const float h = self.heading_deg * kToRad;
+    float soonest = a.avoid_s + 1.0f;
+    for (std::size_t i = 0; i < world.bodies.size(); ++i) {
+        const Body& o = world.bodies[i];
+        const bool piloted =
+            std::any_of(world.pilots.begin(), world.pilots.end(),
+                        [i](const Pilot& q) { return q.body == static_cast<int>(i); });
+        if (piloted || o.outcome != Outcome::Flying) {
+            continue;
+        }
+        const Velocity theirs = velocity_of(rules, o);
+        const float rx = o.x - self.x;
+        const float ry = o.y - self.y;
+        const float rz = o.z - self.z;
+        const float vx = theirs.x - mine.x;
+        const float vy = theirs.y - mine.y;
+        const float vz = theirs.z - mine.z;
+        const float v2 = vx * vx + vy * vy + vz * vz;
+        // When the two are closest, within the look-ahead, and how far apart then.
+        const float t =
+            v2 > 1.0f ? std::clamp(-(rx * vx + ry * vy + rz * vz) / v2, 0.0f, a.avoid_s) : 0.0f;
+        const float mx = rx + vx * t;
+        const float my = ry + vy * t;
+        const float mz = rz + vz * t;
+        const float size = (plane_type(self.type).size + plane_type(o.type).size) * 0.5f;
+        const float tall = rules.damage.collision_height_u * 2.5f;
+        if (std::hypot(mx, my) >= a.avoid_u * size || std::abs(mz) >= tall || t >= soonest) {
+            continue;
+        }
+        soonest = t;
+        if (p.dodge_s <= 0.0f) {
+            // Pick a way once and keep it, so it doesn't dither.
+            const float right = mx * std::cos(h) - my * std::sin(h);
+            p.dodge_turn = std::abs(right) < 2.0f ? p.side : (right > 0.0f ? -1.0f : 1.0f);
+        }
+        p.dodge_s = kDodgeS;
+    }
+    if (p.dodge_s > 0.0f) {
+        w.heading = self.heading_deg + p.dodge_turn * 90.0f;
+        w.pitch = 0.0f;
+        w.slow = false;
+        p.doing = Phase::Break;
     }
 }
 
@@ -247,6 +314,7 @@ InputCommand ai_command(Pilot& p, const World& world, const Rules& rules, Rng& r
                 Wish w{std::hypot(dx, dy) > 100.0f ? bearing(dx, dy) : course,
                        climb_pitch(fz + 20.0f - self.z), false, false};
                 p.doing = Phase::Guard;
+                dodge(p, world, rules, self, w);
                 keep_flying(p, self, plane, a, w);
                 command(w, throttle_for(self.speed_u_s, want));
                 return c;
@@ -298,23 +366,24 @@ InputCommand ai_command(Pilot& p, const World& world, const Rules& rules, Rng& r
 
     Wish w{self.heading_deg, 0.0f, false, false};
 
-    // Too close, nose on: break away rather than ram.
-    if (hunting && p.phase != Phase::Break && d < a.break_range_u && std::abs(dz) < 15.0f &&
-        nose_off < 60.0f) {
-        p.phase = Phase::Break;
-        p.phase_s = kBreakS;
-        p.side = wrap180(to_lead - self.heading_deg) > 0.0f ? -1.0f : 1.0f;
-    }
+    // Gone past each other: the target is behind, near, and not pointing this way (a plane on this
+    // one's tail is to be turned against, not flown away from).
+    const bool chased =
+        std::abs(wrap180(bearing(self.x - tx, self.y - ty) - target.heading_deg)) < 60.0f;
+    const bool passed = nose_off > 110.0f && d < 200.0f && !chased;
+    const bool close = d < a.dogfight_u;
+    // Once a fight is joined there's no climbing away to set up again: that walks it up the sky.
+    p.fighting = close || (p.fighting && d < a.dogfight_u * kPartedAt);
+    // An attack ends after a pass, or if it never closes.
+    const auto attack_over = [&] { return passed || (p.phase_s <= 0.0f && !close); };
+    const auto attack = [&] {
+        p.phase = Phase::Attack;
+        p.phase_s = kAttackS;
+        p.set_up = false;
+    };
 
     if (!hunting) {
         w.heading = self.heading_deg + 30.0f; // circle
-    } else if (p.phase == Phase::Break) {
-        w.heading = self.heading_deg + p.side * 90.0f;
-        w.pitch = 10.0f;
-        if (p.phase_s <= 0.0f) {
-            p.phase = p.style == Style::Turn ? Phase::Pursue : Phase::Extend;
-            p.phase_s = a.extend_s;
-        }
     } else if (p.style == Style::Turn) {
         p.phase = Phase::Pursue;
         // How far off its tail this plane is: aim behind it until it's there.
@@ -329,66 +398,76 @@ InputCommand ai_command(Pilot& p, const World& world, const Rules& rules, Rng& r
         }
         w.pitch = d < a.fire_range_u && std::abs(dz) < 40.0f ? aim_pitch : climb_pitch(dz);
         w.shoot = true;
-        w.slow = off_tail < 60.0f && d < 100.0f && self.speed_u_s > target.speed_u_s + 5.0f;
+        w.slow = off_tail < 60.0f && d < 250.0f &&
+                 self.speed_u_s > target.speed_u_s + std::max(0.0f, d - 70.0f) * 0.3f;
     } else if (p.style == Style::DiveClimb) {
         if (p.phase == Phase::Climb) {
-            const float goal = std::min(plane.flight.ceiling_u - 10.0f, tz + a.dive_height_u);
-            // Climb at a distance: away if close, back if far, across between.
-            w.heading = d < 220.0f   ? to_lead + 180.0f
-                        : d > 400.0f ? to_lead
-                                     : to_lead + p.side * 90.0f;
-            w.pitch = climb_pitch(goal - self.z);
-            if (self.z >= goal - 15.0f && d < 450.0f) {
-                p.phase = Phase::Attack;
-                p.phase_s = kAttackS;
+            // From a distance, climb toward the target to a height fixed now, then dive on it.
+            if (!p.set_up) {
+                p.set_up = true;
+                p.phase_s = a.climb_max_s;
+                p.climb_to_u = std::min(plane.flight.ceiling_u - 10.0f, tz + a.dive_height_u);
+            }
+            w.heading = aim_heading;
+            w.pitch = climb_pitch(p.climb_to_u - self.z);
+            w.shoot = true;
+            if (p.fighting || p.phase_s <= 0.0f || (self.z >= p.climb_to_u - 15.0f && d < 450.0f)) {
+                attack();
             }
         } else if (p.phase == Phase::Attack) {
             w.heading = aim_heading;
             w.pitch = aim_pitch;
             w.shoot = true;
-            if (d < a.break_range_u || dz > 15.0f || (nose_off > 110.0f && d < 200.0f) ||
-                p.phase_s <= 0.0f) {
+            if (attack_over()) {
                 p.phase = Phase::Extend;
                 p.phase_s = a.extend_s;
             }
         } else {
             p.phase = Phase::Extend;
-            w.pitch = 15.0f;
+            w.pitch = 0.0f;
+            w.shoot = true;
             if (p.phase_s <= 0.0f) {
                 p.phase = Phase::Climb;
             }
         }
     } else { // head-on
         if (p.phase == Phase::Line) {
+            if (!p.set_up) {
+                p.set_up = true;
+                p.phase_s = a.climb_max_s;
+            }
             const float h = target.heading_deg * kToRad;
             const float ax = tx + std::sin(h) * a.head_on_run_u;
             const float ay = ty + std::cos(h) * a.head_on_run_u;
             w.heading = bearing(ax - self.x, ay - self.y);
             w.pitch = climb_pitch(dz);
+            w.shoot = true;
             const float off_nose =
                 std::abs(wrap180(bearing(self.x - tx, self.y - ty) - target.heading_deg));
-            if ((off_nose < 35.0f && d > 150.0f && d < a.head_on_run_u * 1.3f) ||
+            if (p.fighting || p.phase_s <= 0.0f ||
+                (off_nose < 35.0f && d > 150.0f && d < a.head_on_run_u * 1.3f) ||
                 std::hypot(ax - self.x, ay - self.y) < 80.0f) {
-                p.phase = Phase::Attack;
-                p.phase_s = kAttackS;
+                attack();
             }
         } else if (p.phase == Phase::Attack) {
             w.heading = aim_heading;
             w.pitch = d < a.fire_range_u ? aim_pitch : climb_pitch(dz);
             w.shoot = true;
-            if ((nose_off > 110.0f && d < 200.0f) || p.phase_s <= 0.0f) {
+            if (attack_over()) {
                 p.phase = Phase::Extend;
                 p.phase_s = a.extend_s;
             }
         } else {
             p.phase = Phase::Extend;
-            w.pitch = climb_pitch(dz);
+            w.pitch = 0.0f;
+            w.shoot = true;
             if (p.phase_s <= 0.0f) {
                 p.phase = Phase::Line;
             }
         }
     }
     p.doing = p.phase;
+    dodge(p, world, rules, self, w);
 
     // Other enemies: don't fly into each other (bombers are bigger).
     for (const Pilot& other : world.pilots) {

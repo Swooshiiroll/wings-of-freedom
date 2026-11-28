@@ -88,7 +88,7 @@ TEST_CASE("An old tuning file's stand-in keys are reported, and the rest still l
 
 TEST_CASE("The file says its format; files from before real planes are format 1") {
     const std::string text = to_tuning(Tuning{});
-    CHECK(text.find("format = 5\n") != std::string::npos);
+    CHECK(text.find("format = 6\n") != std::string::npos);
     CHECK(tuning_format(text) == kTuningFormat);
     CHECK(tuning_format("# old\ncamera.lead_u = 40\nflight.ceiling_u = 240\n") == 1);
     CHECK(tuning_format("") == 1);
@@ -97,6 +97,7 @@ TEST_CASE("The file says its format; files from before real planes are format 1"
     CHECK(2 < kTuningFormat);
     CHECK(3 < kTuningFormat); // alpha.9's too
     CHECK(4 < kTuningFormat); // v0.1.0-pre's too
+    CHECK(5 < kTuningFormat); // and pre.3's
     CHECK(text.find("flight.height_share = ") != std::string::npos);
     Tuning t;
     std::string errors;

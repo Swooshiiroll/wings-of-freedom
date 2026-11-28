@@ -319,11 +319,19 @@ then flak.
 - **Rookies that sharpen** (owner, 2026-11-27): a wave-1 pilot's aim is off by up to **8°** and it
   looks at you every **0.5 s**; each wave sharpens that, down to **2°** and **0.15 s**.
 - **Unlimited ammunition and fuel** (owner).
-- Every pilot leads its shots, fires within **220 u** with its nose within **5°** of its aim, pulls
-  up before **40 u** (2,000 ft), turns back **250 u** inside the edges, breaks off rather than ram,
-  and keeps clear of the other enemies.
-- **Dive-and-climb** gets **80 u** (4,000 ft) above you before it attacks; **head-on** gets **400 u**
-  in front first.
+- Every pilot leads its shots, fires whenever it has one (within **220 u**, its nose within **5°**
+  of its aim), pulls up before **40 u** (2,000 ft), turns back **250 u** inside the edges, and
+  keeps clear of the other enemies.
+- **Never ramming you** (owner, 2026-11-27): a pilot looks **0.9 s** ahead, and if it would pass
+  within **45 u** of your plane it turns hard away, level, then comes back. Escorts too; bombers
+  hold their course. A collision should only happen if you steer into one.
+- **Attacking before evading** (owner, 2026-11-27: no constant climbing in a dogfight):
+  - **Dive-and-climb** climbs only on the way in, toward you, to **80 u** (4,000 ft) above where
+    you were when it started, for **8 s** at most. **Head-on** gets **400 u** in front first, also
+    for 8 s at most.
+  - Within **350 u** there's no setting up: every style turns and fights, and doesn't climb or
+    line up again until you're **1,050 u** apart.
+  - After a pass it flies clear for **1.5 s**, level. A plane on its tail it turns against.
 - **A kill** is an enemy that goes down after you have damaged or rammed it.
 
 ### Bombers

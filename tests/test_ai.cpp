@@ -61,7 +61,122 @@ float off_tail(const Body& a, const Body& b) {
     return std::abs(std::remainder(to_a - (b.heading_deg + 180.0f), 360.0f));
 }
 
+// How a scripted player flies a dogfight.
+enum class Fly { Straight, Circle, Weave, Chase };
+
+InputCommand flown(Fly how, float t, const World& w) {
+    InputCommand c;
+    if (how == Fly::Circle) {
+        c.turn = 127;
+    } else if (how == Fly::Weave) {
+        c.turn = std::fmod(t, 8.0f) < 4.0f ? std::int8_t{127} : std::int8_t{-127};
+    } else if (how == Fly::Chase) {
+        // After the enemy, matching its height.
+        const Body& me = w.bodies[0];
+        const Body& e = w.bodies[1];
+        const float to = std::atan2(e.x - me.x, e.y - me.y) * 180.0f / kPi;
+        const float off = std::remainder(to - me.heading_deg, 360.0f);
+        c.turn = static_cast<std::int8_t>(std::clamp(off / 8.0f, -1.0f, 1.0f) * 127.0f);
+        const float pitch = std::clamp((e.z - me.z) * 0.8f, -30.0f, 30.0f);
+        c.pitch = static_cast<std::int8_t>(std::clamp((pitch - me.pitch_deg) / 4.0f, -1.0f, 1.0f) *
+                                           127.0f);
+        c.throttle = 127;
+    }
+    return c;
+}
+
+// One enemy against a player who can't be hurt, for a while: what happened.
+struct Fight {
+    int contacts = 0; // times the two came within collision reach
+    int hits = 0;     // rounds that hit the player
+    float top = 0.0f; // the highest the enemy got
+};
+
+Fight dogfight(Style style, Fly how, std::uint64_t seed, float seconds) {
+    Rules r;
+    const float reach = r.damage.collision_radius_u * 2.0f;
+    const float tall = r.damage.collision_height_u;
+    r.damage.collision_radius_u = 0.0f; // count contacts without ending the fight
+    r.rederive();
+    World w = with_player(r, 14400.0f, 14400.0f);
+    w.rng = Rng{seed};
+    const float a = static_cast<float>(seed) * 1.7f;
+    add_enemy(w, r, style, 14400.0f + 900.0f * std::sin(a), 14400.0f + 900.0f * std::cos(a), 200.0f,
+              std::fmod(a * 180.0f / kPi + 180.0f, 360.0f));
+    Fight f;
+    bool touching = false;
+    const int ticks = static_cast<int>(seconds * kTicksPerSecond);
+    for (int i = 0; i < ticks; ++i) {
+        repair(w.bodies[0], plane_of(r, w.bodies[0]).damage);
+        const float t = static_cast<float>(i) * kTickSeconds;
+        step(w, std::vector<InputCommand>{flown(how, t, w)}, r);
+        for (const Event& e : w.events) {
+            f.hits += e.kind == EventKind::RoundHitPlane && e.who == 0 ? 1 : 0;
+        }
+        const Body& p = w.bodies[0];
+        const Body& e = w.bodies[1];
+        const bool now = std::hypot(e.x - p.x, e.y - p.y) < reach && std::abs(e.z - p.z) <= tall;
+        f.contacts += now && !touching ? 1 : 0;
+        touching = now;
+        f.top = std::max(f.top, e.z);
+    }
+    return f;
+}
+
 } // namespace
+
+TEST_CASE("Enemies dodge you: flying without aiming at them, you're never rammed, but get hit") {
+    for (const Style style : {Style::Turn, Style::DiveClimb, Style::HeadOn}) {
+        int hits = 0;
+        int turning = 0; // contacts while you turn: rare, as you can cut across them
+        for (const Fly how : {Fly::Straight, Fly::Circle, Fly::Weave}) {
+            for (std::uint64_t seed = 1; seed <= 6; ++seed) {
+                const Fight f = dogfight(style, how, seed, 60.0f);
+                CAPTURE(static_cast<int>(style));
+                CAPTURE(seed);
+                if (how == Fly::Straight) {
+                    CHECK(f.contacts == 0);
+                } else {
+                    turning += f.contacts;
+                }
+                hits += f.hits;
+            }
+        }
+        CAPTURE(static_cast<int>(style));
+        CHECK(turning <= 2); // in 12 minutes of it
+        CHECK(hits > 100);   // dodging hasn't made them harmless
+    }
+}
+
+TEST_CASE("Chased in a dogfight, enemies don't climb away") {
+    for (const Style style : {Style::Turn, Style::DiveClimb, Style::HeadOn}) {
+        for (std::uint64_t seed = 1; seed <= 8; ++seed) {
+            const Fight f = dogfight(style, Fly::Chase, seed, 90.0f);
+            CAPTURE(static_cast<int>(style));
+            CAPTURE(seed);
+            CHECK(f.top < 200.0f + 220.0f); // from 200 u: never off toward the 600 u ceiling
+        }
+    }
+}
+
+TEST_CASE("In close there's no setting up, and a climb gives up after a while") {
+    Rules r = sharp_rules();
+    r.ai.fire_range_u = 0.0f;
+    for (const Style style : {Style::DiveClimb, Style::HeadOn}) {
+        World w = with_player(r);
+        add_enemy(w, r, style, 1640.0f, 1200.0f, 200.0f, 270.0f); // 200 u off
+        run(w, r, kTickSeconds);
+        CHECK(w.pilots[0].phase == Phase::Attack);
+    }
+    // Far off and far below: it can't get above, so it attacks anyway.
+    World w = with_player(r, 14400.0f, 14400.0f, 500.0f);
+    add_enemy(w, r, Style::DiveClimb, 14400.0f, 17400.0f, 100.0f, 180.0f);
+    run(w, r, 1.0f);
+    CHECK(w.pilots[0].phase == Phase::Climb);
+    CHECK(w.pilots[0].climb_to_u == doctest::Approx(580.0f).epsilon(0.02));
+    run(w, r, r.ai.climb_max_s);
+    CHECK(w.pilots[0].phase != Phase::Climb);
+}
 
 TEST_CASE("Later waves aim better and react faster, down to the best") {
     const AiParams p;
@@ -138,18 +253,24 @@ TEST_CASE("A turn-fighter gets onto a straight-flying plane's tail and stays nea
     // Starting ahead and to the side, coming the other way.
     add_enemy(w, r, Style::Turn, 1650.0f, 1100.0f, 200.0f, 180.0f);
     InputCommand slow;
-    slow.throttle = -127; // so the He 51 can keep up
-    run(w, r, 6.0f, slow);
-    run(w, r, 14.0f);
-    CHECK(off_tail(w.bodies[1], w.bodies[0]) < 50.0f);
-    CHECK(std::hypot(w.bodies[1].x - w.bodies[0].x, w.bodies[1].y - w.bodies[0].y) < 300.0f);
+    slow.throttle = -127; // ease off, short of a stall, so the He 51 can keep up
+    run(w, r, 1.2f, slow);
+    run(w, r, 8.8f);
+    // Over the next ten seconds, most of the time behind you and close.
+    int behind = 0;
+    for (int i = 0; i < 10 * kTicksPerSecond; ++i) {
+        step(w, std::vector<InputCommand>{InputCommand{}}, r);
+        const float d = std::hypot(w.bodies[1].x - w.bodies[0].x, w.bodies[1].y - w.bodies[0].y);
+        behind += off_tail(w.bodies[1], w.bodies[0]) < 60.0f && d < 300.0f ? 1 : 0;
+    }
+    CHECK(behind > 7 * kTicksPerSecond);
 }
 
 TEST_CASE("Dive-and-climb gets above its target before it attacks") {
     Rules r = sharp_rules();
     r.ai.fire_range_u = 0.0f;
     World w = with_player(r);
-    add_enemy(w, r, Style::DiveClimb, 1700.0f, 1400.0f, 200.0f, 270.0f);
+    add_enemy(w, r, Style::DiveClimb, 2640.0f, 1400.0f, 200.0f, 270.0f); // from a distance
     InputCommand circle;
     circle.turn = 127;
     bool attacked = false;

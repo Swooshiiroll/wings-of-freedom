@@ -33,7 +33,7 @@ enum class Phase : std::uint8_t {
     Line,    // head-on: getting out in front
     Attack,  // diving or head-on at the target
     Extend,  // flying clear before coming back
-    Break,   // turning away so as not to ram
+    Break,   // dodging so as not to ram
     Recover, // pulling up from the ground
     Return,  // turning back inside the battle area
     Course,  // a bomber holding its course
@@ -58,12 +58,15 @@ struct AiParams {
     float reaction_step_s = 0.07f;
     float fire_range_u = 220.0f;
     float fire_cone_deg = 5.0f;      // fires with its nose this close to where it's aiming
-    float break_range_u = 45.0f;     // breaks off closer than this, nose on
+    float avoid_s = 0.9f;            // looks this far ahead for a collision with you
+    float avoid_u = 45.0f;           // and dodges if its path would pass this close
+    float dogfight_u = 350.0f;       // closer than this there's no setting up: it fights
+    float climb_max_s = 8.0f;        // a climb or a head-on line-up lasts at most this long
     float floor_u = 40.0f;           // pulls up so as never to go below this
     float edge_margin_u = 250.0f;    // turns back this far inside the soft edges
-    float dive_height_u = 80.0f;     // dive-and-climb: gets this far above first
+    float dive_height_u = 80.0f;     // dive-and-climb: climbs to this far above you first
     float head_on_run_u = 400.0f;    // head-on: lines up from this far in front
-    float extend_s = 3.0f;           // flies clear this long after a pass
+    float extend_s = 1.5f;           // flies clear this long after a pass
     float escort_break_u = 600.0f;   // escorts fight you within this of their bombers
     float escort_return_u = 1200.0f; // and go back to them beyond this
 
@@ -95,8 +98,13 @@ struct Pilot {
     Phase phase = Phase::Pursue; // its style's own step
     Phase doing = Phase::Pursue; // what it's doing this tick (the step, or pulling up and so on)
     Skill skill{};
-    float phase_s = 0.0f; // time left in a timed phase
-    float look_s = 0.0f;  // until it looks at its target again
+    float phase_s = 0.0f;    // time left in a timed phase
+    bool fighting = false;   // it has closed with its target: no setting up until they've parted
+    bool set_up = false;     // this climb or line-up has started (its timer and height are set)
+    float climb_to_u = 0.0f; // dive-and-climb: the height this climb is for, fixed at its start
+    float dodge_s = 0.0f;    // still dodging for this long,
+    float dodge_turn = 0.0f; // this way (-1 left, 1 right)
+    float look_s = 0.0f;     // until it looks at its target again
     // What it saw last: its target's position and velocity.
     float seen_x = 0.0f;
     float seen_y = 0.0f;
